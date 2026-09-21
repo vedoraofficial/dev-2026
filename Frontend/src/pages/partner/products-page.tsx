@@ -56,7 +56,7 @@ export function PartnerProductsPage() {
                 />
                 <div className="flex items-end justify-between gap-3 p-4">
                   <div className="min-w-0">
-                    <h2 className="text-[0.9375rem] font-semibold">{p.name}</h2>
+                    <h2 className="text-[0.9375rem] font-medium">{p.name}</h2>
                     <p className="mt-1 text-xs text-muted-foreground">{p.gemstones.join(" · ")}</p>
                     <p className="mt-1 font-mono text-xs text-gold-light">
                       {formatINR(p.price)} · {formatBV(p.bv)}
@@ -76,7 +76,7 @@ export function PartnerProductsPage() {
 
           <div className="space-y-4 md:space-y-5">
             <Panel>
-              <h2 className="mb-4 text-[0.9375rem] font-semibold">Your order</h2>
+              <h2 className="mb-4 text-[0.9375rem] font-medium">Your order</h2>
               {lines.length === 0 ? (
                 <p className="py-4 text-sm text-muted-foreground">
                   Your order is empty. Add a bracelet to begin.
@@ -104,7 +104,7 @@ export function PartnerProductsPage() {
                 </div>
               </dl>
               <div className="flex items-baseline justify-between border-t border-border/70 pt-4">
-                <span className="text-[0.8125rem] font-semibold">Total payable</span>
+                <span className="text-[0.8125rem] font-medium">Total payable</span>
                 <span className="font-display text-3xl">{formatINR(total)}</span>
               </div>
 

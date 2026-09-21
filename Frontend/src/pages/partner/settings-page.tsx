@@ -95,7 +95,7 @@ export function PartnerSettingsPage() {
             </Panel>
 
             <Panel className="border-danger/25">
-              <h2 className="text-[0.9375rem] font-semibold text-danger">Deactivate account</h2>
+              <h2 className="text-[0.9375rem] font-medium text-danger">Deactivate account</h2>
               <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
                 Your VEDORA ID and downline placements stay permanently in the genealogy tree.
                 Deactivation only stops new income and logins.

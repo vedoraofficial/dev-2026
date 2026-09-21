@@ -39,7 +39,7 @@ export function TablePagination({ summary, pages, onPageChange, className }: Pro
             className={cn(
               box,
               n === page
-                ? "border-gold bg-gold font-semibold text-primary-foreground"
+                ? "border-gold bg-gold font-medium text-primary-foreground"
                 : "border-border text-muted-foreground hover:bg-muted",
             )}
           >

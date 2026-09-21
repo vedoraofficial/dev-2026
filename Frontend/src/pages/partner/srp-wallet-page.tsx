@@ -89,7 +89,7 @@ export function PartnerSrpWalletPage() {
             </div>
 
             <p className="mt-5 border-t border-border/70 pt-4 text-xs leading-relaxed text-muted-foreground">
-              Earn <strong className="font-semibold text-gold">2 SRP</strong> for every confirmed
+              Earn <strong className="font-medium text-gold">2 SRP</strong> for every confirmed
               bracelet sale. If you make no sale in a month and hold 10 SRP or more, the system
               deducts 10 SRP automatically and keeps your ID active for the next month.
             </p>

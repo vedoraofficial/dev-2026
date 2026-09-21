@@ -29,7 +29,7 @@ export function PartnerPoliciesPage() {
               key={title}
               className="flex flex-col rounded-2xl border border-border bg-card p-4 md:p-5"
             >
-              <h2 className="text-[0.9375rem] font-semibold">{title}</h2>
+              <h2 className="text-[0.9375rem] font-medium">{title}</h2>
               <p className="mt-1.5 text-xs text-muted-foreground">{detail}</p>
               <div className="mt-4 flex items-center gap-4 text-xs">
                 <button type="button" className="py-1 font-medium text-gold hover:underline">
@@ -45,7 +45,7 @@ export function PartnerPoliciesPage() {
 
         <Panel className="flex flex-wrap items-center justify-between gap-4">
           <div className="min-w-0">
-            <h2 className="text-[0.9375rem] font-semibold">Partner Agreement accepted</h2>
+            <h2 className="text-[0.9375rem] font-medium">Partner Agreement accepted</h2>
             <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
               Accepted 14 Mar 2026, 11:42 IST from IP 103.21.58.14. All ten policies above were
               presented and agreed at registration.

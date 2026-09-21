@@ -26,7 +26,7 @@ export function AdminFoundersPage() {
               <div className="flex items-center gap-4 border-b border-border/70 pb-4">
                 <PersonAvatar size="lg" />
                 <div className="min-w-0">
-                  <h2 className="text-base leading-snug font-semibold">{f.name}</h2>
+                  <h2 className="text-base leading-snug font-medium">{f.name}</h2>
                   <MonoId tone="gold" className="block">
                     {f.id}
                   </MonoId>

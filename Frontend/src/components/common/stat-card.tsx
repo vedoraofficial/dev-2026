@@ -34,7 +34,7 @@ export function StatCard({ label, value, hint, highlight, tone, className }: Pro
       >
         {value}
       </p>
-      {hint ? <p className="mt-2 text-xs text-muted-foreground">{hint}</p> : null}
+      {hint ? <div className="mt-2 text-xs text-muted-foreground">{hint}</div> : null}
     </div>
   )
 }

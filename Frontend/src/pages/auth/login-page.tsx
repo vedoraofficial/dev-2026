@@ -22,9 +22,11 @@ export function LoginPage() {
     formState: { errors, isSubmitting },
   } = useForm<LoginValues>({ resolver: zodResolver(loginSchema) })
 
-  // Temporary: no auth API yet. Admin ID goes to the admin panel, everyone else to the partner portal.
+  // Temporary: no auth API yet. The Root Admin ID (VED108, also typed as VED0108 / VED000108)
+  // goes to the admin panel, everyone else to the partner portal.
   const onSubmit = ({ vedoraId }: LoginValues) => {
-    navigate(vedoraId.toUpperCase() === "VED108" ? ROUTES.admin.overview : ROUTES.partner.dashboard)
+    const isAdmin = Number(vedoraId.replace(/\D/g, "")) === 108
+    navigate(isAdmin ? ROUTES.admin.overview : ROUTES.partner.dashboard)
   }
 
   return (

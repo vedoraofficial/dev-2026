@@ -17,7 +17,7 @@ const paymentMethods = ["Online (UPI)", "Sponsor wallet", "Offline"] as const
 function Step({ n, title, children }: { n: number; title: string; children: ReactNode }) {
   return (
     <Panel>
-      <h2 className="mb-4 flex items-center gap-3 text-[0.9375rem] font-semibold">
+      <h2 className="mb-4 flex items-center gap-3 text-[0.9375rem] font-medium">
         <span className="grid size-6 place-items-center rounded-full bg-gold text-xs font-bold text-primary-foreground">
           {n}
         </span>
@@ -163,7 +163,7 @@ export function AdminManualPlacementPage() {
 
           <Panel className="flex flex-col">
             <div className="mb-4 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-              <h2 className="text-[0.9375rem] font-semibold">
+              <h2 className="text-[0.9375rem] font-medium">
                 Choose slot under <MonoId tone="gold">{upline}</MonoId>
               </h2>
               <p className="text-[0.6875rem] text-muted-foreground">

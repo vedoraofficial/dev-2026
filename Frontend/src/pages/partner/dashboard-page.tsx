@@ -143,7 +143,7 @@ export function PartnerDashboardPage() {
               />
               <p className="text-xs leading-relaxed text-muted-foreground">
                 1 confirmed sale done this month — you are Active through{" "}
-                <strong className="font-semibold text-foreground">
+                <strong className="font-medium text-foreground">
                   {idActivation.activeThrough}
                 </strong>
                 .
@@ -204,7 +204,7 @@ export function PartnerDashboardPage() {
                   >
                     <PersonAvatar tone="plain" size="sm" />
                     <div className="min-w-0 flex-1">
-                      <p className="truncate text-[0.8125rem] font-semibold">{j.name}</p>
+                      <p className="truncate text-[0.8125rem] font-medium">{j.name}</p>
                       <p className="text-[0.6875rem] text-muted-foreground">
                         <MonoId tone="muted" className="text-[0.6875rem]">
                           {j.id}

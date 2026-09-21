@@ -68,7 +68,7 @@ const columns: Column<AdminOrder>[] = [
     header: "Partner",
     cell: (r) => (
       <div>
-        <p className="font-semibold">{r.partner}</p>
+        <p className="font-medium">{r.partner}</p>
         <MonoId tone="muted" className="text-[0.6875rem]">
           {r.partnerId}
         </MonoId>

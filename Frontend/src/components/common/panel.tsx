@@ -24,7 +24,7 @@ export function PanelHeader({ title, aside, className }: PanelHeaderProps) {
     <div
       className={cn("mb-4 flex flex-wrap items-center justify-between gap-x-4 gap-y-1", className)}
     >
-      <h2 className="text-[0.9375rem] font-semibold text-foreground">{title}</h2>
+      <h2 className="text-[0.9375rem] font-medium text-foreground">{title}</h2>
       {aside ? <div className="text-xs text-muted-foreground">{aside}</div> : null}
     </div>
   )

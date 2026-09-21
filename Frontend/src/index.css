@@ -131,10 +131,17 @@
   * {
     @apply border-border outline-ring/50;
   }
+  /* Every size in the app is rem-based, so this one value scales the whole UI. */
   html {
     @apply font-sans;
+    font-size: 15px;
     -webkit-text-size-adjust: 100%;
     -webkit-tap-highlight-color: transparent;
+  }
+  @media (min-width: 768px) {
+    html {
+      font-size: 13.5px;
+    }
   }
   body {
     @apply bg-background text-foreground antialiased;

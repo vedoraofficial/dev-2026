@@ -61,7 +61,7 @@ function SidebarBody({ sectionLabel, nav, user, onNavigate }: Props & { onNaviga
         <div className="flex items-center gap-3 rounded-xl border border-border bg-accent/60 px-3 py-2.5">
           <PersonAvatar size="sm" />
           <div className="min-w-0">
-            <p className="truncate text-[0.8125rem] font-semibold">{user.name}</p>
+            <p className="truncate text-[0.8125rem] font-medium">{user.name}</p>
             <MonoId tone="gold" className="text-[0.6875rem]">
               {user.id}
             </MonoId>

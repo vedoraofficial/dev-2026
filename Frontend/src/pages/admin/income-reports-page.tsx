@@ -122,7 +122,7 @@ export function AdminIncomeReportsPage() {
                     {String(i + 1).padStart(2, "0")}
                   </span>
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-[0.875rem] font-semibold">{e.name}</p>
+                    <p className="truncate text-[0.875rem] font-medium">{e.name}</p>
                     <MonoId tone="muted" className="text-[0.6875rem]">
                       {e.id}
                     </MonoId>

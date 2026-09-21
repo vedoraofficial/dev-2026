@@ -33,7 +33,7 @@ const columns: Column<TeamMember>[] = [
       <div className="flex items-center gap-3">
         <PersonAvatar size="sm" tone={r.status === "no-bv" ? "muted" : "striped"} />
         <div className="min-w-0">
-          <p className="truncate text-[0.875rem] font-semibold">{r.name}</p>
+          <p className="truncate text-[0.875rem] font-medium">{r.name}</p>
           <MonoId tone="muted" className="text-[0.6875rem]">
             {r.id}
           </MonoId>

@@ -58,7 +58,7 @@ const columns: Column<PartnerRow>[] = [
       <div className="flex items-center gap-3">
         <PersonAvatar tone={r.founder ? "gold" : r.status === "inactive" ? "muted" : "plain"} />
         <div className="min-w-0">
-          <p className="truncate text-[0.875rem] font-semibold">{r.name}</p>
+          <p className="truncate text-[0.875rem] font-medium">{r.name}</p>
           <p className="text-[0.6875rem]">
             <MonoId tone={r.founder ? "gold" : "muted"}>{r.id}</MonoId>
             {r.founder ? <span className="text-gold"> · Founder</span> : null}

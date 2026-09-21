@@ -40,7 +40,7 @@ export function AdminGenealogyPage() {
                 <MonoId tone="gold" className="text-[0.6875rem]">
                   VED108
                 </MonoId>
-                <p className="mt-1 font-semibold">Root Admin</p>
+                <p className="mt-1 font-medium">Root Admin</p>
                 <p className="mt-1 text-[0.6875rem] text-muted-foreground">
                   Control &amp; oversight only · earns no income
                 </p>
@@ -67,7 +67,7 @@ export function AdminGenealogyPage() {
                       <MonoId tone="gold" className="text-[0.6875rem]">
                         {leg.id}
                       </MonoId>
-                      <p className="mt-1 font-semibold">{leg.name}</p>
+                      <p className="mt-1 font-medium">{leg.name}</p>
                       <p className="mt-1 text-[0.6875rem] text-muted-foreground">
                         {leg.slotsUsed} / 20 · {formatNumber(leg.downline)} downline
                       </p>
@@ -120,7 +120,7 @@ export function AdminGenealogyPage() {
             <div className="mb-5 flex items-center gap-3">
               <PersonAvatar tone="gold" size="md" />
               <div className="min-w-0">
-                <p className="truncate font-semibold">{selected.name}</p>
+                <p className="truncate font-medium">{selected.name}</p>
                 <p className="text-[0.6875rem]">
                   <MonoId tone="muted">{selected.id}</MonoId>
                   <span className="text-muted-foreground"> · Founder</span>

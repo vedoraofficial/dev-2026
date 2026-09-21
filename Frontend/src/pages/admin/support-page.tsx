@@ -72,7 +72,7 @@ const columns: Column<Ticket>[] = [
     header: "Raised by",
     cell: (r) => (
       <div>
-        <p className="font-semibold">{r.name}</p>
+        <p className="font-medium">{r.name}</p>
         <MonoId tone="muted" className="text-[0.6875rem]">
           {r.partnerId}
         </MonoId>

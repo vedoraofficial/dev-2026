@@ -51,7 +51,7 @@ export function PartnerProfilePage() {
           <div className="space-y-4 md:space-y-5">
             <Panel className="flex flex-col items-center text-center">
               <PersonAvatar size="xl" />
-              <h2 className="mt-4 text-lg font-semibold">Rohit Deshmukh</h2>
+              <h2 className="mt-4 text-lg font-medium">Rohit Deshmukh</h2>
               <MonoId tone="gold" className="mt-0.5">
                 VED000418
               </MonoId>

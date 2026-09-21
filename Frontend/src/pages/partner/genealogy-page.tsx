@@ -41,7 +41,7 @@ export function PartnerGenealogyPage() {
                 <MonoId tone="gold" className="text-[0.6875rem]">
                   {me.id}
                 </MonoId>
-                <p className="mt-1 font-semibold">{me.name} — You</p>
+                <p className="mt-1 font-medium">{me.name} — You</p>
                 <p className="mt-1 text-[0.6875rem] text-muted-foreground">
                   {me.direct} / 20 direct ·{" "}
                   <span className="text-gold">{me.downline} downline</span>
@@ -69,7 +69,7 @@ export function PartnerGenealogyPage() {
                       <MonoId tone="gold" className="text-[0.625rem]">
                         {c.id}
                       </MonoId>
-                      <p className="mt-1 font-semibold">{c.name}</p>
+                      <p className="mt-1 font-medium">{c.name}</p>
                       <p className="mt-1 text-[0.6875rem] text-muted-foreground">
                         {c.direct >= 20 ? "20 / 20 · full" : `${c.direct} / 20 direct`}
                       </p>
@@ -134,7 +134,7 @@ export function PartnerGenealogyPage() {
             <div className="mb-5 flex items-center gap-3">
               <PersonAvatar size="md" />
               <div className="min-w-0">
-                <p className="truncate font-semibold">{selected.fullName}</p>
+                <p className="truncate font-medium">{selected.fullName}</p>
                 <MonoId tone="gold" className="text-[0.6875rem]">
                   {selected.id}
                 </MonoId>
