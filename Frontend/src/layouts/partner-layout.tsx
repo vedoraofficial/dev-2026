@@ -1,10 +1,16 @@
-import { Outlet } from "react-router-dom"
+import { PARTNER_NAV } from "@/app/navigation"
+import { AppShell } from "@/components/common/app-shell"
 
-/** Shell for the Partner & Founder portal — sidebar + topbar go here when the design is built. */
+/**
+ * Shell for the Partner & Founder portal.
+ * The user card is sample data until auth exists — then read it from the session.
+ */
 export function PartnerLayout() {
   return (
-    <div className="min-h-svh">
-      <Outlet />
-    </div>
+    <AppShell
+      sectionLabel="Partner portal"
+      nav={PARTNER_NAV}
+      user={{ name: "Rohit Deshmukh", id: "VED000418" }}
+    />
   )
 }

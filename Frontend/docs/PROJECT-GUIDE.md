@@ -53,6 +53,7 @@ Frontend/
 │  │
 │  ├─ features/             Business logic grouped by domain (see §4)
 │  │  └─ <feature>/         e.g. wallet/, genealogy/, withdrawals/
+│  │     ├─ mock-data.ts    TEMPORARY sample data + its types, until the API exists
 │  │     ├─ api.ts          Functions that call the backend
 │  │     ├─ queries.ts      React Query hooks (useXxx)
 │  │     ├─ schemas.ts      zod schemas for forms/validation
@@ -61,7 +62,7 @@ Frontend/
 │  │
 │  ├─ components/
 │  │  ├─ ui/                shadcn/ui primitives (generated — see §6)
-│  │  └─ common/            Our own reusable components (StatCard, DataTable, …)
+│  │  └─ common/            Our own reusable components (see §5b)
 │  │
 │  ├─ hooks/                Generic hooks not tied to a feature
 │  ├─ lib/                  utils.ts (cn), api.ts (axios), query-client.ts, env.ts
@@ -92,7 +93,9 @@ Frontend/
    only inside the same folder (`./types`).
 3. **Files are `kebab-case`** (`stat-card.tsx`); **components are `PascalCase`** named exports
    (`export function StatCard`). Default exports only for `App.tsx`.
-4. **Pages stay thin.** A page fetches via a feature hook and composes components. No
+4. **Pages stay thin.** A page gets its data from a feature (`features/<x>/mock-data.ts` today,
+   `queries.ts` once the API exists) and composes components. Screen-specific layout may live in
+   the page file; extract it to `features/<x>/components/` when a second screen needs it. No
    business logic or raw `axios` in pages.
 5. **One component per file**, props typed inline or with a `Props` type in the same file.
 6. **Don't hard-code URLs.** Use `ROUTES` from `@/app/routes`.
@@ -151,6 +154,24 @@ Already added: `alert`, `alert-dialog`, `avatar`, `badge`, `button`, `card`, `ch
 
 Need another? `npx shadcn@latest add <name>`. Don't copy components from random sites.
 
+## 5b. Our own components (`components/common/`)
+
+Use these before writing new markup — they carry the approved design.
+
+| Component                                         | Use for                                                                                |
+| ------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| `AppShell`                                        | Sidebar + content frame. Fixed sidebar on desktop, slide-in drawer on tablet/phone.    |
+| `PageHeader` / `PageBody`                         | Top bar (title, subtitle, actions, bell, avatar) and the padded content area under it. |
+| `Panel` / `PanelHeader`                           | The standard dark-green card and its title row.                                        |
+| `StatCard` / `StatGrid`                           | KPI tiles. `highlight` = gold outline, `tone` = green/gold/red label.                  |
+| `DataTable`                                       | Any table. One column list renders a table on desktop **and stacked cards on phones**. |
+| `FilterTabs`, `FilterSelect`, `TablePagination`   | Filters and paging above/below a table.                                                |
+| `StatusPill`                                      | success / pending / danger / neutral / gold badges.                                    |
+| `MonoId`                                          | VEDORA IDs, order numbers, codes (always monospace).                                   |
+| `PersonAvatar`, `ProgressBar`, `Timeline`, `Logo` | Small building blocks.                                                                 |
+
+Money/number formatting lives in `lib/format.ts` (`formatINR`, `formatCompactINR`, `formatBV`, …).
+
 ## 6. Editing `components/ui/`
 
 These files are owned by shadcn — you _may_ edit them (that's the point of shadcn), but:
@@ -162,32 +183,51 @@ These files are owned by shadcn — you _may_ edit them (that's the point of sha
 
 ## 7. Theming
 
-- Dark theme is the default (`ThemeProvider` in `app/providers.tsx`, `defaultTheme="dark"`).
-- Colors, radius and fonts are CSS variables in `src/index.css`. shadcn's neutral placeholder
-  palette is currently active.
-- **Planned (not yet applied):** brand look from the design PDF — dark green + gold, Cormorant
-  Garamond (display) / Manrope (UI) / JetBrains Mono (VEDORA IDs). Exact brand hex codes are
-  still pending from the client, so don't hard-code approximations; wait for the tokens.
+- VEDORA is **dark-only** (`ThemeProvider` in `app/providers.tsx` uses `forcedTheme="dark"`).
+- The brand palette, radius and fonts are CSS variables in `src/index.css`. Change the look
+  there, not in components:
+  - Surfaces: `background` (#071a13) → `card` (#0c2419) → `forest` (#1a3a29); inputs use `field`.
+  - Brand: `gold` (#c9a961), `gold-light` (#e4ca8e), text `foreground` (#f4f1e9).
+  - Status: `success`, `warning`, `danger` (+ `-soft` backgrounds).
+  - Use as Tailwind classes: `bg-card`, `text-gold`, `border-border`, `bg-success-soft`, …
+- Fonts: **Cormorant Garamond** (`font-display`: titles, big numbers), **Manrope** (`font-sans`:
+  everything else), **JetBrains Mono** (`font-mono`: IDs, money in tables).
+- The hex values were sampled from the design PDF. The client's official brand hex codes are
+  still pending — when they arrive, only `index.css` needs updating.
+
+### Responsive (must work on Windows, Mac, iPad, iPhone, Android)
+
+- Mobile-first. Breakpoints: `md` 768px (tablet), `lg` 1024px (desktop; sidebar becomes fixed).
+- Below `lg` the sidebar is a drawer opened from the header menu button.
+- Tables use `DataTable` so phones get cards instead of sideways scrolling.
+- Inputs are 16px on phones (`text-base`) so iOS Safari doesn't zoom on focus. Don't shrink them.
+- Tap targets are ≥ 40px on phones (`Button` / `Input` sizes already handle this).
+- Use `min-h-svh`, not `h-screen`, and keep `viewport-fit=cover` + `safe-x` for the iPhone notch.
+- Check every new screen at **1440**, **820** and **390** px wide and make sure the page never
+  scrolls sideways.
 
 ## 8. Routes
 
 Defined in `app/router.tsx`, URLs in `app/routes.ts`.
 
-| Area    | Routes                                                                                                                                      |
-| ------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| Auth    | `/login`                                                                                                                                    |
-| Admin   | `/admin/` overview · partners · founders · manual-placement · genealogy · products · withdrawals · income-reports · transactions · settings |
-| Partner | `/partner/` dashboard · genealogy · team · wallet · income-reports · products · profile · settings                                          |
+| Area    | Routes                                                                                                                                                         |
+| ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Auth    | `/login`                                                                                                                                                       |
+| Admin   | `/admin/` overview · partners · founders · manual-placement · genealogy · products · orders · withdrawals · income-reports · transactions · support · settings |
+| Partner | `/partner/` dashboard · genealogy · team · wallet · srp-wallet · income-reports · products · orders · profile · policies · settings                            |
 
-Every page is currently a `PagePlaceholder`. To build one: replace the body of the file in
-`pages/…`, keep the exported component name (the router imports it by name).
+All 24 screens of the approved design are built. To add a page: create `pages/<portal>/x-page.tsx`
+exporting a named component, then register it in `app/router.tsx`, `app/routes.ts` and
+`app/navigation.ts`.
 
-## 9. Not built yet (setup only)
+## 9. Not built yet
 
-- Real designs for all screens (`PagePlaceholder` everywhere).
-- Auth: login flow, token storage, route guards per role (Admin / Founder / Partner). Needs the
-  backend auth contract first.
-- Shared money/BV formatter (rule 13).
+- **Real data.** Every screen shows sample data from `features/*/mock-data.ts`. Buttons (Approve,
+  Confirm placement, Checkout…) don't call anything yet.
+- **Auth:** the login screen validates and redirects (`VED108` → admin, anything else → partner) but
+  there is no token/session, and no route guards per role (Admin / Founder / Partner). The user card
+  in the sidebar is hard-coded in `layouts/*-layout.tsx`. Needs the backend auth contract first.
+- **Policies:** "Read" / "Download PDF" buttons have no files behind them yet.
 - Partner self-registration with OTP, Partner Agreement acceptance, Rank & Achievement module,
   Level Capacity dashboard, Active/Inactive handling — listed as "not yet designed" in the
   design PDF.
@@ -196,5 +236,5 @@ Every page is currently a `PagePlaceholder`. To build one: replace the body of t
 
 The API shape is owned by the backend developer. Agree endpoints and response types with them
 first, write the types in `features/<x>/types.ts`, then build the UI. Until an endpoint exists,
-mock inside the feature's `api.ts` — never inside components — so swapping in the real call
-changes one file.
+the feature's `mock-data.ts` stands in — never put sample data inside components. To go live:
+add `api.ts` + `queries.ts` next to it, switch the page to the query hook, delete `mock-data.ts`.

@@ -1,4 +1,4 @@
-﻿import type { ComponentType } from "react"
+import type { ComponentType } from "react"
 import { createBrowserRouter, Navigate, type RouteObject } from "react-router-dom"
 
 import { ROUTES } from "@/app/routes"
@@ -6,7 +6,7 @@ import { AdminLayout } from "@/layouts/admin-layout"
 import { AuthLayout } from "@/layouts/auth-layout"
 import { PartnerLayout } from "@/layouts/partner-layout"
 
-/** Pages are lazy-loaded so each screen is its own chunk. */
+/** Pages are lazy-loaded so each screen is its own chunk. `name` is the page's exported component. */
 const page = (load: () => Promise<Record<string, unknown>>, name: string): RouteObject => ({
   lazy: async () => ({ Component: (await load())[name] as ComponentType }),
 })
@@ -16,10 +16,7 @@ export const router = createBrowserRouter([
   {
     element: <AuthLayout />,
     children: [
-      {
-        path: ROUTES.login,
-        ...page(() => import("@/pages/auth/login-page"), "LoginPage"),
-      },
+      { path: ROUTES.login, ...page(() => import("@/pages/auth/login-page"), "LoginPage") },
     ],
   },
   {
@@ -51,6 +48,7 @@ export const router = createBrowserRouter([
         path: "products",
         ...page(() => import("@/pages/admin/products-page"), "AdminProductsPage"),
       },
+      { path: "orders", ...page(() => import("@/pages/admin/orders-page"), "AdminOrdersPage") },
       {
         path: "withdrawals",
         ...page(() => import("@/pages/admin/withdrawals-page"), "AdminWithdrawalsPage"),
@@ -63,6 +61,7 @@ export const router = createBrowserRouter([
         path: "transactions",
         ...page(() => import("@/pages/admin/transactions-page"), "AdminTransactionsPage"),
       },
+      { path: "support", ...page(() => import("@/pages/admin/support-page"), "AdminSupportPage") },
       {
         path: "settings",
         ...page(() => import("@/pages/admin/settings-page"), "AdminSettingsPage"),
@@ -85,6 +84,10 @@ export const router = createBrowserRouter([
       { path: "team", ...page(() => import("@/pages/partner/team-page"), "PartnerTeamPage") },
       { path: "wallet", ...page(() => import("@/pages/partner/wallet-page"), "PartnerWalletPage") },
       {
+        path: "srp-wallet",
+        ...page(() => import("@/pages/partner/srp-wallet-page"), "PartnerSrpWalletPage"),
+      },
+      {
         path: "income-reports",
         ...page(() => import("@/pages/partner/income-reports-page"), "PartnerIncomeReportsPage"),
       },
@@ -92,9 +95,14 @@ export const router = createBrowserRouter([
         path: "products",
         ...page(() => import("@/pages/partner/products-page"), "PartnerProductsPage"),
       },
+      { path: "orders", ...page(() => import("@/pages/partner/orders-page"), "PartnerOrdersPage") },
       {
         path: "profile",
         ...page(() => import("@/pages/partner/profile-page"), "PartnerProfilePage"),
+      },
+      {
+        path: "policies",
+        ...page(() => import("@/pages/partner/policies-page"), "PartnerPoliciesPage"),
       },
       {
         path: "settings",

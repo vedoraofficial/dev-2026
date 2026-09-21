@@ -1,10 +1,13 @@
-import { Outlet } from "react-router-dom"
+import { ADMIN_NAV } from "@/app/navigation"
+import { AppShell } from "@/components/common/app-shell"
 
-/** Shell for the Admin Control Panel — sidebar + topbar go here when the design is built. */
+/** Shell for the Admin Control Panel. The signed-in user is fixed to Root Admin until auth exists. */
 export function AdminLayout() {
   return (
-    <div className="min-h-svh">
-      <Outlet />
-    </div>
+    <AppShell
+      sectionLabel="Admin control"
+      nav={ADMIN_NAV}
+      user={{ name: "Root Admin", id: "VED108" }}
+    />
   )
 }
