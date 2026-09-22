@@ -126,9 +126,6 @@ export function AdminSettingsPage() {
                   </li>
                 ))}
               </ul>
-              <Button variant="outline" className="mt-4">
-                Add admin user
-              </Button>
             </Panel>
           </div>
 

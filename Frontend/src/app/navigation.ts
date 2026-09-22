@@ -13,7 +13,8 @@ export const ADMIN_NAV: NavItem[] = [
   { label: "Withdrawals", to: ROUTES.admin.withdrawals },
   { label: "Income Reports", to: ROUTES.admin.incomeReports },
   { label: "Transactions", to: ROUTES.admin.transactions },
-  { label: "Settings", to: ROUTES.admin.settings },
+  // "Settings" is deliberately not in the sidebar — it's reached from the profile menu
+  // next to the notification bell (see components/common/user-menu.tsx).
 ]
 
 export const PARTNER_NAV: NavItem[] = [

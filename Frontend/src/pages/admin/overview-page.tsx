@@ -70,7 +70,6 @@ export function AdminOverviewPage() {
             hint={`${formatINR(stats.commissionPerSale)} × ${formatNumber(stats.productSales)} sales`}
           />
           <StatCard
-            highlight
             href={ROUTES.admin.withdrawals}
             label="Needs your action"
             value={stats.pendingWithdrawals}
