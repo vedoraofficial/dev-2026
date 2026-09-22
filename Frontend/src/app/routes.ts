@@ -12,7 +12,6 @@ export const ROUTES = {
     withdrawals: "/admin/withdrawals",
     incomeReports: "/admin/income-reports",
     transactions: "/admin/transactions",
-    support: "/admin/support",
     settings: "/admin/settings",
     profile: "/admin/profile",
   },

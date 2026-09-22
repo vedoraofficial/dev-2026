@@ -12,6 +12,16 @@ export const payoutSplit = [
 
 export const payoutTotal = 1104000
 
+/** Options for the Income Reports "Period" filter. */
+export const INCOME_PERIODS = ["01–18 Sep", "Last month", "Custom"] as const
+export type IncomePeriod = (typeof INCOME_PERIODS)[number]
+
+export const periodDateLabel: Record<IncomePeriod, string> = {
+  "01–18 Sep": "01 Sep – 18 Sep 2026",
+  "Last month": "01 Aug – 31 Aug 2026",
+  Custom: "01 Aug – 18 Sep 2026",
+}
+
 export const topEarners = [
   { name: "Poonam Medhavi", id: "VED000001", amount: 84200 },
   { name: "Neelam Dongare", id: "VED000002", amount: 61700 },
@@ -33,7 +43,8 @@ export type LedgerEntry = {
   excluded?: boolean
 }
 
-export const commissionLedger: LedgerEntry[] = [
+/** 01–18 Sep 2026 — the current period. */
+const septemberLedger: LedgerEntry[] = [
   {
     id: "1",
     date: "18 Sep",
@@ -117,6 +128,83 @@ export const commissionLedger: LedgerEntry[] = [
     excluded: true,
   },
 ]
+
+/** Last month — August 2026. */
+const augustLedger: LedgerEntry[] = [
+  {
+    id: "9",
+    date: "28 Aug",
+    order: "ORD-00982",
+    seller: "VED000455",
+    recipient: "VED000455",
+    type: "Direct Sale",
+    level: "—",
+    amount: 200,
+  },
+  {
+    id: "10",
+    date: "28 Aug",
+    order: "ORD-00982",
+    seller: "VED000455",
+    recipient: "VED000418",
+    type: "BV Level Income",
+    level: "L1",
+    amount: 100,
+  },
+  {
+    id: "11",
+    date: "25 Aug",
+    order: "ORD-00966",
+    seller: "VED000462",
+    recipient: "VED000462",
+    type: "Direct Sale",
+    level: "—",
+    amount: 200,
+  },
+  {
+    id: "12",
+    date: "25 Aug",
+    order: "ORD-00966",
+    seller: "VED000462",
+    recipient: "VED000418",
+    type: "BV Level Income",
+    level: "L1",
+    amount: 100,
+  },
+  {
+    id: "13",
+    date: "20 Aug",
+    order: "ORD-00940",
+    seller: "VED000601",
+    recipient: "VED000462",
+    type: "Capped — 21st slot",
+    level: "L1",
+    amount: 0,
+    excluded: true,
+  },
+  {
+    id: "14",
+    date: "18 Aug",
+    order: "ORD-00918",
+    seller: "VED000568",
+    recipient: "VED000568",
+    type: "Direct Sale",
+    level: "—",
+    amount: 200,
+  },
+]
+
+export const commissionLedgerByPeriod: Record<IncomePeriod, LedgerEntry[]> = {
+  "01–18 Sep": septemberLedger,
+  "Last month": augustLedger,
+  Custom: [...septemberLedger, ...augustLedger],
+}
+
+export const payoutTotalByPeriod: Record<IncomePeriod, number> = {
+  "01–18 Sep": 1104000,
+  "Last month": 986000,
+  Custom: 1104000 + 986000,
+}
 
 /** Partner: the signed-in partner's own income */
 export const partnerIncomeSummary = [

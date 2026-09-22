@@ -210,11 +210,11 @@ These files are owned by shadcn — you _may_ edit them (that's the point of sha
 
 Defined in `app/router.tsx`, URLs in `app/routes.ts`.
 
-| Area    | Routes                                                                                                                                                         |
-| ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Auth    | `/login`                                                                                                                                                       |
-| Admin   | `/admin/` overview · partners · founders · manual-placement · genealogy · products · orders · withdrawals · income-reports · transactions · support · settings |
-| Partner | `/partner/` dashboard · genealogy · team · wallet · srp-wallet · income-reports · products · orders · profile · policies · settings                            |
+| Area    | Routes                                                                                                                                                 |
+| ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Auth    | `/login`                                                                                                                                               |
+| Admin   | `/admin/` overview · partners · founders · genealogy · products · orders · withdrawals · income-reports · transactions · settings · profile            |
+| Partner | `/partner/` dashboard · genealogy · manual-placement · team · wallet · srp-wallet · income-reports · products · orders · profile · policies · settings |
 
 All 24 screens of the approved design are built. To add a page: create `pages/<portal>/x-page.tsx`
 exporting a named component, then register it in `app/router.tsx`, `app/routes.ts` and

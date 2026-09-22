@@ -13,7 +13,6 @@ export const ADMIN_NAV: NavItem[] = [
   { label: "Withdrawals", to: ROUTES.admin.withdrawals },
   { label: "Income Reports", to: ROUTES.admin.incomeReports },
   { label: "Transactions", to: ROUTES.admin.transactions },
-  { label: "Support", to: ROUTES.admin.support },
   { label: "Settings", to: ROUTES.admin.settings },
 ]
 

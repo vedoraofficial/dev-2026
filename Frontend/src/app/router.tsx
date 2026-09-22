@@ -71,7 +71,6 @@ export const router = createBrowserRouter([
         path: "transactions",
         ...page(() => import("@/pages/admin/transactions-page"), "AdminTransactionsPage"),
       },
-      { path: "support", ...page(() => import("@/pages/admin/support-page"), "AdminSupportPage") },
       {
         path: "settings",
         ...page(() => import("@/pages/admin/settings-page"), "AdminSettingsPage"),

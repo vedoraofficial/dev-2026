@@ -1,3 +1,5 @@
+import { useState } from "react"
+
 import { DataTable, type Column } from "@/components/common/data-table"
 import { FilterSelect } from "@/components/common/filter-select"
 import { MonoId } from "@/components/common/mono-id"
@@ -5,15 +7,21 @@ import { PageBody, PageHeader } from "@/components/common/page-header"
 import { Panel, PanelHeader } from "@/components/common/panel"
 import { Button } from "@/components/ui/button"
 import {
-  commissionLedger,
+  commissionLedgerByPeriod,
+  INCOME_PERIODS,
   payoutSplit,
   payoutTotal,
+  payoutTotalByPeriod,
+  periodDateLabel,
   topEarners,
+  type IncomePeriod,
   type LedgerEntry,
 } from "@/features/income/mock-data"
+import { downloadCsv } from "@/lib/csv"
 import { formatINR, formatNumber } from "@/lib/format"
 import { cn } from "@/lib/utils"
 
+const VIEW_OPTIONS = ["Level-wise", "Date-wise"]
 const maxSplit = Math.max(...payoutSplit.map((p) => p.amount))
 const barTone = { direct: "bg-gold", mid: "bg-chart-2", low: "bg-chart-4" } as const
 
@@ -62,16 +70,33 @@ const columns: Column<LedgerEntry>[] = [
 ]
 
 export function AdminIncomeReportsPage() {
+  const [period, setPeriod] = useState<IncomePeriod>(INCOME_PERIODS[0])
+  const ledger = commissionLedgerByPeriod[period]
+  const periodTotal = payoutTotalByPeriod[period]
+
+  const exportCsv = () => {
+    downloadCsv(
+      `vedora-income-${period.toLowerCase().replace(/[^a-z0-9]+/g, "-")}.csv`,
+      ["Date", "Order", "Seller", "Recipient", "Type", "Level", "Amount (INR)"],
+      ledger.map((r) => [r.date, r.order, r.seller, r.recipient, r.type, r.level, r.amount]),
+    )
+  }
+
   return (
     <>
       <PageHeader
         title="Income Reports"
-        subtitle="Commission ledger produced by the BV engine · 01–18 Sep 2026"
+        subtitle={`Commission ledger produced by the BV engine · ${periodDateLabel[period]}`}
         actions={
           <>
-            <FilterSelect label="View" options={["Level-wise", "Date-wise", "Partner-wise"]} />
-            <FilterSelect label="Period" options={["01–18 Sep", "Last month", "Custom"]} />
-            <Button>Export</Button>
+            <FilterSelect label="View" options={VIEW_OPTIONS} />
+            <FilterSelect
+              label="Period"
+              options={[...INCOME_PERIODS]}
+              defaultValue={period}
+              onValueChange={(v) => setPeriod(v as IncomePeriod)}
+            />
+            <Button onClick={exportCsv}>Export</Button>
           </>
         }
       />
@@ -143,13 +168,14 @@ export function AdminIncomeReportsPage() {
           />
           <DataTable
             columns={columns}
-            rows={commissionLedger}
+            rows={ledger}
             getRowKey={(r) => r.id}
             rowClassName={(r) => (r.excluded ? "bg-muted/30 text-muted-foreground" : undefined)}
+            emptyMessage="No commission entries in this period."
           />
           <div className="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-border/70 pt-4 text-xs text-muted-foreground">
             <span>₹600 distributed per sale · {formatNumber(1840)} sales this period</span>
-            <span className="font-mono text-sm text-gold">{formatINR(payoutTotal)}</span>
+            <span className="font-mono text-sm text-gold">{formatINR(periodTotal)}</span>
           </div>
         </Panel>
       </PageBody>
