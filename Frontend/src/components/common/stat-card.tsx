@@ -1,4 +1,6 @@
+import { ChevronRight } from "lucide-react"
 import type { ReactNode } from "react"
+import { Link } from "react-router-dom"
 
 import { cn } from "@/lib/utils"
 
@@ -11,21 +13,25 @@ type Props = {
   highlight?: boolean
   /** Colours the label (and the value for "danger") to flag status, e.g. success rate or failures */
   tone?: "success" | "warning" | "danger"
+  /** Makes the card a link to the screen that breaks this number down */
+  href?: string
   className?: string
 }
 
 const labelTone = { success: "text-success", warning: "text-gold", danger: "text-danger" } as const
 
-export function StatCard({ label, value, hint, highlight, tone, className }: Props) {
-  return (
-    <div
-      className={cn(
-        "min-w-0 rounded-2xl border bg-card p-4 md:p-5",
-        highlight ? "border-gold/45" : "border-border",
-        className,
-      )}
-    >
-      <p className={cn("eyebrow", highlight && "text-gold", tone && labelTone[tone])}>{label}</p>
+export function StatCard({ label, value, hint, highlight, tone, href, className }: Props) {
+  const content = (
+    <>
+      <div className="flex items-start justify-between gap-2">
+        <p className={cn("eyebrow", highlight && "text-gold", tone && labelTone[tone])}>{label}</p>
+        {href ? (
+          <ChevronRight
+            aria-hidden
+            className="mt-px size-3.5 shrink-0 text-muted-foreground/70 transition-transform group-hover:translate-x-0.5 group-hover:text-gold"
+          />
+        ) : null}
+      </div>
       <p
         className={cn(
           "mt-2 font-display text-[1.875rem] leading-none font-medium md:text-[2.125rem]",
@@ -35,8 +41,26 @@ export function StatCard({ label, value, hint, highlight, tone, className }: Pro
         {value}
       </p>
       {hint ? <div className="mt-2 text-xs text-muted-foreground">{hint}</div> : null}
-    </div>
+    </>
   )
+
+  const cardClass = cn(
+    "group min-w-0 rounded-2xl border bg-card p-4 md:p-5",
+    highlight ? "border-gold/45" : "border-border",
+    href &&
+      "transition-colors hover:border-gold/40 hover:bg-accent/30 focus-visible:border-gold/50 focus-visible:ring-3 focus-visible:ring-gold/20 focus-visible:outline-none",
+    className,
+  )
+
+  if (href) {
+    return (
+      <Link to={href} className={cardClass}>
+        {content}
+      </Link>
+    )
+  }
+
+  return <div className={cardClass}>{content}</div>
 }
 
 /** Responsive grid for a row of StatCards: 2 columns on phones, `cols` from `lg`. */

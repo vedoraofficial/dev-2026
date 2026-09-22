@@ -5,6 +5,7 @@ import { Logo } from "@/components/common/logo"
 import { MonoId } from "@/components/common/mono-id"
 import { PersonAvatar } from "@/components/common/person-avatar"
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet"
+import { PortalUserProvider, type PortalUser } from "@/lib/portal-user"
 import { useShellStore } from "@/lib/shell-store"
 import { cn } from "@/lib/utils"
 
@@ -12,7 +13,7 @@ type Props = {
   /** Small caption above the menu, e.g. "Admin control" */
   sectionLabel: string
   nav: NavItem[]
-  user: { name: string; id: string }
+  user: PortalUser
 }
 
 function SidebarBody({ sectionLabel, nav, user, onNavigate }: Props & { onNavigate?: () => void }) {
@@ -58,15 +59,19 @@ function SidebarBody({ sectionLabel, nav, user, onNavigate }: Props & { onNaviga
       </nav>
 
       <div className="shrink-0 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
-        <div className="flex items-center gap-3 rounded-xl border border-border bg-accent/60 px-3 py-2.5">
-          <PersonAvatar size="sm" />
+        <NavLink
+          to={user.profileHref}
+          onClick={onNavigate}
+          className="flex items-center gap-3 rounded-xl border border-border bg-accent/60 px-3 py-2.5 transition-colors hover:border-gold/30"
+        >
+          <PersonAvatar tone={user.role === "Root Admin" ? "gold" : "striped"} size="sm" />
           <div className="min-w-0">
             <p className="truncate text-[0.8125rem] font-medium">{user.name}</p>
             <MonoId tone="gold" className="text-[0.6875rem]">
               {user.id}
             </MonoId>
           </div>
-        </div>
+        </NavLink>
       </div>
     </div>
   )
@@ -75,6 +80,7 @@ function SidebarBody({ sectionLabel, nav, user, onNavigate }: Props & { onNaviga
 /**
  * Sidebar + content frame shared by the Admin and Partner portals.
  * Desktop (lg+): fixed sidebar. Tablet / phone: the sidebar becomes a slide-in drawer.
+ * The signed-in `user` is made available to every page via `usePortalUser()`.
  */
 export function AppShell(props: Props) {
   const open = useShellStore((s) => s.mobileNavOpen)
@@ -99,7 +105,9 @@ export function AppShell(props: Props) {
       </Sheet>
 
       <div className="min-w-0">
-        <Outlet />
+        <PortalUserProvider user={props.user}>
+          <Outlet />
+        </PortalUserProvider>
       </div>
     </div>
   )

@@ -1,20 +1,33 @@
+import { Loader2 } from "lucide-react"
 import type { ComponentType } from "react"
 import { createBrowserRouter, Navigate, type RouteObject } from "react-router-dom"
 
 import { ROUTES } from "@/app/routes"
+import { RouteError } from "@/components/common/route-error"
 import { AdminLayout } from "@/layouts/admin-layout"
 import { AuthLayout } from "@/layouts/auth-layout"
 import { PartnerLayout } from "@/layouts/partner-layout"
 
+/** Shown for the instant a lazy page's chunk is still downloading. */
+function RouteLoading() {
+  return (
+    <div className="grid min-h-[60svh] place-items-center">
+      <Loader2 className="size-6 animate-spin text-gold" aria-label="Loading" />
+    </div>
+  )
+}
+
 /** Pages are lazy-loaded so each screen is its own chunk. `name` is the page's exported component. */
 const page = (load: () => Promise<Record<string, unknown>>, name: string): RouteObject => ({
   lazy: async () => ({ Component: (await load())[name] as ComponentType }),
+  HydrateFallback: RouteLoading,
 })
 
 export const router = createBrowserRouter([
-  { path: "/", element: <Navigate to={ROUTES.login} replace /> },
+  { path: "/", element: <Navigate to={ROUTES.login} replace />, ErrorBoundary: RouteError },
   {
     element: <AuthLayout />,
+    ErrorBoundary: RouteError,
     children: [
       { path: ROUTES.login, ...page(() => import("@/pages/auth/login-page"), "LoginPage") },
     ],
@@ -22,6 +35,7 @@ export const router = createBrowserRouter([
   {
     path: ROUTES.admin.root,
     element: <AdminLayout />,
+    ErrorBoundary: RouteError,
     children: [
       { index: true, element: <Navigate to={ROUTES.admin.overview} replace /> },
       {
@@ -66,11 +80,13 @@ export const router = createBrowserRouter([
         path: "settings",
         ...page(() => import("@/pages/admin/settings-page"), "AdminSettingsPage"),
       },
+      { path: "profile", ...page(() => import("@/pages/admin/profile-page"), "AdminProfilePage") },
     ],
   },
   {
     path: ROUTES.partner.root,
     element: <PartnerLayout />,
+    ErrorBoundary: RouteError,
     children: [
       { index: true, element: <Navigate to={ROUTES.partner.dashboard} replace /> },
       {

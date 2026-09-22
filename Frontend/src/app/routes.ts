@@ -15,6 +15,7 @@ export const ROUTES = {
     transactions: "/admin/transactions",
     support: "/admin/support",
     settings: "/admin/settings",
+    profile: "/admin/profile",
   },
   partner: {
     root: "/partner",

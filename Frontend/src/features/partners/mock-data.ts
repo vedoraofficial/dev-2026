@@ -1,11 +1,14 @@
 /** Sample data for Partners and Founders. Replace with API calls in `api.ts` / `queries.ts`. */
 
-export type PartnerStatus = "active" | "pan-pending" | "inactive"
+export type PartnerStatus = "active" | "free-active" | "pan-pending" | "inactive"
 
 export type PartnerRow = {
   id: string
   name: string
+  mobile: string
   sponsor: string
+  /** Depth in the genealogy from Root Admin — what the "Level" filter matches on. */
+  level: number
   slotsUsed: number
   team: number
   wallet: number
@@ -17,7 +20,9 @@ export const partners: PartnerRow[] = [
   {
     id: "VED000001",
     name: "Poonam Medhavi",
+    mobile: "+91 98220 10001",
     sponsor: "VED108",
+    level: 1,
     slotsUsed: 20,
     team: 2981,
     wallet: 840000,
@@ -27,7 +32,9 @@ export const partners: PartnerRow[] = [
   {
     id: "VED000418",
     name: "Rohit Deshmukh",
+    mobile: "+91 98220 41288",
     sponsor: "VED000301",
+    level: 2,
     slotsUsed: 14,
     team: 214,
     wallet: 48600,
@@ -36,7 +43,9 @@ export const partners: PartnerRow[] = [
   {
     id: "VED000462",
     name: "Imran Shaikh",
+    mobile: "+91 90112 74625",
     sponsor: "VED000418",
+    level: 3,
     slotsUsed: 20,
     team: 96,
     wallet: 102400,
@@ -45,7 +54,9 @@ export const partners: PartnerRow[] = [
   {
     id: "VED000478",
     name: "Meera Joshi",
+    mobile: "+91 98765 04781",
     sponsor: "VED000418",
+    level: 3,
     slotsUsed: 4,
     team: 18,
     wallet: 9400,
@@ -54,7 +65,9 @@ export const partners: PartnerRow[] = [
   {
     id: "VED000491",
     name: "Akash Patil",
+    mobile: "+91 99225 04911",
     sponsor: "VED000418",
+    level: 5,
     slotsUsed: 7,
     team: 7,
     wallet: 22800,
@@ -63,7 +76,9 @@ export const partners: PartnerRow[] = [
   {
     id: "VED000568",
     name: "Pooja Nair",
+    mobile: "+91 97025 05681",
     sponsor: "VED000418",
+    level: 3,
     slotsUsed: 11,
     team: 31,
     wallet: 17200,
@@ -72,21 +87,39 @@ export const partners: PartnerRow[] = [
   {
     id: "VED000455",
     name: "Sneha Kulkarni",
+    mobile: "+91 96073 04551",
     sponsor: "VED000418",
+    level: 3,
     slotsUsed: 9,
     team: 42,
     wallet: 31200,
     status: "active",
   },
+  {
+    id: "VED000512",
+    name: "Karan Mehta",
+    mobile: "+91 89561 05121",
+    sponsor: "VED000455",
+    level: 4,
+    slotsUsed: 3,
+    team: 5,
+    wallet: 6200,
+    status: "free-active",
+  },
 ]
 
-export const partnerTabs = [
-  { value: "all", label: "All 6,482" },
-  { value: "founders", label: "Founders 3" },
-  { value: "active", label: "Active 6,118" },
-  { value: "free-active", label: "Free Active 208" },
-  { value: "inactive", label: "Inactive 364" },
-  { value: "pan-pending", label: "PAN pending 23" },
+/** Tab filters above the Partners table. `total` is the full-dataset count shown in the tab label. */
+export const partnerTabs: {
+  value: PartnerStatus | "all" | "founders"
+  label: string
+  total: number
+}[] = [
+  { value: "all", label: "All 6,482", total: 6482 },
+  { value: "founders", label: "Founders 3", total: 3 },
+  { value: "active", label: "Active 6,118", total: 6118 },
+  { value: "free-active", label: "Free Active 208", total: 208 },
+  { value: "inactive", label: "Inactive 364", total: 364 },
+  { value: "pan-pending", label: "PAN pending 23", total: 23 },
 ]
 
 export type Founder = {

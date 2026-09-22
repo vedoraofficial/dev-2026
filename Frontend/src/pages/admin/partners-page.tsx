@@ -1,3 +1,5 @@
+import { useMemo, useState } from "react"
+
 import { DataTable, type Column } from "@/components/common/data-table"
 import { FilterSelect } from "@/components/common/filter-select"
 import { FilterTabs } from "@/components/common/filter-tabs"
@@ -15,13 +17,41 @@ import {
   type PartnerRow,
   type PartnerStatus,
 } from "@/features/partners/mock-data"
+import { downloadCsv } from "@/lib/csv"
 import { formatCompactINR, formatINR, formatNumber } from "@/lib/format"
 import { cn } from "@/lib/utils"
 
 const statusLabel: Record<PartnerStatus, { text: string; variant: PillVariant }> = {
   active: { text: "Active", variant: "success" },
+  "free-active": { text: "Free Active", variant: "gold" },
   "pan-pending": { text: "PAN pending", variant: "pending" },
   inactive: { text: "Inactive", variant: "danger" },
+}
+
+const LEVEL_OPTIONS = ["Any", "Level 1", "Level 2", "Level 3", "Level 4", "Level 5"]
+
+/** Which tab each partner belongs to. "all" and "founders" aren't PartnerStatus values. */
+function matchesTab(partner: PartnerRow, tab: string): boolean {
+  if (tab === "all") return true
+  if (tab === "founders") return !!partner.founder
+  return partner.status === tab
+}
+
+/** Matches the search box against ID, name and mobile (spaces ignored for ID/mobile). */
+function matchesQuery(partner: PartnerRow, query: string): boolean {
+  const q = query.trim().toLowerCase()
+  if (!q) return true
+  const qDigits = q.replace(/\s+/g, "")
+  return (
+    partner.name.toLowerCase().includes(q) ||
+    partner.id.toLowerCase().replace(/\s+/g, "").includes(qDigits) ||
+    partner.mobile.replace(/\s+/g, "").includes(qDigits)
+  )
+}
+
+/** "Any" matches everyone; "Level 3" matches partner.level === 3. */
+function matchesLevel(partner: PartnerRow, level: string): boolean {
+  return level === "Any" || partner.level === Number(level.replace("Level ", ""))
 }
 
 function RowActions({ row }: { row: PartnerRow }) {
@@ -69,6 +99,11 @@ const columns: Column<PartnerRow>[] = [
   },
   { key: "sponsor", header: "Sponsor", cell: (r) => <MonoId tone="muted">{r.sponsor}</MonoId> },
   {
+    key: "level",
+    header: "Level",
+    cell: (r) => <span className="text-muted-foreground">L{r.level}</span>,
+  },
+  {
     key: "slots",
     header: "Slots",
     cell: (r) => (
@@ -104,44 +139,112 @@ const columns: Column<PartnerRow>[] = [
 ]
 
 export function AdminPartnersPage() {
+  const [tab, setTab] = useState<string>(partnerTabs[0].value)
+  const [query, setQuery] = useState("")
+  const [level, setLevel] = useState("Any")
+  const isSearching = query.trim().length > 0
+  const isFiltered = isSearching || level !== "Any"
+
+  const rows = useMemo(
+    () =>
+      partners.filter(
+        (p) => matchesTab(p, tab) && matchesQuery(p, query) && matchesLevel(p, level),
+      ),
+    [tab, query, level],
+  )
+  const tabTotal = partnerTabs.find((t) => t.value === tab)?.total ?? partners.length
+
+  const exportCsv = () => {
+    downloadCsv(
+      `vedora-partners-${tab}${level === "Any" ? "" : `-${level.toLowerCase().replace(" ", "")}`}.csv`,
+      [
+        "VEDORA ID",
+        "Name",
+        "Mobile",
+        "Sponsor",
+        "Level",
+        "Slots used",
+        "Team",
+        "Wallet (INR)",
+        "Status",
+      ],
+      rows.map((r) => [
+        r.id,
+        r.name,
+        r.mobile,
+        r.sponsor,
+        r.level,
+        r.slotsUsed,
+        r.team,
+        r.wallet,
+        statusLabel[r.status].text,
+      ]),
+    )
+  }
+
   return (
     <>
       <PageHeader
         title="Partners"
         subtitle="6,482 records · 3 Founders (fixed) · IDs auto-generated from VED000004"
         actions={
-          <>
-            <Input
-              type="search"
-              placeholder="Search ID, name or mobile…"
-              aria-label="Search partners"
-              className="w-full md:w-72"
-            />
-            <Button className="max-md:flex-1">Add partner</Button>
-          </>
+          <Input
+            type="search"
+            placeholder="Search ID, name or mobile…"
+            aria-label="Search partners"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            className="w-full md:w-72"
+          />
         }
       />
       <PageBody>
         <Panel>
           <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-            <FilterTabs tabs={partnerTabs} aria-label="Partner status" />
+            <FilterTabs
+              tabs={partnerTabs}
+              value={tab}
+              onValueChange={setTab}
+              aria-label="Partner status"
+            />
             <div className="flex items-center gap-2">
               <FilterSelect
                 label="Level"
-                options={["Any", "Level 1", "Level 2", "Level 3", "Level 4", "Level 5"]}
+                options={LEVEL_OPTIONS}
+                defaultValue={level}
+                onValueChange={setLevel}
               />
-              <Button variant="outline" className="h-10 md:h-9">
+              <Button
+                variant="outline"
+                className="h-10 md:h-9"
+                disabled={rows.length === 0}
+                onClick={exportCsv}
+              >
                 Export CSV
               </Button>
             </div>
           </div>
           <DataTable
             columns={columns}
-            rows={partners}
+            rows={rows}
             getRowKey={(r) => r.id}
             rowClassName={(r) => (r.founder ? "bg-muted/30" : undefined)}
+            emptyMessage={
+              isSearching
+                ? `No partners match "${query.trim()}".`
+                : "No partners match this filter."
+            }
           />
-          <TablePagination summary="Showing 1–7 of 6,482" pages={3} />
+          <TablePagination
+            summary={
+              isFiltered
+                ? `${rows.length} result${rows.length === 1 ? "" : "s"}` +
+                  (level !== "Any" ? ` · ${level}` : "") +
+                  (isSearching ? ` for "${query.trim()}"` : "")
+                : `Showing 1–${rows.length} of ${formatNumber(tabTotal)}`
+            }
+            pages={isFiltered || tab !== "all" ? 1 : 3}
+          />
         </Panel>
       </PageBody>
     </>

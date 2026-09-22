@@ -1,7 +1,8 @@
-import { Bell, Menu } from "lucide-react"
+import { Menu } from "lucide-react"
 import type { ReactNode } from "react"
 
-import { PersonAvatar } from "@/components/common/person-avatar"
+import { NotificationsMenu } from "@/components/common/notifications-menu"
+import { UserMenu } from "@/components/common/user-menu"
 import { Button } from "@/components/ui/button"
 import { useShellStore } from "@/lib/shell-store"
 
@@ -47,16 +48,8 @@ export function PageHeader({ title, subtitle, actions, hideUtilities }: Props) {
 
         {hideUtilities ? null : (
           <>
-            <Button
-              variant="quiet"
-              size="icon"
-              className="relative bg-card"
-              aria-label="Notifications"
-            >
-              <Bell />
-              <span className="absolute top-2 right-2 size-1.5 rounded-full bg-gold" />
-            </Button>
-            <PersonAvatar size="md" className="hidden sm:inline-block" />
+            <NotificationsMenu />
+            <UserMenu />
           </>
         )}
       </div>

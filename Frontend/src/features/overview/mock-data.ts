@@ -11,21 +11,45 @@ export const overviewStats = {
   pendingPayout: 184000,
 }
 
-/** Last 12 weeks. `bv` is the full bar; `joinings` is the gold part at the bottom. */
-export const weeklyTrend = [
-  { week: "W1", bv: 136, joinings: 60 },
-  { week: "W2", bv: 176, joinings: 74 },
-  { week: "W3", bv: 156, joinings: 68 },
-  { week: "W4", bv: 216, joinings: 88 },
-  { week: "W5", bv: 216, joinings: 102 },
-  { week: "W6", bv: 250, joinings: 94 },
-  { week: "W7", bv: 256, joinings: 114 },
-  { week: "W8", bv: 276, joinings: 102 },
-  { week: "W9", bv: 316, joinings: 122 },
-  { week: "W10", bv: 316, joinings: 134 },
-  { week: "W11", bv: 322, joinings: 114 },
-  { week: "W12", bv: 330, joinings: 140 },
-]
+/** Options for the Overview "Period" filter. Order matches the dropdown. */
+export const OVERVIEW_PERIODS = ["This month", "Last month", "Last 12 weeks"] as const
+export type OverviewPeriod = (typeof OVERVIEW_PERIODS)[number]
+
+/**
+ * Joinings & BV chart data per period. `bv` is the full bar height; `joinings` is the gold
+ * part at the bottom. Each period has its own shape so switching the filter is visibly different.
+ */
+export const weeklyTrendByPeriod: Record<
+  OverviewPeriod,
+  { week: string; bv: number; joinings: number }[]
+> = {
+  "This month": [
+    { week: "W1", bv: 220, joinings: 90 },
+    { week: "W2", bv: 260, joinings: 108 },
+    { week: "W3", bv: 300, joinings: 118 },
+    { week: "W4", bv: 330, joinings: 140 },
+  ],
+  "Last month": [
+    { week: "W1", bv: 260, joinings: 96 },
+    { week: "W2", bv: 210, joinings: 74 },
+    { week: "W3", bv: 240, joinings: 88 },
+    { week: "W4", bv: 300, joinings: 120 },
+  ],
+  "Last 12 weeks": [
+    { week: "W1", bv: 136, joinings: 60 },
+    { week: "W2", bv: 176, joinings: 74 },
+    { week: "W3", bv: 156, joinings: 68 },
+    { week: "W4", bv: 216, joinings: 88 },
+    { week: "W5", bv: 216, joinings: 102 },
+    { week: "W6", bv: 250, joinings: 94 },
+    { week: "W7", bv: 256, joinings: 114 },
+    { week: "W8", bv: 276, joinings: 102 },
+    { week: "W9", bv: 316, joinings: 122 },
+    { week: "W10", bv: 316, joinings: 134 },
+    { week: "W11", bv: 322, joinings: 114 },
+    { week: "W12", bv: 330, joinings: 140 },
+  ],
+}
 
 export const actionQueue = [
   { label: "Withdrawals pending", count: 9, tone: "neutral" as const },

@@ -1,3 +1,6 @@
+import { useMemo, useState } from "react"
+
+import { ROUTES } from "@/app/routes"
 import { FilterSelect } from "@/components/common/filter-select"
 import { MonoId } from "@/components/common/mono-id"
 import { PageBody, PageHeader } from "@/components/common/page-header"
@@ -7,16 +10,27 @@ import {
   actionQueue,
   activityLog,
   founderLegs,
+  OVERVIEW_PERIODS,
   overviewStats as stats,
-  weeklyTrend,
+  weeklyTrendByPeriod,
+  type OverviewPeriod,
 } from "@/features/overview/mock-data"
 import { formatCompactINR, formatINR, formatNumber } from "@/lib/format"
 import { cn } from "@/lib/utils"
 
-const maxBv = Math.max(...weeklyTrend.map((w) => w.bv))
 const totalLegPartners = founderLegs.reduce((sum, leg) => sum + leg.partners, 0)
 
+const periodChartLabel: Record<OverviewPeriod, string> = {
+  "This month": "this month",
+  "Last month": "last month",
+  "Last 12 weeks": "last 12 weeks",
+}
+
 export function AdminOverviewPage() {
+  const [period, setPeriod] = useState<OverviewPeriod>(OVERVIEW_PERIODS[0])
+  const weeklyTrend = weeklyTrendByPeriod[period]
+  const maxBv = useMemo(() => Math.max(...weeklyTrend.map((w) => w.bv)), [weeklyTrend])
+
   return (
     <>
       <PageHeader
@@ -27,28 +41,37 @@ export function AdminOverviewPage() {
           </>
         }
         actions={
-          <FilterSelect label="Period" options={["This month", "Last month", "Last 12 weeks"]} />
+          <FilterSelect
+            label="Period"
+            options={[...OVERVIEW_PERIODS]}
+            defaultValue={period}
+            onValueChange={(value) => setPeriod(value as OverviewPeriod)}
+          />
         }
       />
       <PageBody>
         <StatGrid>
           <StatCard
+            href={ROUTES.admin.partners}
             label="Total partners"
             value={formatNumber(stats.totalPartners)}
             hint={<span className="text-success">▲ {stats.joinedThisMonth} this month</span>}
           />
           <StatCard
+            href={ROUTES.admin.products}
             label="Product sales"
             value={formatNumber(stats.productSales)}
             hint={`${formatNumber(stats.bvGenerated)} BV generated`}
           />
           <StatCard
+            href={ROUTES.admin.incomeReports}
             label="Commission paid"
             value={formatCompactINR(stats.commissionPaid)}
             hint={`${formatINR(stats.commissionPerSale)} × ${formatNumber(stats.productSales)} sales`}
           />
           <StatCard
             highlight
+            href={ROUTES.admin.withdrawals}
             label="Needs your action"
             value={stats.pendingWithdrawals}
             hint={`withdrawals · ${formatCompactINR(stats.pendingPayout)}`}
@@ -59,7 +82,7 @@ export function AdminOverviewPage() {
           <div className="space-y-4 md:space-y-5">
             <Panel>
               <PanelHeader
-                title="Joinings & BV — last 12 weeks"
+                title={`Joinings & BV — ${periodChartLabel[period]}`}
                 aside={
                   <span className="flex items-center gap-4">
                     <span className="flex items-center gap-1.5">
@@ -73,7 +96,7 @@ export function AdminOverviewPage() {
               />
               <div
                 role="img"
-                aria-label="Bar chart of weekly joinings and BV for the last 12 weeks, rising steadily"
+                aria-label={`Bar chart of weekly joinings and BV for the ${periodChartLabel[period]}`}
                 className="flex h-56 items-end gap-1.5 sm:h-72 md:gap-3 lg:h-[21rem]"
               >
                 {weeklyTrend.map((w) => (
