@@ -7,7 +7,6 @@ export const ADMIN_NAV: NavItem[] = [
   { label: "Overview", to: ROUTES.admin.overview },
   { label: "Partners", to: ROUTES.admin.partners },
   { label: "Founders", to: ROUTES.admin.founders },
-  { label: "Manual Placement", to: ROUTES.admin.manualPlacement },
   { label: "Genealogy Viewer", to: ROUTES.admin.genealogy },
   { label: "Products", to: ROUTES.admin.products },
   { label: "Orders", to: ROUTES.admin.orders },
@@ -21,6 +20,7 @@ export const ADMIN_NAV: NavItem[] = [
 export const PARTNER_NAV: NavItem[] = [
   { label: "Dashboard", to: ROUTES.partner.dashboard },
   { label: "Genealogy Tree", to: ROUTES.partner.genealogy },
+  { label: "Manual Placement", to: ROUTES.partner.manualPlacement },
   { label: "My Team", to: ROUTES.partner.team },
   { label: "Wallet", to: ROUTES.partner.wallet },
   { label: "SRP Wallet", to: ROUTES.partner.srpWallet },

@@ -47,7 +47,7 @@ function Field({
   )
 }
 
-export function AdminManualPlacementPage() {
+export function PartnerManualPlacementPage() {
   const [slot, setSlot] = useState(15)
   const [payment, setPayment] = useState<(typeof paymentMethods)[number]>("Online (UPI)")
 

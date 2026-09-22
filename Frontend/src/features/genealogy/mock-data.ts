@@ -62,63 +62,142 @@ export const founderLegs: FounderLeg[] = [
 
 export const treeFooter = { depthShown: 3, totalNodes: 6485, widestLevel: 20 }
 
-/** Partner view: the signed-in partner's direct line. */
-export type PartnerChild = {
+/** Partner view: the signed-in partner's whole downline, Level 1 to Level 5. */
+export type PartnerTreeMember = {
   id: string
   /** Short label on the tree card */
   name: string
   fullName: string
-  direct: number
-  /** Selected-member panel */
+  /** 0 = you, 1 = your direct partners … 5 = deepest level */
+  level: number
+  /** Position under the sponsor. Above 20 = valid in the tree but earns the sponsor no BV. */
+  slot: number
   sponsor: string
   joined: string
+  direct: number
   downline: number
   bvContributed: number
-  children: { id: string; level: number; note?: "beyond-cap" }[]
+  /** Next free BV-eligible slot, or null when 20 / 20 are taken */
+  openSlot: number | null
+  children: PartnerTreeMember[]
 }
 
-export const partnerTree = {
-  me: { id: "VED000418", name: "Rohit Deshmukh", direct: 14, downline: 214 },
-  openSlot: 15,
-  children: [
-    {
-      id: "VED000455",
-      name: "Sneha K.",
-      fullName: "Sneha Kulkarni",
-      direct: 9,
-      sponsor: "VED000418",
-      joined: "02 Jun 2026",
-      downline: 42,
-      bvContributed: 21000,
-      children: [
-        { id: "VED000512", level: 2 },
-        { id: "VED000534", level: 2 },
-      ],
-    },
-    {
-      id: "VED000462",
-      name: "Imran S.",
-      fullName: "Imran Shaikh",
-      direct: 20,
-      sponsor: "VED000418",
-      joined: "14 Jun 2026",
-      downline: 96,
-      bvContributed: 38000,
-      children: [
-        { id: "VED000549", level: 2 },
-        { id: "VED000601", level: 2, note: "beyond-cap" as const },
-      ],
-    },
-    {
-      id: "VED000478",
-      name: "Meera J.",
-      fullName: "Meera Joshi",
-      direct: 4,
-      sponsor: "VED000418",
-      joined: "29 Jun 2026",
-      downline: 18,
-      bvContributed: 9000,
-      children: [{ id: "VED000588", level: 2 }],
-    },
-  ] satisfies PartnerChild[],
+const MAX_LEVEL = 5
+const MAX_DIRECT = 20
+
+/** [id, full name, joined, children] — the API will return the tree already nested like this. */
+type Seed = [id: string, fullName: string, joined: string, children?: Seed[]]
+
+const sampleNames = [
+  "Aarti Pawar",
+  "Vikas Jadhav",
+  "Pradnya Gaikwad",
+  "Sagar Mane",
+  "Neha Kadam",
+  "Rahul Salunkhe",
+  "Snehal Bhosale",
+  "Amol Chavan",
+  "Komal Thorat",
+  "Nikhil Deshpande",
+  "Pooja Kharat",
+  "Tushar Wagh",
+  "Rutuja Shinde",
+  "Ganesh More",
+  "Priya Kulkarni",
+  "Yogesh Patil",
+  "Shruti Joshi",
+  "Mahesh Gore",
+  "Anjali Rane",
+  "Sachin Bhagat",
+  "Madhuri Sawant",
+  "Kiran Lokhande",
+  "Swati Nikam",
+  "Rohan Kamble",
+  "Ashwini Dhole",
+  "Sandeep Mhatre",
+  "Varsha Ingle",
+  "Prashant Sutar",
+]
+const joinedMonth: Record<number, string> = { 1: "Jun", 2: "Jul", 3: "Aug", 4: "Aug", 5: "Sep" }
+/** Sample members each person has at levels 3–5 (kept small so the page stays light). */
+const sampleBranching: Record<number, number> = { 3: 2, 4: 1, 5: 1 }
+
+let nextId = 700
+let nextName = 0
+
+function sampleTeam(level: number, count: number, withTeam = true): Seed[] {
+  if (level > MAX_LEVEL) return []
+  return Array.from({ length: count }, () => {
+    const id = `VED${String(nextId++).padStart(6, "0")}`
+    const day = String((nextId % 27) + 1).padStart(2, "0")
+    return [
+      id,
+      sampleNames[nextName++ % sampleNames.length],
+      `${day} ${joinedMonth[level]} 2026`,
+      withTeam ? sampleTeam(level + 1, sampleBranching[level + 1] ?? 0) : [],
+    ]
+  })
 }
+
+function buildMember(seed: Seed, sponsor: string, level: number, slot: number): PartnerTreeMember {
+  const [id, fullName, joined, seeds = []] = seed
+  const children = seeds.map((s, i) => buildMember(s, id, level + 1, i + 1))
+  const downline = children.reduce((sum, c) => sum + 1 + c.downline, 0)
+  const direct = Math.min(children.length, MAX_DIRECT)
+  const [first, last = ""] = fullName.split(" ")
+  return {
+    id,
+    name: last ? `${first} ${last[0]}.` : first,
+    fullName,
+    level,
+    slot,
+    sponsor,
+    joined,
+    direct,
+    downline,
+    bvContributed: (downline + 1) * 1000,
+    openSlot: children.length < MAX_DIRECT ? children.length + 1 : null,
+    children,
+  }
+}
+
+export const partnerTree = buildMember(
+  [
+    "VED000418",
+    "Rohit Deshmukh",
+    "14 Mar 2026",
+    [
+      [
+        "VED000455",
+        "Sneha Kulkarni",
+        "02 Jun 2026",
+        [
+          ["VED000512", "Aditya Kale", "05 Jul 2026", sampleTeam(3, 2)],
+          ["VED000534", "Kavya Nimbalkar", "09 Jul 2026", sampleTeam(3, 2)],
+        ],
+      ],
+      [
+        "VED000462",
+        "Imran Shaikh",
+        "14 Jun 2026",
+        [
+          ["VED000549", "Farhan Qureshi", "11 Jul 2026", sampleTeam(3, 2)],
+          // Slots 2–20 filled, then a 21st partner placed beyond the cap.
+          ...sampleTeam(2, 19, false),
+          ["VED000601", "Vivek Rane", "03 Sep 2026"],
+        ],
+      ],
+      [
+        "VED000478",
+        "Meera Joshi",
+        "29 Jun 2026",
+        [["VED000588", "Omkar Shinde", "18 Jul 2026", sampleTeam(3, 2)], ...sampleTeam(2, 1)],
+      ],
+      // Slots 4–14: more direct partners who joined, shown behind "+11 more joined".
+      ...sampleTeam(1, 11, false),
+    ],
+  ],
+  "VED000301",
+  0,
+  7,
+)

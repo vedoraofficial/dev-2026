@@ -51,10 +51,6 @@ export const router = createBrowserRouter([
         ...page(() => import("@/pages/admin/founders-page"), "AdminFoundersPage"),
       },
       {
-        path: "manual-placement",
-        ...page(() => import("@/pages/admin/manual-placement-page"), "AdminManualPlacementPage"),
-      },
-      {
         path: "genealogy",
         ...page(() => import("@/pages/admin/genealogy-page"), "AdminGenealogyPage"),
       },
@@ -96,6 +92,13 @@ export const router = createBrowserRouter([
       {
         path: "genealogy",
         ...page(() => import("@/pages/partner/genealogy-page"), "PartnerGenealogyPage"),
+      },
+      {
+        path: "manual-placement",
+        ...page(
+          () => import("@/pages/partner/manual-placement-page"),
+          "PartnerManualPlacementPage",
+        ),
       },
       { path: "team", ...page(() => import("@/pages/partner/team-page"), "PartnerTeamPage") },
       { path: "wallet", ...page(() => import("@/pages/partner/wallet-page"), "PartnerWalletPage") },
