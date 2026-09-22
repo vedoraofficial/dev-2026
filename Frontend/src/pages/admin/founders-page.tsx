@@ -1,3 +1,7 @@
+import type { ReactNode } from "react"
+import { Link } from "react-router-dom"
+
+import { ROUTES } from "@/app/routes"
 import { MonoId } from "@/components/common/mono-id"
 import { PageBody, PageHeader } from "@/components/common/page-header"
 import { PersonAvatar } from "@/components/common/person-avatar"
@@ -13,20 +17,15 @@ export function AdminFoundersPage() {
       <PageHeader
         title="Founders"
         subtitle="VED000001 – VED000003 · fixed permanently, cannot be reassigned or regenerated"
-        actions={
-          <Button variant="quiet" disabled>
-            Add founder — disabled
-          </Button>
-        }
       />
       <PageBody>
         <div className="grid gap-4 md:grid-cols-2 md:gap-5 xl:grid-cols-3">
           {founders.map((f) => (
             <Panel key={f.id} className="flex flex-col">
               <div className="flex items-center gap-4 border-b border-border/70 pb-4">
-                <PersonAvatar size="lg" />
+                <PersonAvatar tone="gold" size="lg" />
                 <div className="min-w-0">
-                  <h2 className="text-base leading-snug font-medium">{f.name}</h2>
+                  <h2 className="truncate text-base leading-snug font-medium">{f.name}</h2>
                   <MonoId tone="gold" className="block">
                     {f.id}
                   </MonoId>
@@ -56,27 +55,22 @@ export function AdminFoundersPage() {
               </dl>
 
               <div className="mt-auto grid grid-cols-2 gap-2 border-t border-border/70 pt-4">
-                <Button size="lg" className="col-span-2">
-                  Open genealogy
+                <Button asChild size="lg">
+                  <Link to={`${ROUTES.admin.genealogy}?id=${f.id}`}>Open genealogy</Link>
                 </Button>
-                <Button variant="outline">Income report</Button>
-                <Button variant="quiet">Edit profile</Button>
+                <Button asChild variant="outline" size="lg">
+                  <Link to={ROUTES.admin.incomeReports}>Income report</Link>
+                </Button>
               </div>
             </Panel>
           ))}
         </div>
-
-        <Panel className="text-xs leading-relaxed text-muted-foreground">
-          Founders sit directly under Root Admin <MonoId tone="gold">VED108</MonoId> and receive
-          level income as topmost upline. Their IDs are permanent — the panel allows profile and
-          status edits only; placement, ID and sponsor are locked at database level.
-        </Panel>
       </PageBody>
     </>
   )
 }
 
-function Row({ label, value }: { label: string; value: React.ReactNode }) {
+function Row({ label, value }: { label: string; value: ReactNode }) {
   return (
     <div className="flex items-center justify-between gap-4">
       <dt className="text-muted-foreground">{label}</dt>

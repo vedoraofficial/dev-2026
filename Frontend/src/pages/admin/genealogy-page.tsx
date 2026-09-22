@@ -1,4 +1,5 @@
 import { useState } from "react"
+import { useSearchParams } from "react-router-dom"
 
 import { MonoId } from "@/components/common/mono-id"
 import { PageBody, PageHeader } from "@/components/common/page-header"
@@ -11,7 +12,20 @@ import { formatBV, formatINR, formatNumber } from "@/lib/format"
 import { cn } from "@/lib/utils"
 
 export function AdminGenealogyPage() {
-  const [selectedId, setSelectedId] = useState(founderLegs[0].id)
+  const [searchParams] = useSearchParams()
+  const requestedId = searchParams.get("id")
+
+  const [selectedId, setSelectedId] = useState(requestedId ?? founderLegs[0].id)
+  // Jumped here from "Open genealogy" on a Founder's card — re-select when `?id=` changes,
+  // without an effect (React's documented pattern for adjusting state during render).
+  const [syncedId, setSyncedId] = useState(requestedId)
+  if (requestedId !== syncedId) {
+    setSyncedId(requestedId)
+    if (requestedId && founderLegs.some((f) => f.id === requestedId)) {
+      setSelectedId(requestedId)
+    }
+  }
+
   const selected = founderLegs.find((f) => f.id === selectedId) ?? founderLegs[0]
   const full = selected.slotsUsed >= 20
 

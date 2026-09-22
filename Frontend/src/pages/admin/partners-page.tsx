@@ -1,4 +1,5 @@
-import { useMemo, useState } from "react"
+import { useState } from "react"
+import { toast } from "sonner"
 
 import { DataTable, type Column } from "@/components/common/data-table"
 import { FilterSelect } from "@/components/common/filter-select"
@@ -10,10 +11,20 @@ import { Panel } from "@/components/common/panel"
 import { StatusPill, type PillVariant } from "@/components/common/status-pill"
 import { TablePagination } from "@/components/common/table-pagination"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import {
+  partners as initialPartners,
   partnerTabs,
-  partners,
   type PartnerRow,
   type PartnerStatus,
 } from "@/features/partners/mock-data"
@@ -29,6 +40,7 @@ const statusLabel: Record<PartnerStatus, { text: string; variant: PillVariant }>
 }
 
 const LEVEL_OPTIONS = ["Any", "Level 1", "Level 2", "Level 3", "Level 4", "Level 5"]
+const PAGE_SIZE = 10
 
 /** Which tab each partner belongs to. "all" and "founders" aren't PartnerStatus values. */
 function matchesTab(partner: PartnerRow, tab: string): boolean {
@@ -54,105 +66,277 @@ function matchesLevel(partner: PartnerRow, level: string): boolean {
   return level === "Any" || partner.level === Number(level.replace("Level ", ""))
 }
 
-function RowActions({ row }: { row: PartnerRow }) {
+function DetailRow({ label, value }: { label: string; value: React.ReactNode }) {
+  return (
+    <div className="flex items-center justify-between gap-4 text-[0.8125rem]">
+      <dt className="text-muted-foreground">{label}</dt>
+      <dd className="text-right font-medium">{value}</dd>
+    </div>
+  )
+}
+
+/** Read-only — opened by "View" for every partner, including Founders. */
+function ViewPartnerDialog({ row }: { row: PartnerRow }) {
+  return (
+    <Dialog>
+      <DialogTrigger asChild>
+        <Button variant="quiet" size="sm">
+          View
+        </Button>
+      </DialogTrigger>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>{row.name}</DialogTitle>
+          <DialogDescription>
+            <MonoId tone="gold">{row.id}</MonoId>
+            {row.founder ? <span className="text-gold"> · Founder</span> : null}
+          </DialogDescription>
+        </DialogHeader>
+        <dl className="space-y-3">
+          <DetailRow label="Mobile" value={<span className="font-mono">{row.mobile}</span>} />
+          <DetailRow label="Sponsor" value={<MonoId>{row.sponsor}</MonoId>} />
+          <DetailRow label="Level" value={`L${row.level}`} />
+          <DetailRow label="Direct slots" value={`${row.slotsUsed} / 20`} />
+          <DetailRow label="Team" value={`${formatNumber(row.team)} partners`} />
+          <DetailRow
+            label="Wallet"
+            value={<span className="font-mono">{formatINR(row.wallet)}</span>}
+          />
+          <DetailRow
+            label="Status"
+            value={
+              <StatusPill variant={statusLabel[row.status].variant}>
+                {statusLabel[row.status].text}
+              </StatusPill>
+            }
+          />
+        </dl>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+/** Edits name + mobile. Not offered to Founders (their profile is locked). */
+function EditPartnerDialog({
+  row,
+  onSave,
+}: {
+  row: PartnerRow
+  onSave: (next: { name: string; mobile: string }) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const [name, setName] = useState(row.name)
+  const [mobile, setMobile] = useState(row.mobile)
+
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        setOpen(next)
+        if (next) {
+          setName(row.name)
+          setMobile(row.mobile)
+        }
+      }}
+    >
+      <DialogTrigger asChild>
+        <Button variant="outline" size="sm">
+          Edit
+        </Button>
+      </DialogTrigger>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Edit {row.name}</DialogTitle>
+          <DialogDescription>
+            <MonoId tone="gold">{row.id}</MonoId> · sponsor and placement are locked.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor={`name-${row.id}`} className="eyebrow">
+              Full name
+            </Label>
+            <Input id={`name-${row.id}`} value={name} onChange={(e) => setName(e.target.value)} />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor={`mobile-${row.id}`} className="eyebrow">
+              Mobile
+            </Label>
+            <Input
+              id={`mobile-${row.id}`}
+              type="tel"
+              value={mobile}
+              onChange={(e) => setMobile(e.target.value)}
+            />
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="quiet" onClick={() => setOpen(false)}>
+            Cancel
+          </Button>
+          <Button
+            disabled={!name.trim()}
+            onClick={() => {
+              onSave({ name: name.trim(), mobile: mobile.trim() })
+              toast.success(`${name.trim()}'s profile updated`)
+              setOpen(false)
+            }}
+          >
+            Save changes
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+function RowActions({
+  row,
+  onSaveProfile,
+  onApprovePan,
+  onActivate,
+}: {
+  row: PartnerRow
+  onSaveProfile: (next: { name: string; mobile: string }) => void
+  onApprovePan: () => void
+  onActivate: () => void
+}) {
   return (
     <>
-      <Button variant="quiet" size="sm">
-        View
-      </Button>
+      <ViewPartnerDialog row={row} />
       {row.founder ? (
         <Button variant="quiet" size="sm" disabled>
           Locked
         </Button>
       ) : row.status === "pan-pending" ? (
-        <Button size="sm">Review</Button>
+        <Button
+          size="sm"
+          onClick={() => {
+            onApprovePan()
+            toast.success(`${row.name}'s PAN approved — now Active`)
+          }}
+        >
+          Review
+        </Button>
       ) : row.status === "inactive" ? (
-        <Button variant="outline" size="sm">
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => {
+            onActivate()
+            toast.success(`${row.name} reactivated`)
+          }}
+        >
           Activate
         </Button>
       ) : (
-        <Button variant="outline" size="sm">
-          Edit
-        </Button>
+        <EditPartnerDialog row={row} onSave={onSaveProfile} />
       )}
     </>
   )
 }
 
-const columns: Column<PartnerRow>[] = [
-  {
-    key: "partner",
-    header: "Partner",
-    primary: true,
-    cell: (r) => (
-      <div className="flex items-center gap-3">
-        <PersonAvatar tone={r.founder ? "gold" : r.status === "inactive" ? "muted" : "plain"} />
-        <div className="min-w-0">
-          <p className="truncate text-[0.875rem] font-medium">{r.name}</p>
-          <p className="text-[0.6875rem]">
-            <MonoId tone={r.founder ? "gold" : "muted"}>{r.id}</MonoId>
-            {r.founder ? <span className="text-gold"> · Founder</span> : null}
-          </p>
-        </div>
-      </div>
-    ),
-  },
-  { key: "sponsor", header: "Sponsor", cell: (r) => <MonoId tone="muted">{r.sponsor}</MonoId> },
-  {
-    key: "level",
-    header: "Level",
-    cell: (r) => <span className="text-muted-foreground">L{r.level}</span>,
-  },
-  {
-    key: "slots",
-    header: "Slots",
-    cell: (r) => (
-      <MonoId
-        className={cn("text-[0.8125rem]", r.slotsUsed === 20 ? "text-danger" : "text-foreground")}
-      >
-        {String(r.slotsUsed).padStart(2, "0")} / 20
-      </MonoId>
-    ),
-  },
-  {
-    key: "team",
-    header: "Team",
-    cell: (r) => <span className="text-muted-foreground">{formatNumber(r.team)}</span>,
-  },
-  {
-    key: "wallet",
-    header: "Wallet",
-    cell: (r) => (
-      <span className="font-mono text-[0.8125rem]">
-        {r.wallet >= 100000 ? formatCompactINR(r.wallet) : formatINR(r.wallet)}
-      </span>
-    ),
-  },
-  {
-    key: "status",
-    header: "Status",
-    cell: (r) => (
-      <StatusPill variant={statusLabel[r.status].variant}>{statusLabel[r.status].text}</StatusPill>
-    ),
-  },
-  { key: "actions", header: "Actions", actions: true, cell: (r) => <RowActions row={r} /> },
-]
-
 export function AdminPartnersPage() {
+  const [allPartners, setAllPartners] = useState(initialPartners)
   const [tab, setTab] = useState<string>(partnerTabs[0].value)
   const [query, setQuery] = useState("")
   const [level, setLevel] = useState("Any")
   const isSearching = query.trim().length > 0
   const isFiltered = isSearching || level !== "Any"
 
-  const rows = useMemo(
-    () =>
-      partners.filter(
-        (p) => matchesTab(p, tab) && matchesQuery(p, query) && matchesLevel(p, level),
-      ),
-    [tab, query, level],
+  const rows = allPartners.filter(
+    (p) => matchesTab(p, tab) && matchesQuery(p, query) && matchesLevel(p, level),
   )
-  const tabTotal = partnerTabs.find((t) => t.value === tab)?.total ?? partners.length
+  const tabTotal = partnerTabs.find((t) => t.value === tab)?.total ?? allPartners.length
+
+  // Reset to page 1 whenever a filter changes (adjusting state during render — no effect needed).
+  const filterKey = `${tab}|${level}|${query}`
+  const [page, setPage] = useState(1)
+  const [syncedFilterKey, setSyncedFilterKey] = useState(filterKey)
+  if (filterKey !== syncedFilterKey) {
+    setSyncedFilterKey(filterKey)
+    setPage(1)
+  }
+  const totalPages = Math.max(1, Math.ceil(rows.length / PAGE_SIZE))
+  const pagedRows = rows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
+  const rangeStart = rows.length === 0 ? 0 : (page - 1) * PAGE_SIZE + 1
+  const rangeEnd = Math.min(page * PAGE_SIZE, rows.length)
+
+  const updatePartner = (id: string, changes: Partial<PartnerRow>) =>
+    setAllPartners((prev) => prev.map((p) => (p.id === id ? { ...p, ...changes } : p)))
+
+  const columns: Column<PartnerRow>[] = [
+    {
+      key: "partner",
+      header: "Partner",
+      primary: true,
+      cell: (r) => (
+        <div className="flex items-center gap-3">
+          <PersonAvatar tone={r.founder ? "gold" : r.status === "inactive" ? "muted" : "plain"} />
+          <div className="min-w-0">
+            <p className="truncate text-[0.875rem] font-medium">{r.name}</p>
+            <p className="text-[0.6875rem]">
+              <MonoId tone={r.founder ? "gold" : "muted"}>{r.id}</MonoId>
+              {r.founder ? <span className="text-gold"> · Founder</span> : null}
+            </p>
+          </div>
+        </div>
+      ),
+    },
+    { key: "sponsor", header: "Sponsor", cell: (r) => <MonoId tone="muted">{r.sponsor}</MonoId> },
+    {
+      key: "level",
+      header: "Level",
+      cell: (r) => <span className="text-muted-foreground">L{r.level}</span>,
+    },
+    {
+      key: "slots",
+      header: "Slots",
+      cell: (r) => (
+        <MonoId
+          className={cn("text-[0.8125rem]", r.slotsUsed === 20 ? "text-danger" : "text-foreground")}
+        >
+          {String(r.slotsUsed).padStart(2, "0")} / 20
+        </MonoId>
+      ),
+    },
+    {
+      key: "team",
+      header: "Team",
+      cell: (r) => <span className="text-muted-foreground">{formatNumber(r.team)}</span>,
+    },
+    {
+      key: "wallet",
+      header: "Wallet",
+      cell: (r) => (
+        <span className="font-mono text-[0.8125rem]">
+          {r.wallet >= 100000 ? formatCompactINR(r.wallet) : formatINR(r.wallet)}
+        </span>
+      ),
+    },
+    {
+      key: "status",
+      header: "Status",
+      cell: (r) => (
+        <StatusPill variant={statusLabel[r.status].variant}>
+          {statusLabel[r.status].text}
+        </StatusPill>
+      ),
+    },
+    {
+      key: "actions",
+      header: "Actions",
+      actions: true,
+      cell: (r) => (
+        <RowActions
+          row={r}
+          onSaveProfile={(changes) => updatePartner(r.id, changes)}
+          onApprovePan={() => updatePartner(r.id, { status: "active" })}
+          onActivate={() => updatePartner(r.id, { status: "active" })}
+        />
+      ),
+    },
+  ]
 
   const exportCsv = () => {
     downloadCsv(
@@ -226,7 +410,7 @@ export function AdminPartnersPage() {
           </div>
           <DataTable
             columns={columns}
-            rows={rows}
+            rows={pagedRows}
             getRowKey={(r) => r.id}
             rowClassName={(r) => (r.founder ? "bg-muted/30" : undefined)}
             emptyMessage={
@@ -236,14 +420,16 @@ export function AdminPartnersPage() {
             }
           />
           <TablePagination
+            key={filterKey}
             summary={
               isFiltered
-                ? `${rows.length} result${rows.length === 1 ? "" : "s"}` +
+                ? `Showing ${rangeStart}–${rangeEnd} of ${rows.length} result${rows.length === 1 ? "" : "s"}` +
                   (level !== "Any" ? ` · ${level}` : "") +
                   (isSearching ? ` for "${query.trim()}"` : "")
-                : `Showing 1–${rows.length} of ${formatNumber(tabTotal)}`
+                : `Showing ${rangeStart}–${rangeEnd} of ${formatNumber(tabTotal)}`
             }
-            pages={isFiltered || tab !== "all" ? 1 : 3}
+            pages={totalPages}
+            onPageChange={setPage}
           />
         </Panel>
       </PageBody>
