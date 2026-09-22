@@ -1,6 +1,7 @@
 import type { PillVariant } from "@/components/common/status-pill"
 
-export type OrderStatus = "delivered" | "shipped" | "confirmed" | "failed" | "refunding"
+export type OrderStatus =
+  "delivered" | "shipped" | "confirmed" | "failed" | "refunding" | "refunded" | "cancelled"
 
 export const orderStatusPill: Record<OrderStatus, { label: string; variant: PillVariant }> = {
   delivered: { label: "Delivered", variant: "success" },
@@ -8,6 +9,8 @@ export const orderStatusPill: Record<OrderStatus, { label: string; variant: Pill
   confirmed: { label: "Confirmed", variant: "pending" },
   failed: { label: "Failed", variant: "danger" },
   refunding: { label: "Refunding", variant: "pending" },
+  refunded: { label: "Refunded", variant: "success" },
+  cancelled: { label: "Cancelled", variant: "danger" },
 }
 
 export const orderTabs = [
@@ -75,6 +78,42 @@ export const adminOrders: AdminOrder[] = [
     amount: 1999,
     shipment: "Cancelled pre-dispatch",
     status: "refunding",
+  },
+  {
+    id: "ORD-01180",
+    partner: "Akash Patil",
+    partnerId: "VED000491",
+    items: "Wealth × 1",
+    amount: 1999,
+    shipment: "Cancelled by partner — pre-dispatch",
+    status: "cancelled",
+  },
+  {
+    id: "ORD-01176",
+    partner: "Karan Mehta",
+    partnerId: "VED000512",
+    items: "Balance × 2",
+    amount: 3998,
+    shipment: "Awaiting dispatch",
+    status: "confirmed",
+  },
+  {
+    id: "ORD-01172",
+    partner: "Aditya Kale",
+    partnerId: "VED000533",
+    items: "Protection × 3",
+    amount: 5997,
+    shipment: "BD1247850 · in transit",
+    status: "shipped",
+  },
+  {
+    id: "ORD-01169",
+    partner: "Farhan Qureshi",
+    partnerId: "VED000549",
+    items: "Energy × 1",
+    amount: 1999,
+    shipment: "Delivered 15 Sep",
+    status: "delivered",
   },
 ]
 
