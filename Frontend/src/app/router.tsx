@@ -30,6 +30,10 @@ export const router = createBrowserRouter([
     ErrorBoundary: RouteError,
     children: [
       { path: ROUTES.login, ...page(() => import("@/pages/auth/login-page"), "LoginPage") },
+      {
+        path: ROUTES.adminLogin,
+        ...page(() => import("@/pages/auth/admin-login-page"), "AdminLoginPage"),
+      },
     ],
   },
   {

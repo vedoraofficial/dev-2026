@@ -1,6 +1,7 @@
 /** Single source of truth for URLs. Use these instead of hard-coded strings. */
 export const ROUTES = {
   login: "/login",
+  adminLogin: "/admin-login",
   admin: {
     root: "/admin",
     overview: "/admin/overview",

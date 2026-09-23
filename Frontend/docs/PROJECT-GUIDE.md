@@ -11,7 +11,8 @@ way, discuss it with the team and change this file — don't quietly break it.
   - **Admin Control Panel** (`/admin/*`) — Root Admin `VED108`.
   - **Partner & Founder portal** (`/partner/*`) — one shared portal; Founders see their own
     Founder ID.
-  - **Login** (`/login`) — shared entry for all roles.
+  - **Login** — `/login` for Partners & Founders, `/admin-login` for Root Admin. Each links to
+    the other.
 
 ## 2. Domain glossary
 
@@ -212,7 +213,7 @@ Defined in `app/router.tsx`, URLs in `app/routes.ts`.
 
 | Area    | Routes                                                                                                                                                 |
 | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Auth    | `/login`                                                                                                                                               |
+| Auth    | `/login` (Partner & Founder) · `/admin-login` (Root Admin)                                                                                             |
 | Admin   | `/admin/` overview · partners · founders · genealogy · products · orders · withdrawals · income-reports · transactions · settings · profile            |
 | Partner | `/partner/` dashboard · genealogy · manual-placement · team · wallet · srp-wallet · income-reports · products · orders · profile · policies · settings |
 

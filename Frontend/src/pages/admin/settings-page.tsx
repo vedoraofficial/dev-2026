@@ -1,4 +1,5 @@
-import type { ReactNode } from "react"
+import { useState, type ReactNode } from "react"
+import { toast } from "sonner"
 
 import { PageBody, PageHeader } from "@/components/common/page-header"
 import { Panel, PanelHeader } from "@/components/common/panel"
@@ -23,14 +24,34 @@ const roles = [
   { name: "Content Manager", detail: "Products, news, notifications" },
 ]
 
+type Settings = {
+  phonepeEnabled: boolean
+  maintenanceMode: boolean
+  minPayout: string
+  fee: string
+  window: string
+  pan: string
+}
+
+const initialSettings: Settings = {
+  phonepeEnabled: true,
+  maintenanceMode: false,
+  minPayout: "₹ 1,000",
+  fee: "2 %",
+  window: "24 hours",
+  pan: "Required before first payout",
+}
+
 function ToggleRow({
   title,
   detail,
-  defaultChecked,
+  checked,
+  onCheckedChange,
 }: {
   title: string
   detail: string
-  defaultChecked?: boolean
+  checked: boolean
+  onCheckedChange: (checked: boolean) => void
 }) {
   return (
     <div className="flex items-center justify-between gap-4 border-b border-border/70 py-3.5 first:pt-0 last:border-b-0 last:pb-0">
@@ -38,7 +59,7 @@ function ToggleRow({
         <p className="text-[0.875rem] font-medium">{title}</p>
         <p className="text-[0.6875rem] text-muted-foreground">{detail}</p>
       </div>
-      <Switch defaultChecked={defaultChecked} aria-label={title} />
+      <Switch checked={checked} onCheckedChange={onCheckedChange} aria-label={title} />
     </div>
   )
 }
@@ -55,24 +76,52 @@ function InfoRow({ title, detail, value }: { title: string; detail: string; valu
   )
 }
 
-function SettingField({ id, label, value }: { id: string; label: string; value: string }) {
+function SettingField({
+  id,
+  label,
+  value,
+  onChange,
+}: {
+  id: string
+  label: string
+  value: string
+  onChange: (value: string) => void
+}) {
   return (
     <div className="space-y-2">
       <Label htmlFor={id} className="eyebrow">
         {label}
       </Label>
-      <Input id={id} defaultValue={value} />
+      <Input id={id} value={value} onChange={(e) => onChange(e.target.value)} />
     </div>
   )
 }
 
 export function AdminSettingsPage() {
+  const [saved, setSaved] = useState(initialSettings)
+  const [draft, setDraft] = useState(initialSettings)
+  const isDirty = JSON.stringify(draft) !== JSON.stringify(saved)
+
+  const setField = (key: keyof Settings) => (value: string) =>
+    setDraft((d) => ({ ...d, [key]: value }))
+  const setToggle = (key: keyof Settings) => (checked: boolean) =>
+    setDraft((d) => ({ ...d, [key]: checked }))
+
+  const saveSettings = () => {
+    setSaved(draft)
+    toast.success("Settings saved")
+  }
+
   return (
     <>
       <PageHeader
         title="Settings"
         subtitle="System configuration, roles and compensation constants"
-        actions={<Button>Save settings</Button>}
+        actions={
+          <Button disabled={!isDirty} onClick={saveSettings}>
+            Save settings
+          </Button>
+        }
       />
       <PageBody>
         <div className="grid gap-4 md:gap-5 lg:grid-cols-2">
@@ -94,11 +143,6 @@ export function AdminSettingsPage() {
                   </div>
                 ))}
               </div>
-              <p className="mt-4 text-[0.6875rem] leading-relaxed text-muted-foreground">
-                These values are enforced in the database and commission engine. They are shown
-                read-only so the plan cannot be altered after go-live — changes require a versioned
-                release.
-              </p>
             </Panel>
 
             <Panel>
@@ -115,14 +159,7 @@ export function AdminSettingsPage() {
                     </div>
                     {role.locked ? (
                       <span className="text-[0.6875rem] text-muted-foreground">Permanent</span>
-                    ) : (
-                      <button
-                        type="button"
-                        className="px-2 py-1 text-xs font-medium text-gold hover:underline"
-                      >
-                        Edit
-                      </button>
-                    )}
+                    ) : null}
                   </li>
                 ))}
               </ul>
@@ -131,28 +168,53 @@ export function AdminSettingsPage() {
 
           <div className="space-y-4 md:space-y-5">
             <Panel>
-              <PanelHeader title="Payment gateways" />
-              <ToggleRow title="Razorpay" detail="Primary · collection & payout" defaultChecked />
-              <ToggleRow title="PhonePe" detail="Secondary · UPI collection" defaultChecked />
+              <PanelHeader title="Payment gateway" />
+              <ToggleRow
+                title="PhonePe"
+                detail="Collection & payout"
+                checked={draft.phonepeEnabled}
+                onCheckedChange={setToggle("phonepeEnabled")}
+              />
             </Panel>
 
             <Panel>
               <PanelHeader title="Withdrawal policy" />
               <div className="grid gap-4 sm:grid-cols-2">
-                <SettingField id="minPayout" label="Minimum payout" value="₹ 1,000" />
-                <SettingField id="fee" label="Processing fee" value="2 %" />
-                <SettingField id="window" label="Settlement window" value="24 hours" />
+                <SettingField
+                  id="minPayout"
+                  label="Minimum payout"
+                  value={draft.minPayout}
+                  onChange={setField("minPayout")}
+                />
+                <SettingField
+                  id="fee"
+                  label="Processing fee"
+                  value={draft.fee}
+                  onChange={setField("fee")}
+                />
+                <SettingField
+                  id="window"
+                  label="Settlement window"
+                  value={draft.window}
+                  onChange={setField("window")}
+                />
                 <SettingField
                   id="pan"
                   label="PAN verification"
-                  value="Required before first payout"
+                  value={draft.pan}
+                  onChange={setField("pan")}
                 />
               </div>
             </Panel>
 
             <Panel>
               <PanelHeader title="System" />
-              <ToggleRow title="Maintenance mode" detail="Blocks partner logins during releases" />
+              <ToggleRow
+                title="Maintenance mode"
+                detail="Blocks partner logins during releases"
+                checked={draft.maintenanceMode}
+                onCheckedChange={setToggle("maintenanceMode")}
+              />
               <InfoRow
                 title="Database backup"
                 detail="MySQL · daily 02:00 IST"

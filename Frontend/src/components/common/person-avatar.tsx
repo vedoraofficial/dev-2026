@@ -16,10 +16,23 @@ const sizes = { xs: "size-6", sm: "size-8", md: "size-10", lg: "size-14", xl: "s
 type Props = {
   tone?: keyof typeof tones
   size?: keyof typeof sizes
+  /** A real photo (e.g. an uploaded profile picture). Falls back to the plain colour when unset. */
+  src?: string
+  alt?: string
   className?: string
 }
 
-export function PersonAvatar({ tone = "striped", size = "md", className }: Props) {
+export function PersonAvatar({ tone = "striped", size = "md", src, alt = "", className }: Props) {
+  if (src) {
+    return (
+      <img
+        src={src}
+        alt={alt}
+        className={cn("inline-block shrink-0 rounded-full object-cover", sizes[size], className)}
+      />
+    )
+  }
+
   return (
     <span
       aria-hidden

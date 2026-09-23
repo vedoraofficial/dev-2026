@@ -1,5 +1,5 @@
 import { zodResolver } from "@hookform/resolvers/zod"
-import { Eye, EyeOff } from "lucide-react"
+import { Eye, EyeOff, ShieldCheck } from "lucide-react"
 import { useState } from "react"
 import { useForm } from "react-hook-form"
 import { Link, useNavigate } from "react-router-dom"
@@ -7,24 +7,33 @@ import { Link, useNavigate } from "react-router-dom"
 import { ROUTES } from "@/app/routes"
 import logo from "@/assets/images/vedora-logo.jpg"
 import { Button } from "@/components/ui/button"
-import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { loginSchema, type LoginValues } from "@/features/auth/schemas"
 
-export function LoginPage() {
+/** Root Admin's fixed VEDORA ID. Typed as VED108, VED0108 or VED000108. */
+const isRootAdminId = (id: string) => Number(id.replace(/\D/g, "")) === 108
+
+export function AdminLoginPage() {
   const navigate = useNavigate()
   const [showPassword, setShowPassword] = useState(false)
   const {
     register,
     handleSubmit,
+    setError,
     formState: { errors, isSubmitting },
   } = useForm<LoginValues>({ resolver: zodResolver(loginSchema) })
 
-  // Temporary: no auth API yet. This screen is the Partner & Founder entry point —
-  // Root Admin signs in separately at /admin-login.
-  const onSubmit = () => {
-    navigate(ROUTES.partner.dashboard)
+  // Temporary: no auth API yet. Only the Root Admin ID is accepted here — everyone else
+  // (Partners, Founders) signs in at /login.
+  const onSubmit = ({ vedoraId }: LoginValues) => {
+    if (!isRootAdminId(vedoraId)) {
+      setError("vedoraId", {
+        message: "That's not the Root Admin ID — use Partner Sign-in instead.",
+      })
+      return
+    }
+    navigate(ROUTES.admin.overview)
   }
 
   return (
@@ -40,11 +49,15 @@ export function LoginPage() {
             height={834}
           />
         </div>
-        <div className="mx-auto w-full max-w-xl">
-          <h2 className="font-display text-4xl font-normal md:text-5xl">Wear Your Energy</h2>
-          <p className="mt-3 max-w-sm text-sm text-muted-foreground">
-            Natural gemstone bracelets, built into a direct-selling business you own.
-          </p>
+        <div className="mx-auto flex w-full max-w-xl items-start gap-3">
+          <ShieldCheck className="mt-1 size-6 shrink-0 text-gold" aria-hidden />
+          <div>
+            <h2 className="font-display text-4xl font-normal md:text-5xl">Admin Control Panel</h2>
+            <p className="mt-3 max-w-sm text-sm text-muted-foreground">
+              Manage partners, orders, payouts and the compensation engine for the whole VEDORA
+              network.
+            </p>
+          </div>
         </div>
       </section>
 
@@ -57,11 +70,9 @@ export function LoginPage() {
         >
           <div>
             <h1 className="font-display text-[2rem] leading-tight font-normal md:text-4xl">
-              Partner Sign-in
+              Admin Sign-in
             </h1>
-            <p className="mt-1 text-xs text-muted-foreground">
-              Use the VEDORA ID issued at registration.
-            </p>
+            <p className="mt-1 text-xs text-muted-foreground">Root Admin access only.</p>
           </div>
 
           <div className="space-y-2">
@@ -70,7 +81,7 @@ export function LoginPage() {
             </Label>
             <Input
               id="vedoraId"
-              placeholder="VED000418"
+              placeholder="VED108"
               autoComplete="username"
               autoCapitalize="characters"
               spellCheck={false}
@@ -115,36 +126,14 @@ export function LoginPage() {
             ) : null}
           </div>
 
-          <div className="flex items-center justify-between gap-3 text-xs">
-            <label
-              htmlFor="remember"
-              className="flex cursor-pointer items-center gap-2 text-muted-foreground"
-            >
-              <Checkbox id="remember" />
-              Remember me
-            </label>
-            <button type="button" className="font-medium text-gold hover:underline">
-              Forgot password?
-            </button>
-          </div>
-
           <Button type="submit" size="lg" className="w-full" disabled={isSubmitting}>
             Sign in
           </Button>
 
           <p className="text-center text-xs text-muted-foreground">
-            New partner?{" "}
-            <button type="button" className="font-medium text-gold hover:underline">
-              Join under your sponsor
-            </button>
-          </p>
-
-          <p className="rounded-xl border border-border bg-card/70 p-3.5 text-center text-[0.6875rem] leading-relaxed text-muted-foreground">
-            Founders sign in here too, with their Founder ID.
-            <br />
-            Are you an admin?{" "}
-            <Link to={ROUTES.adminLogin} className="font-medium text-gold hover:underline">
-              Sign in here →
+            Not an admin?{" "}
+            <Link to={ROUTES.login} className="font-medium text-gold hover:underline">
+              Partner sign-in →
             </Link>
           </p>
         </form>

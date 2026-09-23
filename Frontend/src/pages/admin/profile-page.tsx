@@ -1,3 +1,6 @@
+import { useRef, useState, type ComponentProps, type ReactNode } from "react"
+import { toast } from "sonner"
+
 import { MonoId } from "@/components/common/mono-id"
 import { PageBody, PageHeader } from "@/components/common/page-header"
 import { PersonAvatar } from "@/components/common/person-avatar"
@@ -7,11 +10,20 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 
+type Details = { name: string; mobile: string; email: string; city: string }
+
+const initialDetails: Details = {
+  name: "Root Admin",
+  mobile: "+91 98200 00108",
+  email: "admin@vedoraofficial.in",
+  city: "Pune, Maharashtra",
+}
+
 function Field({
   id,
   label,
   ...props
-}: { id: string; label: string } & React.ComponentProps<typeof Input>) {
+}: { id: string; label: string } & ComponentProps<typeof Input>) {
   return (
     <div className="space-y-2">
       <Label htmlFor={id} className="eyebrow">
@@ -22,7 +34,7 @@ function Field({
   )
 }
 
-function Row({ label, value }: { label: string; value: React.ReactNode }) {
+function Row({ label, value }: { label: string; value: ReactNode }) {
   return (
     <div className="flex items-center justify-between gap-4 text-[0.8125rem]">
       <dt className="text-muted-foreground">{label}</dt>
@@ -32,6 +44,57 @@ function Row({ label, value }: { label: string; value: React.ReactNode }) {
 }
 
 export function AdminProfilePage() {
+  const [saved, setSaved] = useState(initialDetails)
+  const [draft, setDraft] = useState(initialDetails)
+  const [photo, setPhoto] = useState<string | undefined>()
+  const photoInputRef = useRef<HTMLInputElement>(null)
+
+  const isDirty = JSON.stringify(draft) !== JSON.stringify(saved)
+  const setField = (key: keyof Details) => (e: React.ChangeEvent<HTMLInputElement>) =>
+    setDraft((d) => ({ ...d, [key]: e.target.value }))
+
+  const handlePhotoPick = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    if (!file.type.startsWith("image/")) {
+      toast.error("Choose an image file")
+      return
+    }
+    const reader = new FileReader()
+    reader.onload = () => {
+      setPhoto(reader.result as string)
+      toast.success("Profile photo updated")
+    }
+    reader.readAsDataURL(file)
+    e.target.value = ""
+  }
+
+  const saveChanges = () => {
+    setSaved(draft)
+    toast.success("Profile updated")
+  }
+  const cancelChanges = () => setDraft(saved)
+
+  const [currentPassword, setCurrentPassword] = useState("")
+  const [newPassword, setNewPassword] = useState("")
+  const [passwordError, setPasswordError] = useState("")
+
+  const updatePassword = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!currentPassword) {
+      setPasswordError("Enter your current password")
+      return
+    }
+    if (newPassword.length < 8) {
+      setPasswordError("New password must be at least 8 characters")
+      return
+    }
+    setPasswordError("")
+    setCurrentPassword("")
+    setNewPassword("")
+    toast.success("Password updated")
+  }
+
   return (
     <>
       <PageHeader
@@ -39,8 +102,12 @@ export function AdminProfilePage() {
         subtitle="Root Admin account details"
         actions={
           <>
-            <Button variant="quiet">Cancel</Button>
-            <Button>Save changes</Button>
+            <Button variant="quiet" disabled={!isDirty} onClick={cancelChanges}>
+              Cancel
+            </Button>
+            <Button disabled={!isDirty} onClick={saveChanges}>
+              Save changes
+            </Button>
           </>
         }
       />
@@ -48,15 +115,26 @@ export function AdminProfilePage() {
         <div className="grid gap-4 md:gap-5 lg:grid-cols-[19rem_minmax(0,1fr)]">
           <div className="space-y-4 md:space-y-5">
             <Panel className="flex flex-col items-center text-center">
-              <PersonAvatar tone="gold" size="xl" />
-              <h2 className="mt-4 text-lg font-medium">Root Admin</h2>
+              <PersonAvatar tone="gold" size="xl" src={photo} alt={saved.name} />
+              <h2 className="mt-4 text-lg font-medium">{saved.name}</h2>
               <MonoId tone="gold" className="mt-0.5">
                 VED108
               </MonoId>
               <StatusPill variant="gold" className="mt-3">
                 Full access
               </StatusPill>
-              <Button variant="outline" className="mt-5 w-full">
+              <input
+                ref={photoInputRef}
+                type="file"
+                accept="image/*"
+                hidden
+                onChange={handlePhotoPick}
+              />
+              <Button
+                variant="outline"
+                className="mt-5 w-full"
+                onClick={() => photoInputRef.current?.click()}
+              >
                 Change photo
               </Button>
             </Panel>
@@ -68,10 +146,6 @@ export function AdminProfilePage() {
                 <Row label="Oversight" value="Whole network" />
                 <Row label="Income" value={<span className="text-muted-foreground">None</span>} />
               </dl>
-              <p className="mt-4 rounded-xl border border-border bg-field/60 p-3 text-[0.6875rem] leading-relaxed text-muted-foreground">
-                VED108 is permanent and cannot be reassigned. To add operators with limited access,
-                use Settings → Admin roles &amp; access.
-              </p>
             </Panel>
           </div>
 
@@ -79,26 +153,35 @@ export function AdminProfilePage() {
             <Panel>
               <PanelHeader title="Personal details" />
               <div className="grid gap-4 sm:grid-cols-2">
-                <Field id="name" label="Full name" defaultValue="Root Admin" autoComplete="name" />
+                <Field
+                  id="name"
+                  label="Full name"
+                  value={draft.name}
+                  onChange={setField("name")}
+                  autoComplete="name"
+                />
                 <Field
                   id="mobile"
                   label="Mobile"
                   type="tel"
                   inputMode="tel"
-                  defaultValue="+91 98200 00108"
+                  value={draft.mobile}
+                  onChange={setField("mobile")}
                   autoComplete="tel"
                 />
                 <Field
                   id="email"
                   label="Email"
                   type="email"
-                  defaultValue="admin@vedoraofficial.in"
+                  value={draft.email}
+                  onChange={setField("email")}
                   autoComplete="email"
                 />
                 <Field
                   id="city"
                   label="City / State"
-                  defaultValue="Pune, Maharashtra"
+                  value={draft.city}
+                  onChange={setField("city")}
                   autoComplete="address-level2"
                 />
               </div>
@@ -106,14 +189,30 @@ export function AdminProfilePage() {
 
             <Panel>
               <PanelHeader title="Change password" />
-              <form className="grid gap-4 sm:grid-cols-2" onSubmit={(e) => e.preventDefault()}>
+              <form className="grid gap-4 sm:grid-cols-2" onSubmit={updatePassword} noValidate>
                 <Field
                   id="current"
                   label="Current password"
                   type="password"
                   autoComplete="current-password"
+                  value={currentPassword}
+                  onChange={(e) => setCurrentPassword(e.target.value)}
+                  aria-invalid={!!passwordError}
                 />
-                <Field id="new" label="New password" type="password" autoComplete="new-password" />
+                <Field
+                  id="new"
+                  label="New password"
+                  type="password"
+                  autoComplete="new-password"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  aria-invalid={!!passwordError}
+                />
+                {passwordError ? (
+                  <p role="alert" className="text-xs text-danger sm:col-span-2">
+                    {passwordError}
+                  </p>
+                ) : null}
                 <Button type="submit" className="sm:col-span-2 sm:w-fit">
                   Update password
                 </Button>
