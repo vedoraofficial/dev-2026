@@ -1,5 +1,5 @@
 import { zodResolver } from "@hookform/resolvers/zod"
-import { Eye, EyeOff, ShieldCheck } from "lucide-react"
+import { Eye, EyeOff } from "lucide-react"
 import { useState } from "react"
 import { useForm } from "react-hook-form"
 import { Link, useNavigate } from "react-router-dom"
@@ -49,15 +49,11 @@ export function AdminLoginPage() {
             height={834}
           />
         </div>
-        <div className="mx-auto flex w-full max-w-xl items-start gap-3">
-          <ShieldCheck className="mt-1 size-6 shrink-0 text-gold" aria-hidden />
-          <div>
-            <h2 className="font-display text-4xl font-normal md:text-5xl">Admin Control Panel</h2>
-            <p className="mt-3 max-w-sm text-sm text-muted-foreground">
-              Manage partners, orders, payouts and the compensation engine for the whole VEDORA
-              network.
-            </p>
-          </div>
+        <div className="mx-auto w-full max-w-xl">
+          <h2 className="font-display text-4xl font-normal md:text-5xl">Wear Your Energy</h2>
+          <p className="mt-3 max-w-sm text-sm text-muted-foreground">
+            Natural gemstone bracelets, built into a direct-selling business you own.
+          </p>
         </div>
       </section>
 
