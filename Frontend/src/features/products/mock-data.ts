@@ -76,3 +76,14 @@ export const products: Product[] = [
     status: "draft",
   },
 ]
+
+/**
+ * Units of each SKU sold by the signed-in partner (sample data). Every partner sees only their
+ * own numbers — the real ones come from the API for that partner.
+ */
+export const partnerUnitsSold: Record<string, number> = {
+  "SKU-01": 42,
+  "SKU-02": 31,
+  "SKU-03": 24,
+  "SKU-04": 13,
+}

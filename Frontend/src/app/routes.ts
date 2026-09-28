@@ -1,6 +1,7 @@
 /** Single source of truth for URLs. Use these instead of hard-coded strings. */
 export const ROUTES = {
   login: "/login",
+  /** Old admin sign-in URL — only redirects to `login` now. */
   adminLogin: "/admin-login",
   admin: {
     root: "/admin",

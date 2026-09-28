@@ -2,7 +2,7 @@ import { zodResolver } from "@hookform/resolvers/zod"
 import { Eye, EyeOff } from "lucide-react"
 import { useState } from "react"
 import { useForm } from "react-hook-form"
-import { Link, useNavigate } from "react-router-dom"
+import { useNavigate } from "react-router-dom"
 
 import { ROUTES } from "@/app/routes"
 import logo from "@/assets/images/vedora-logo.jpg"
@@ -21,10 +21,11 @@ export function LoginPage() {
     formState: { errors, isSubmitting },
   } = useForm<LoginValues>({ resolver: zodResolver(loginSchema) })
 
-  // Temporary: no auth API yet. This screen is the Partner & Founder entry point —
-  // Root Admin signs in separately at /admin-login.
-  const onSubmit = () => {
-    navigate(ROUTES.partner.dashboard)
+  // Temporary: no auth API yet. One sign-in for everyone — the ID decides where you land:
+  // Root Admin (VED108, also typed VED0108 / VED000108) → Admin panel, everyone else → Partner portal.
+  const onSubmit = ({ vedoraId }: LoginValues) => {
+    const isRootAdmin = Number(vedoraId.replace(/\D/g, "")) === 108
+    navigate(isRootAdmin ? ROUTES.admin.overview : ROUTES.partner.dashboard)
   }
 
   return (
@@ -57,7 +58,7 @@ export function LoginPage() {
         >
           <div>
             <h1 className="font-display text-[2rem] leading-tight font-normal md:text-4xl">
-              Partner Sign-in
+              Sign in
             </h1>
             <p className="mt-1 text-xs text-muted-foreground">
               Use the VEDORA ID issued at registration.
@@ -140,12 +141,11 @@ export function LoginPage() {
           </p>
 
           <p className="rounded-xl border border-border bg-card/70 p-3.5 text-center text-[0.6875rem] leading-relaxed text-muted-foreground">
-            Founders sign in here too, with their Founder ID.
+            One login for everyone — your ID opens the right portal.
             <br />
-            Are you an admin?{" "}
-            <Link to={ROUTES.adminLogin} className="font-medium text-gold hover:underline">
-              Sign in here →
-            </Link>
+            Admin <span className="font-mono text-gold">VED108</span> · Founders{" "}
+            <span className="font-mono text-gold">VED000001–03</span> · Partners from{" "}
+            <span className="font-mono text-gold">VED000004</span>
           </p>
         </form>
       </section>
