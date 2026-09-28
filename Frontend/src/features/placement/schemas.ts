@@ -40,6 +40,8 @@ export const placementSchema = z
       .toUpperCase()
       .regex(/^[A-Z]{5}\d{4}[A-Z]$/, "PAN looks like ABCDE1234F"),
     address: z.string().trim().min(5, "Enter house / building and street"),
+    /** Post office / locality picked from the pincode lookup (optional). */
+    area: z.string().trim(),
     city: z.string().trim().min(2, "Enter the city"),
     state: z.string().trim().min(2, "Enter the state"),
     pincode: pincode,
@@ -69,6 +71,7 @@ export const placementSchema = z
     shipMobile: mobile,
     shipLine1: z.string().trim().min(5, "Enter house / building and street"),
     shipLandmark: z.string().trim(),
+    shipArea: z.string().trim(),
     shipCity: z.string().trim().min(2, "Enter the city"),
     shipState: z.string().trim().min(2, "Enter the state"),
     shipPincode: pincode,

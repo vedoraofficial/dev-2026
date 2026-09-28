@@ -164,6 +164,7 @@ export function PlacementSuccess({
             <p className="font-medium">{values.shipName}</p>
             <p className="text-muted-foreground">
               {values.shipLine1}
+              {values.shipArea ? `, ${values.shipArea}` : ""}
               {values.shipLandmark ? `, ${values.shipLandmark}` : ""}
               <br />
               {values.shipCity}, {values.shipState} – {values.shipPincode}

@@ -1,6 +1,6 @@
 import { zodResolver } from "@hookform/resolvers/zod"
 import { Loader2 } from "lucide-react"
-import { useState, type FormEvent, type ReactNode } from "react"
+import { useEffect, useState, type FormEvent, type ReactNode } from "react"
 import { Controller, useForm, useWatch, type DefaultValues } from "react-hook-form"
 import { toast } from "sonner"
 
@@ -27,6 +27,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
+import { AreaSelect, PincodeHint } from "@/features/placement/components/pincode-lookup"
 import { PlacementSuccess } from "@/features/placement/components/placement-success"
 import { ProductPicker } from "@/features/placement/components/product-picker"
 import {
@@ -43,6 +44,7 @@ import {
   type PlacementInput,
   type PlacementValues,
 } from "@/features/placement/schemas"
+import { isPincode, usePincodeLookup } from "@/features/placement/queries"
 import { products } from "@/features/products/mock-data"
 import { formatBV, formatINR } from "@/lib/format"
 import { cn } from "@/lib/utils"
@@ -112,6 +114,7 @@ function blankForm(slot: number, newId: string): DefaultValues<PlacementInput> {
     city: "",
     state: "",
     pincode: "",
+    area: "",
     password: "",
     confirmPassword: "",
     newId,
@@ -122,6 +125,7 @@ function blankForm(slot: number, newId: string): DefaultValues<PlacementInput> {
     shipMobile: "",
     shipLine1: "",
     shipLandmark: "",
+    shipArea: "",
     shipCity: "",
     shipState: "",
     shipPincode: "",
@@ -189,6 +193,8 @@ export function PartnerManualPlacementPage() {
     regState,
     regPincode,
     typedNewId,
+    regArea,
+    shipPincode,
   ] = useWatch({
     control,
     name: [
@@ -201,8 +207,29 @@ export function PartnerManualPlacementPage() {
       "state",
       "pincode",
       "newId",
+      "area",
+      "shipPincode",
     ],
   })
+
+  // Pincode → city / state / areas. A found pincode fills City and State (still editable).
+  const regLookup = usePincodeLookup(regPincode ?? "")
+  const shipLookup = usePincodeLookup(shipPincode ?? "")
+  useEffect(() => {
+    const info = regLookup.data
+    if (!info) return
+    setValue("city", info.city, { shouldValidate: true })
+    setValue("state", info.state, { shouldValidate: true })
+    setValue("area", "")
+  }, [regLookup.data, setValue])
+  useEffect(() => {
+    const info = shipLookup.data
+    // With "Same as registered address" the shipping fields are copied, not looked up.
+    if (!info || shipSameAsRegistered) return
+    setValue("shipCity", info.city, { shouldValidate: true })
+    setValue("shipState", info.state, { shouldValidate: true })
+    setValue("shipArea", "")
+  }, [shipLookup.data, shipSameAsRegistered, setValue])
   const uplineKnown = (upline ?? "").trim().toUpperCase() === defaultUpline.id
   const product = products.find((p) => p.sku === productSku)
   const slotsUsed = Math.min(takenBySlot.size, TOTAL_SLOTS)
@@ -223,6 +250,7 @@ export function PartnerManualPlacementPage() {
     setValue("shipMobile", getValues("mobile"))
     setValue("shipLine1", getValues("address"))
     setValue("shipLandmark", "")
+    setValue("shipArea", getValues("area"))
     setValue("shipCity", getValues("city"))
     setValue("shipState", getValues("state"))
     setValue("shipPincode", getValues("pincode"))
@@ -412,7 +440,7 @@ export function PartnerManualPlacementPage() {
                   {...register("address")}
                 />
               </Field>
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+              <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
                 <Field label="Pincode" htmlFor="pincode" error={errors.pincode?.message}>
                   <Input
                     id="pincode"
@@ -423,6 +451,21 @@ export function PartnerManualPlacementPage() {
                     aria-invalid={!!errors.pincode}
                     {...register("pincode")}
                   />
+                  <PincodeHint lookup={regLookup} complete={isPincode(regPincode ?? "")} />
+                </Field>
+                <Field label="Area / post office" htmlFor="area">
+                  <Controller
+                    control={control}
+                    name="area"
+                    render={({ field }) => (
+                      <AreaSelect
+                        id="area"
+                        areas={regLookup.data?.areas ?? []}
+                        value={field.value}
+                        onChange={field.onChange}
+                      />
+                    )}
+                  />
                 </Field>
                 <Field label="City" htmlFor="city" error={errors.city?.message}>
                   <Input
@@ -432,12 +475,7 @@ export function PartnerManualPlacementPage() {
                     {...register("city")}
                   />
                 </Field>
-                <Field
-                  label="State"
-                  htmlFor="state"
-                  error={errors.state?.message}
-                  className="col-span-2 sm:col-span-1"
-                >
+                <Field label="State" htmlFor="state" error={errors.state?.message}>
                   <Input
                     id="state"
                     autoComplete="address-level1"
@@ -614,7 +652,8 @@ export function PartnerManualPlacementPage() {
                   {regAddress || regCity || regPincode ? (
                     <p className="text-muted-foreground">
                       {regAddress}
-                      {regAddress ? <br /> : null}
+                      {regArea ? `, ${regArea}` : ""}
+                      {regAddress || regArea ? <br /> : null}
                       {[regCity, regState].filter(Boolean).join(", ")}
                       {regPincode ? ` – ${regPincode}` : ""}
                     </p>
@@ -661,14 +700,10 @@ export function PartnerManualPlacementPage() {
                       {...register("shipLine1")}
                     />
                   </Field>
+                  <Field label="Landmark (optional)" htmlFor="shipLandmark">
+                    <Input id="shipLandmark" {...register("shipLandmark")} />
+                  </Field>
                   <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-                    <Field
-                      label="Landmark (optional)"
-                      htmlFor="shipLandmark"
-                      className="col-span-2 lg:col-span-1"
-                    >
-                      <Input id="shipLandmark" {...register("shipLandmark")} />
-                    </Field>
                     <Field
                       label="Pincode"
                       htmlFor="shipPincode"
@@ -683,6 +718,21 @@ export function PartnerManualPlacementPage() {
                         aria-invalid={!!errors.shipPincode}
                         {...register("shipPincode")}
                       />
+                      <PincodeHint lookup={shipLookup} complete={isPincode(shipPincode ?? "")} />
+                    </Field>
+                    <Field label="Area / post office" htmlFor="shipArea">
+                      <Controller
+                        control={control}
+                        name="shipArea"
+                        render={({ field }) => (
+                          <AreaSelect
+                            id="shipArea"
+                            areas={shipLookup.data?.areas ?? []}
+                            value={field.value}
+                            onChange={field.onChange}
+                          />
+                        )}
+                      />
                     </Field>
                     <Field label="City" htmlFor="shipCity" error={errors.shipCity?.message}>
                       <Input
@@ -692,12 +742,7 @@ export function PartnerManualPlacementPage() {
                         {...register("shipCity")}
                       />
                     </Field>
-                    <Field
-                      label="State"
-                      htmlFor="shipState"
-                      error={errors.shipState?.message}
-                      className="col-span-2 lg:col-span-1"
-                    >
+                    <Field label="State" htmlFor="shipState" error={errors.shipState?.message}>
                       <Input
                         id="shipState"
                         autoComplete="shipping address-level1"
