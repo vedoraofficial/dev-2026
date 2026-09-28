@@ -17,12 +17,24 @@ type Props = {
   href?: string
   /** Makes the card a button — e.g. to use it as a filter shortcut */
   onClick?: () => void
+  /** With `onClick`: the filter this card applies is the active one */
+  pressed?: boolean
   className?: string
 }
 
 const labelTone = { success: "text-success", warning: "text-gold", danger: "text-danger" } as const
 
-export function StatCard({ label, value, hint, highlight, tone, href, onClick, className }: Props) {
+export function StatCard({
+  label,
+  value,
+  hint,
+  highlight,
+  tone,
+  href,
+  onClick,
+  pressed,
+  className,
+}: Props) {
   const content = (
     <>
       <div className="flex items-start justify-between gap-2">
@@ -64,7 +76,12 @@ export function StatCard({ label, value, hint, highlight, tone, href, onClick, c
 
   if (onClick) {
     return (
-      <button type="button" onClick={onClick} className={cn(cardClass, "text-left")}>
+      <button
+        type="button"
+        onClick={onClick}
+        aria-pressed={pressed}
+        className={cn(cardClass, "text-left")}
+      >
         {content}
       </button>
     )

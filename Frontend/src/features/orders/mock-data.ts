@@ -125,6 +125,8 @@ export type PartnerOrder = {
   amount: number
   delivery: string
   status: OrderStatus
+  /** Courier tracking number once shipped */
+  trackingId?: string
 }
 
 export const partnerOrders: PartnerOrder[] = [
@@ -143,6 +145,7 @@ export const partnerOrders: PartnerOrder[] = [
     amount: 1999,
     delivery: "BD1247891 · in transit",
     status: "shipped",
+    trackingId: "BD1247891",
   },
   {
     id: "ORD-01191",
@@ -160,7 +163,99 @@ export const partnerOrders: PartnerOrder[] = [
     delivery: "Payment not received",
     status: "failed",
   },
+  {
+    id: "ORD-01183",
+    product: "Protection Bracelet × 1",
+    date: "13 Sep 2026",
+    amount: 1999,
+    delivery: "Processing · 24–48 h",
+    status: "confirmed",
+  },
+  {
+    id: "ORD-01177",
+    product: "Energy Bracelet × 2",
+    date: "12 Sep 2026",
+    amount: 3998,
+    delivery: "BD1247866 · out for delivery",
+    status: "shipped",
+    trackingId: "BD1247866",
+  },
+  {
+    id: "ORD-01170",
+    product: "Wealth Bracelet × 2",
+    date: "10 Sep 2026",
+    amount: 3998,
+    delivery: "Cancelled by you · refund in 7–10 days",
+    status: "refunding",
+  },
+  {
+    id: "ORD-01162",
+    product: "Balance Bracelet × 1",
+    date: "14 Sep 2026",
+    amount: 1999,
+    delivery: "Delivered 17 Sep",
+    status: "delivered",
+  },
+  {
+    id: "ORD-01155",
+    product: "Protection Bracelet × 3",
+    date: "05 Sep 2026",
+    amount: 5997,
+    delivery: "Delivered 09 Sep",
+    status: "delivered",
+  },
+  {
+    id: "ORD-01149",
+    product: "Energy Bracelet × 1",
+    date: "03 Sep 2026",
+    amount: 1999,
+    delivery: "Cancelled by admin · stock unavailable",
+    status: "cancelled",
+  },
+  {
+    id: "ORD-01138",
+    product: "Wealth Bracelet × 1",
+    date: "29 Aug 2026",
+    amount: 1999,
+    delivery: "Refunded to UPI on 06 Sep",
+    status: "refunded",
+  },
+  {
+    id: "ORD-01166",
+    product: "Protection Bracelet × 2",
+    date: "11 Sep 2026",
+    amount: 3998,
+    delivery: "Card declined by bank",
+    status: "failed",
+  },
+  {
+    id: "ORD-01143",
+    product: "Balance Bracelet × 2",
+    date: "01 Sep 2026",
+    amount: 3998,
+    delivery: "Returned to warehouse · refund in progress",
+    status: "refunding",
+  },
 ]
+
+/**
+ * DUMMY: the 4 cards on My Orders, worked out from the sample list so the cards and the list
+ * always agree. The real numbers come from GET /api/partner/orders/stats.
+ */
+export function partnerOrderStats(orders: PartnerOrder[]) {
+  const sum = (list: PartnerOrder[]) => list.reduce((total, o) => total + o.amount, 0)
+  const refunding = orders.filter((o) => o.status === "refunding")
+  const inTransit = orders.filter((o) => o.status === "shipped")
+  const failed = orders.filter((o) => o.status === "failed")
+  return {
+    totalOrders: orders.length,
+    since: "Mar 2026",
+    refunding: { count: refunding.length, amount: sum(refunding) },
+    inTransit: inTransit.length,
+    trackingIds: inTransit.flatMap((o) => (o.trackingId ? [o.trackingId] : [])),
+    failed: { count: failed.length, amount: sum(failed) },
+  }
+}
 
 export const deliverySla = [
   { zone: "Maharashtra", sla: "Up to 7 business days" },
