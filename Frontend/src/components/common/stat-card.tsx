@@ -15,12 +15,14 @@ type Props = {
   tone?: "success" | "warning" | "danger"
   /** Makes the card a link to the screen that breaks this number down */
   href?: string
+  /** Makes the card a button — e.g. to use it as a filter shortcut */
+  onClick?: () => void
   className?: string
 }
 
 const labelTone = { success: "text-success", warning: "text-gold", danger: "text-danger" } as const
 
-export function StatCard({ label, value, hint, highlight, tone, href, className }: Props) {
+export function StatCard({ label, value, hint, highlight, tone, href, onClick, className }: Props) {
   const content = (
     <>
       <div className="flex items-start justify-between gap-2">
@@ -47,7 +49,7 @@ export function StatCard({ label, value, hint, highlight, tone, href, className 
   const cardClass = cn(
     "group min-w-0 rounded-2xl border bg-card p-4 md:p-5",
     highlight ? "border-gold/45" : "border-border",
-    href &&
+    (href || onClick) &&
       "transition-colors hover:border-gold/40 hover:bg-accent/30 focus-visible:border-gold/50 focus-visible:ring-3 focus-visible:ring-gold/20 focus-visible:outline-none",
     className,
   )
@@ -57,6 +59,14 @@ export function StatCard({ label, value, hint, highlight, tone, href, className 
       <Link to={href} className={cardClass}>
         {content}
       </Link>
+    )
+  }
+
+  if (onClick) {
+    return (
+      <button type="button" onClick={onClick} className={cn(cardClass, "text-left")}>
+        {content}
+      </button>
     )
   }
 

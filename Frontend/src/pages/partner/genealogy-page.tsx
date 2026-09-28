@@ -1,3 +1,4 @@
+import { ArrowLeft } from "lucide-react"
 import { useState } from "react"
 import { Link, useSearchParams } from "react-router-dom"
 import { toast } from "sonner"
@@ -63,6 +64,10 @@ export function PartnerGenealogyPage() {
   const selected = membersById.get(selectedId) ?? me.children[0]
   const full = selected.direct >= 20
 
+  const [viewRootId, setViewRootId] = useState(me.id)
+  const viewRoot = membersById.get(viewRootId) ?? me
+  const isOwnDownline = viewRootId === me.id
+
   return (
     <>
       <PageHeader
@@ -86,9 +91,15 @@ export function PartnerGenealogyPage() {
       <PageBody>
         <div className="grid grid-cols-[minmax(0,1fr)] gap-4 md:gap-5 xl:grid-cols-[minmax(0,1fr)_19rem]">
           <div className="min-w-0 space-y-5">
+            {isOwnDownline ? null : (
+              <Button variant="quiet" size="sm" onClick={() => setViewRootId(me.id)}>
+                <ArrowLeft /> Back to my downline
+              </Button>
+            )}
             <GenealogyTree
-              root={me}
-              rootLabel={`${me.fullName} — You`}
+              key={viewRoot.id}
+              root={viewRoot}
+              rootLabel={isOwnDownline ? `${me.fullName} — You` : viewRoot.fullName}
               selectedId={selectedId}
               onSelect={(m: TreeMember) => setSelectedId(m.id)}
             />
@@ -138,7 +149,18 @@ export function PartnerGenealogyPage() {
               </p>
             ) : null}
 
-            <Button variant="outline" size="lg" className="mt-5 w-full xl:mt-auto">
+            <Button
+              variant="outline"
+              size="lg"
+              className="mt-5 w-full xl:mt-auto"
+              disabled={selected.id === viewRootId}
+              onClick={() => {
+                setViewRootId(selected.id)
+                toast.success(
+                  `Viewing ${selected.id === me.id ? "your" : `${selected.fullName}'s`} tree`,
+                )
+              }}
+            >
               View this member&apos;s tree
             </Button>
           </aside>

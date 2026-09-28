@@ -29,5 +29,6 @@ export const PARTNER_NAV: NavItem[] = [
   { label: "My Orders", to: ROUTES.partner.orders },
   // { label: "Profile", to: ROUTES.partner.profile },
   { label: "Policies", to: ROUTES.partner.policies },
-  { label: "Settings", to: ROUTES.partner.settings },
+  // "Settings" is deliberately not in the sidebar — it's reached from the profile menu
+  // next to the notification bell (see components/common/user-menu.tsx).
 ]

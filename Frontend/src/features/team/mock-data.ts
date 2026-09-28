@@ -1,16 +1,11 @@
-export const levelCounts = [
-  { level: 1, count: 14, cap: 20 },
-  { level: 2, count: 98 },
-  { level: 3, count: 72 },
-  { level: 4, count: 62 },
-  { level: 5, count: 38 },
-]
+import { partnerTree } from "@/features/genealogy/mock-data"
 
 export type TeamMemberStatus = "active" | "free-active" | "no-bv"
 
 export type TeamMember = {
   id: string
   name: string
+  level: number
   joined: string
   slot: number
   downline: number
@@ -18,59 +13,33 @@ export type TeamMember = {
   status: TeamMemberStatus
 }
 
-export const directTeam: TeamMember[] = [
-  {
-    id: "VED000455",
-    name: "Sneha Kulkarni",
-    joined: "02 Jun 2026",
-    slot: 1,
-    downline: 42,
-    srp: 18,
-    status: "active",
-  },
-  {
-    id: "VED000462",
-    name: "Imran Shaikh",
-    joined: "14 Jun 2026",
-    slot: 2,
-    downline: 96,
-    srp: 26,
-    status: "active",
-  },
-  {
-    id: "VED000478",
-    name: "Meera Joshi",
-    joined: "29 Jun 2026",
-    slot: 3,
-    downline: 18,
-    srp: 6,
-    status: "active",
-  },
-  {
-    id: "VED000491",
-    name: "Akash Patil",
-    joined: "11 Jul 2026",
-    slot: 4,
-    downline: 7,
-    srp: 4,
-    status: "free-active",
-  },
-  {
-    id: "VED000601",
-    name: "Vivek Rane",
-    joined: "03 Sep 2026",
-    slot: 21,
-    downline: 2,
-    srp: 8,
-    status: "no-bv",
-  },
-  {
-    id: "VED000568",
-    name: "Pooja Nair",
-    joined: "22 Jul 2026",
-    slot: 5,
-    downline: 31,
-    srp: 12,
-    status: "active",
-  },
-]
+/** The signed-in partner's whole downline (every level), derived from the shared genealogy tree
+ * so Team and Genealogy always agree on who's who. */
+function toTeamMember(m: (typeof partnerTree)["children"][number]): TeamMember {
+  const beyondCap = m.slot > 20
+  const status: TeamMemberStatus = beyondCap ? "no-bv" : m.slot % 4 === 0 ? "free-active" : "active"
+  const srp = beyondCap ? 2 : Math.min(48, 4 + m.downline * 2 + ((m.slot * 3) % 11))
+
+  return {
+    id: m.id,
+    name: m.fullName,
+    level: m.level,
+    joined: m.joined,
+    slot: m.slot,
+    downline: m.downline,
+    srp,
+    status,
+  }
+}
+
+function flattenDownline(node: typeof partnerTree): TeamMember[] {
+  return node.children.flatMap((child) => [toTeamMember(child), ...flattenDownline(child)])
+}
+
+export const teamMembers: TeamMember[] = flattenDownline(partnerTree)
+
+export const levelCounts = [1, 2, 3, 4, 5].map((level) => ({
+  level,
+  count: teamMembers.filter((m) => m.level === level).length,
+  cap: level === 1 ? 20 : undefined,
+}))
