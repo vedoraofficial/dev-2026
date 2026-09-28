@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useState, type ReactNode } from "react"
 
 import { MonoId } from "@/components/common/mono-id"
 import { Panel } from "@/components/common/panel"
@@ -13,8 +13,17 @@ const PREVIEW_WORDS = 32
 /**
  * One SKU in the catalogue — shared by the Admin and Partner Products pages.
  * `soldLabel` is the line at the bottom: all sales for Admin, the signed-in partner's own for Partners.
+ * `action` sits beside it — e.g. the Partner page's "Add to order" button (Admin passes none).
  */
-export function ProductCard({ product: p, soldLabel }: { product: Product; soldLabel: string }) {
+export function ProductCard({
+  product: p,
+  soldLabel,
+  action,
+}: {
+  product: Product
+  soldLabel: string
+  action?: ReactNode
+}) {
   const [expanded, setExpanded] = useState(false)
   const preview = truncateWords(p.description, PREVIEW_WORDS)
   const hasMore = preview !== p.description
@@ -66,7 +75,14 @@ export function ProductCard({ product: p, soldLabel }: { product: Product; soldL
           ) : null}
         </div>
 
-        <p className="mt-auto text-xs text-muted-foreground">{soldLabel}</p>
+        {action ? (
+          <div className="mt-auto flex flex-wrap items-center justify-between gap-3">
+            <p className="text-xs text-muted-foreground">{soldLabel}</p>
+            {action}
+          </div>
+        ) : (
+          <p className="mt-auto text-xs text-muted-foreground">{soldLabel}</p>
+        )}
       </div>
     </Panel>
   )
