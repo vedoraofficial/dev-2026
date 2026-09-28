@@ -2,7 +2,7 @@ import { Menu } from "lucide-react"
 import type { ReactNode } from "react"
 
 import { NotificationsMenu } from "@/components/common/notifications-menu"
-import { UserMenu } from "@/components/common/user-menu"
+// import { UserMenu } from "@/components/common/user-menu"
 import { Button } from "@/components/ui/button"
 import { useShellStore } from "@/lib/shell-store"
 
@@ -49,7 +49,7 @@ export function PageHeader({ title, subtitle, actions, hideUtilities }: Props) {
         {hideUtilities ? null : (
           <>
             <NotificationsMenu />
-            <UserMenu />
+            {/* <UserMenu /> */}
           </>
         )}
       </div>

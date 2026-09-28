@@ -27,7 +27,7 @@ export const PARTNER_NAV: NavItem[] = [
   { label: "Income Reports", to: ROUTES.partner.incomeReports },
   { label: "Products", to: ROUTES.partner.products },
   { label: "My Orders", to: ROUTES.partner.orders },
-  { label: "Profile", to: ROUTES.partner.profile },
+  // { label: "Profile", to: ROUTES.partner.profile },
   { label: "Policies", to: ROUTES.partner.policies },
   { label: "Settings", to: ROUTES.partner.settings },
 ]
