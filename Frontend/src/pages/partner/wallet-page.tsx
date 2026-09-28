@@ -1,4 +1,5 @@
-import { useState } from "react"
+import { useRef, useState } from "react"
+import { toast } from "sonner"
 
 import { DataTable, type Column } from "@/components/common/data-table"
 import { FilterTabs } from "@/components/common/filter-tabs"
@@ -67,27 +68,53 @@ const columns: Column<WalletTxn>[] = [
   },
 ]
 
-const quickAmounts = [5000, 10000, walletSummary.balance]
-
 export function PartnerWalletPage() {
   const [tab, setTab] = useState("all")
   const [amount, setAmount] = useState("25000")
+  const [balance, setBalance] = useState(walletSummary.balance)
+  const [pendingPayout, setPendingPayout] = useState(walletSummary.pendingPayout)
+  const [transactions, setTransactions] = useState(walletTransactions)
+  const withdrawPanelRef = useRef<HTMLDivElement>(null)
+  const amountInputRef = useRef<HTMLInputElement>(null)
 
-  const rows = walletTransactions.filter((t) =>
+  const quickAmounts = [5000, 10000, balance]
+  const numericAmount = Number(amount) || 0
+  const canSubmit = numericAmount > 0 && numericAmount <= balance
+
+  const rows = transactions.filter((t) =>
     tab === "credit" ? t.amount > 0 : tab === "debit" ? t.amount < 0 : true,
   )
+
+  const focusWithdrawPanel = () => {
+    withdrawPanelRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })
+    amountInputRef.current?.focus()
+  }
+
+  const submitWithdrawal = () => {
+    if (!canSubmit) return
+    setBalance((b) => b - numericAmount)
+    setPendingPayout((p) => p + numericAmount)
+    setTransactions((prev) => [
+      {
+        id: crypto.randomUUID(),
+        title: "Withdrawal request",
+        when: "Just now",
+        source: `WD-${Math.floor(10000 + Math.random() * 90000)}`,
+        status: "pending",
+        amount: -numericAmount,
+      },
+      ...prev,
+    ])
+    toast.success(`Withdrawal request of ${formatINR(numericAmount)} submitted`)
+    setAmount("")
+  }
 
   return (
     <>
       <PageHeader
         title="Wallet"
         subtitle="Every credit is posted automatically by the commission engine"
-        actions={
-          <>
-            <Button variant="outline">Add funds</Button>
-            <Button>Request withdrawal</Button>
-          </>
-        }
+        actions={<Button onClick={focusWithdrawPanel}>Request withdrawal</Button>}
       />
       <PageBody>
         <div className="grid gap-4 md:gap-5 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
@@ -96,7 +123,7 @@ export function PartnerWalletPage() {
               <div>
                 <p className="eyebrow text-gold">Available balance</p>
                 <p className="mt-2 font-display text-5xl leading-none md:text-6xl">
-                  {formatINR(walletSummary.balance)}
+                  {formatINR(balance)}
                 </p>
                 <p className="mt-3 text-[0.6875rem] text-muted-foreground">
                   <MonoId tone="muted" className="text-[0.6875rem]">
@@ -109,7 +136,7 @@ export function PartnerWalletPage() {
                 <div>
                   <p className="eyebrow text-[0.625rem]">Pending payout</p>
                   <p className="mt-1 font-display text-2xl text-gold-light">
-                    {formatINR(walletSummary.pendingPayout)}
+                    {formatINR(pendingPayout)}
                   </p>
                 </div>
                 <div>
@@ -132,6 +159,7 @@ export function PartnerWalletPage() {
                       { value: "credit", label: "Credit" },
                       { value: "debit", label: "Debit" },
                     ]}
+                    className="[scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
                   />
                 }
               />
@@ -140,6 +168,7 @@ export function PartnerWalletPage() {
           </div>
 
           <div className="space-y-4 md:space-y-5">
+            <div ref={withdrawPanelRef} />
             <Panel>
               <PanelHeader title="Request withdrawal" />
               <div className="space-y-2">
@@ -152,6 +181,7 @@ export function PartnerWalletPage() {
                   </span>
                   <Input
                     id="amount"
+                    ref={amountInputRef}
                     inputMode="numeric"
                     value={amount ? formatNumber(Number(amount)) : ""}
                     onChange={(e) => setAmount(e.target.value.replace(/\D/g, "").slice(0, 7))}
@@ -170,6 +200,11 @@ export function PartnerWalletPage() {
                     </button>
                   ))}
                 </div>
+                {numericAmount > balance ? (
+                  <p className="text-[0.6875rem] text-danger">
+                    Amount exceeds your available balance of {formatINR(balance)}.
+                  </p>
+                ) : null}
               </div>
 
               <div className="mt-5 space-y-2">
@@ -185,7 +220,12 @@ export function PartnerWalletPage() {
               <p className="mt-4 rounded-xl border border-border bg-field/60 p-3 text-[0.6875rem] leading-relaxed text-muted-foreground">
                 Requests are reviewed by Admin and settled to your bank via Razorpay or PhonePe.
               </p>
-              <Button size="lg" className="mt-4 w-full">
+              <Button
+                size="lg"
+                className="mt-4 w-full"
+                disabled={!canSubmit}
+                onClick={submitWithdrawal}
+              >
                 Submit request
               </Button>
             </Panel>

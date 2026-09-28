@@ -40,6 +40,8 @@ const columns: Column<LedgerRow>[] = [
 ]
 
 export function PartnerSrpWalletPage() {
+  const monthsRedeemable = Math.floor(srpWallet.balance / 10)
+
   return (
     <>
       <PageHeader title="SRP Wallet" subtitle="Sales Reward Points · 2 SRP per confirmed sale" />
@@ -55,7 +57,11 @@ export function PartnerSrpWalletPage() {
               </div>
               <div className="sm:text-right">
                 <p className="eyebrow text-[0.625rem]">Redeemable for</p>
-                <p className="mt-1 font-display text-2xl text-success">2 months free activation</p>
+                <p className="mt-1 font-display text-2xl text-success">
+                  {monthsRedeemable > 0
+                    ? `${monthsRedeemable} month${monthsRedeemable > 1 ? "s" : ""} free activation`
+                    : "Not enough SRP yet"}
+                </p>
               </div>
             </div>
 
@@ -82,7 +88,7 @@ export function PartnerSrpWalletPage() {
                     <p className={cn("font-mono text-base", reached && "text-gold-light")}>
                       {t.points}
                     </p>
-                    <p className="mt-0.5 text-[0.5625rem] sm:text-[0.625rem]">{t.label}</p>
+                    <p className="mt-0.5 text-[0.5625rem] sm:text-[0.625rem]">for {t.label}</p>
                   </div>
                 )
               })}
