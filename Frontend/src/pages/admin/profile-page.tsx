@@ -1,9 +1,6 @@
-import { LogOut } from "lucide-react"
 import { useRef, useState, type ComponentProps, type ReactNode } from "react"
-import { useNavigate } from "react-router-dom"
 import { toast } from "sonner"
 
-import { ROUTES } from "@/app/routes"
 import { MonoId } from "@/components/common/mono-id"
 import { PageBody, PageHeader } from "@/components/common/page-header"
 import { PersonAvatar } from "@/components/common/person-avatar"
@@ -47,16 +44,10 @@ function Row({ label, value }: { label: string; value: ReactNode }) {
 }
 
 export function AdminProfilePage() {
-  const navigate = useNavigate()
   const [saved, setSaved] = useState(initialDetails)
   const [draft, setDraft] = useState(initialDetails)
   const [photo, setPhoto] = useState<string | undefined>()
   const photoInputRef = useRef<HTMLInputElement>(null)
-
-  const handleLogout = () => {
-    toast.success("Logged out successfully")
-    navigate(ROUTES.adminLogin)
-  }
 
   const isDirty = JSON.stringify(draft) !== JSON.stringify(saved)
   const setField = (key: keyof Details) => (e: React.ChangeEvent<HTMLInputElement>) =>
@@ -145,14 +136,6 @@ export function AdminProfilePage() {
                 onClick={() => photoInputRef.current?.click()}
               >
                 Change photo
-              </Button>
-              <Button
-                variant="destructive"
-                className="mt-2.5 w-full"
-                onClick={handleLogout}
-              >
-                <LogOut />
-                Log out
               </Button>
             </Panel>
 

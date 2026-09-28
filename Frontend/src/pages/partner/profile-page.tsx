@@ -1,9 +1,5 @@
-import { LogOut } from "lucide-react"
 import type { ReactNode } from "react"
-import { useNavigate } from "react-router-dom"
-import { toast } from "sonner"
 
-import { ROUTES } from "@/app/routes"
 import { MonoId } from "@/components/common/mono-id"
 import { PageBody, PageHeader } from "@/components/common/page-header"
 import { PersonAvatar } from "@/components/common/person-avatar"
@@ -38,13 +34,6 @@ function PlacementRow({ label, children }: { label: string; children: ReactNode 
 }
 
 export function PartnerProfilePage() {
-  const navigate = useNavigate()
-
-  const handleLogout = () => {
-    toast.success("Logged out successfully")
-    navigate(ROUTES.login)
-  }
-
   return (
     <>
       <PageHeader
@@ -71,14 +60,6 @@ export function PartnerProfilePage() {
               </StatusPill>
               <Button variant="outline" className="mt-5 w-full">
                 Change photo
-              </Button>
-              <Button
-                variant="destructive"
-                className="mt-2.5 w-full"
-                onClick={handleLogout}
-              >
-                <LogOut />
-                Log out
               </Button>
             </Panel>
 
