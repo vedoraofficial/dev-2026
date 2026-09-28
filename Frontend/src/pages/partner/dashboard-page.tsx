@@ -1,7 +1,10 @@
-import { Link } from "react-router-dom"
+import { useState } from "react"
+import { Link, useNavigate } from "react-router-dom"
+import { toast } from "sonner"
 
 import { ROUTES } from "@/app/routes"
 import { MonoId } from "@/components/common/mono-id"
+import { indexTree } from "@/components/common/genealogy-tree"
 import { PageBody, PageHeader } from "@/components/common/page-header"
 import { PersonAvatar } from "@/components/common/person-avatar"
 import { Panel, PanelHeader } from "@/components/common/panel"
@@ -17,6 +20,7 @@ import {
   recentJoinings,
   srpSummary,
 } from "@/features/dashboard/mock-data"
+import { partnerTree } from "@/features/genealogy/mock-data"
 import { products } from "@/features/products/mock-data"
 import { formatINR, formatNumber } from "@/lib/format"
 import { cn } from "@/lib/utils"
@@ -26,7 +30,29 @@ const maxLevel = Math.max(...levelIncome.map((l) => l.amount))
 const levelTotal = levelIncome.reduce((sum, l) => sum + l.amount, 0)
 const levelShade = ["bg-chart-1", "bg-chart-2", "bg-chart-3", "bg-chart-4", "bg-chart-5"]
 
+const myTeamById = indexTree(partnerTree)
+
+/** "631" -> "VED000631"; "ved000631" -> "VED000631"; anything else is returned as typed. */
+function normalizeId(input: string): string {
+  const trimmed = input.trim().toUpperCase()
+  return /^\d+$/.test(trimmed) ? `VED${trimmed.padStart(6, "0")}` : trimmed
+}
+
 export function PartnerDashboardPage() {
+  const navigate = useNavigate()
+  const [query, setQuery] = useState("")
+
+  const searchTeam = () => {
+    if (!query.trim()) return
+    const id = normalizeId(query)
+    const match = myTeamById.get(id)
+    if (!match) {
+      toast.error(`${id} isn't in your team`)
+      return
+    }
+    navigate(`${ROUTES.partner.genealogy}?id=${match.id}`)
+  }
+
   return (
     <>
       <PageHeader
@@ -37,6 +63,9 @@ export function PartnerDashboardPage() {
             type="search"
             placeholder="Search partner ID…"
             aria-label="Search partner ID"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && searchTeam()}
             className="w-full md:w-72"
           />
         }
@@ -44,16 +73,19 @@ export function PartnerDashboardPage() {
       <PageBody>
         <StatGrid>
           <StatCard
+            href={ROUTES.partner.wallet}
             label="Wallet balance"
             value={formatINR(me.walletBalance)}
             hint={<span className="text-success">▲ {formatINR(me.walletThisWeek)} this week</span>}
           />
           <StatCard
+            href={ROUTES.partner.incomeReports}
             label="Total income"
             value={formatINR(me.totalIncome)}
             hint={`Direct ${formatINR(me.directIncome)} · BV ${formatINR(me.bvIncome)}`}
           />
           <StatCard
+            href={ROUTES.partner.team}
             label="Direct slots used"
             value={
               <>
@@ -71,6 +103,7 @@ export function PartnerDashboardPage() {
             }
           />
           <StatCard
+            href={ROUTES.partner.team}
             label="Team size"
             value={formatNumber(me.teamSize)}
             hint={`Across 5 income levels · ${me.teamActive} active`}
@@ -107,7 +140,17 @@ export function PartnerDashboardPage() {
             <Panel>
               <PanelHeader
                 title="BV Level Income — this month"
-                aside={<span className="font-mono text-gold">{formatINR(levelTotal)} total</span>}
+                aside={
+                  <span className="flex items-center gap-3">
+                    <span className="font-mono text-gold">{formatINR(levelTotal)} total</span>
+                    <Link
+                      to={ROUTES.partner.incomeReports}
+                      className="font-medium text-gold hover:underline"
+                    >
+                      View report →
+                    </Link>
+                  </span>
+                }
               />
               <div
                 role="img"

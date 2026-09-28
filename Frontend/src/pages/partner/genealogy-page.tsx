@@ -1,5 +1,8 @@
 import { useState } from "react"
+import { Link, useSearchParams } from "react-router-dom"
+import { toast } from "sonner"
 
+import { ROUTES } from "@/app/routes"
 import { GenealogyLegend, GenealogyTree, indexTree } from "@/components/common/genealogy-tree"
 import { MonoId } from "@/components/common/mono-id"
 import { PageBody, PageHeader } from "@/components/common/page-header"
@@ -7,14 +10,56 @@ import { PersonAvatar } from "@/components/common/person-avatar"
 import { StatusPill } from "@/components/common/status-pill"
 import { Button } from "@/components/ui/button"
 import { partnerTree, type TreeMember } from "@/features/genealogy/mock-data"
+import { downloadCsv } from "@/lib/csv"
 import { formatBV, formatNumber } from "@/lib/format"
 import { cn } from "@/lib/utils"
 
 const me = partnerTree
 const membersById = indexTree(me)
 
+function exportTeamCsv() {
+  const rows = [...membersById.values()].filter((m) => m.id !== me.id)
+  downloadCsv(
+    "vedora-my-team.csv",
+    [
+      "VEDORA ID",
+      "Name",
+      "Level",
+      "Sponsor",
+      "Joined",
+      "Direct slots",
+      "Downline",
+      "BV contributed",
+    ],
+    rows.map((m) => [
+      m.id,
+      m.fullName,
+      m.level,
+      m.sponsor,
+      m.joined,
+      m.direct,
+      m.downline,
+      m.bvContributed,
+    ]),
+  )
+  toast.success(`Exported ${rows.length} team members`)
+}
+
 export function PartnerGenealogyPage() {
-  const [selectedId, setSelectedId] = useState(me.children[1].id)
+  const [searchParams] = useSearchParams()
+  const requestedId = searchParams.get("id")
+
+  const [selectedId, setSelectedId] = useState(
+    requestedId && membersById.has(requestedId) ? requestedId : me.children[1].id,
+  )
+  // Jumped here from the dashboard search — re-select when `?id=` changes, without an effect
+  // (React's documented pattern for adjusting state during render).
+  const [syncedId, setSyncedId] = useState(requestedId)
+  if (requestedId !== syncedId) {
+    setSyncedId(requestedId)
+    if (requestedId && membersById.has(requestedId)) setSelectedId(requestedId)
+  }
+
   const selected = membersById.get(selectedId) ?? me.children[0]
   const full = selected.direct >= 20
 
@@ -29,8 +74,12 @@ export function PartnerGenealogyPage() {
         }
         actions={
           <>
-            <Button variant="outline">Export</Button>
-            <Button>Place new partner</Button>
+            <Button variant="outline" onClick={exportTeamCsv}>
+              Export
+            </Button>
+            <Button asChild>
+              <Link to={ROUTES.partner.manualPlacement}>Place new partner</Link>
+            </Button>
           </>
         }
       />
