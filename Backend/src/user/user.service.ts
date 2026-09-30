@@ -10,6 +10,7 @@ import { AddBankDetailsDto } from './dto/bank-details.dto';
 import { UpdateProfileDetailsDto } from './dto/profile-details.dto';
 import { UserBank } from './entity/user-bank.entity';
 import { UserProfile } from './entity/user-profile.entity';
+import { generateNextVedId } from '../common/utils/ved-id.generator';
 
 @Injectable()
 export class UserService {
@@ -32,7 +33,7 @@ export class UserService {
     }
 
     const passwordHash = await bcrypt.hash(dto.password, 10);
-    const vedId = `VED${Math.floor(Math.random() * 90000) + 10000}`;
+    const vedId = await generateNextVedId(this.userRepo.manager);
 
     const user = this.userRepo.create({
       vedId,

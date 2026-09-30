@@ -8,6 +8,7 @@ import { GenealogyNode, PlacementStatus } from './entity/genealogy-node.entity';
 import { CommissionUpline } from './entity/commission-upline.entity';
 import { JoinPartnerDto } from './dto/join-partner.dto';
 import { RegisterPartnerBySponsorDto } from './dto/register-partner-by-sponsor.dto';
+import { generateNextVedId } from '../common/utils/ved-id.generator';
 
 @Injectable()
 export class GenealogyService {
@@ -22,177 +23,191 @@ export class GenealogyService {
   ) {}
 
   async joinPartner(dto: JoinPartnerDto) {
-    return this.dataSource.transaction(async (manager) => {
-      const userRepo = manager.getRepository(User);
-      const profileRepo = manager.getRepository(UserProfile);
-      const nodeRepo = manager.getRepository(GenealogyNode);
-      const uplineRepo = manager.getRepository(CommissionUpline);
+    try {
+      return await this.dataSource.transaction(async (manager) => {
+        const userRepo = manager.getRepository(User);
+        const profileRepo = manager.getRepository(UserProfile);
+        const nodeRepo = manager.getRepository(GenealogyNode);
+        const uplineRepo = manager.getRepository(CommissionUpline);
 
-      // 1. Check for duplicate email or mobile
-      const existing = await userRepo.findOne({
-        where: [{ email: dto.email }, { mobile: dto.mobile }],
-      });
-      if (existing) {
-        throw new ConflictException('Email or mobile number is already registered.');
-      }
-
-      // 2. Validate sponsor by referral VED ID
-      const sponsor = await userRepo.findOne({ where: { vedId: dto.referralId } });
-      if (!sponsor) {
-        throw new NotFoundException(`Sponsor with referral ID ${dto.referralId} does not exist.`);
-      }
-
-      if (sponsor.role === UserRole.ADMIN) {
-        throw new BadRequestException(
-          'Root Admin cannot be a referral sponsor. New partners must register under a Founder or an active Partner.',
-        );
-      }
-
-      if (sponsor.status === UserStatus.BLOCKED) {
-        throw new BadRequestException('Sponsor account is currently blocked.');
-      }
-
-      // 3. Verify width constraint (Maximum 20 direct partners per sponsor)
-      const existingChildren = await nodeRepo.find({
-        where: { parentUserId: sponsor.id },
-        select: { slotNumber: true },
-      });
-
-      if (existingChildren.length >= 20) {
-        throw new BadRequestException(
-          `Sponsor ${dto.referralId} has reached the maximum capacity of 20 direct partners.`,
-        );
-      }
-
-      // Determine next available slot (1 to 20)
-      const occupiedSlots = new Set(existingChildren.map((c) => c.slotNumber));
-      let availableSlot = 1;
-      while (availableSlot <= 20) {
-        if (!occupiedSlots.has(availableSlot)) {
-          break;
-        }
-        availableSlot++;
-      }
-
-      // 4. Calculate tree depth and uplines based on sponsor type
-      let calculatedDepth = 1;
-      let uplineLevel1: number | null = sponsor.id;
-      let uplineLevel2: number | null = null;
-      let uplineLevel3: number | null = null;
-      let uplineLevel4: number | null = null;
-      let uplineLevel5: number | null = null;
-
-      if (sponsor.role === UserRole.FOUNDER) {
-        // Founder is not in the tree and has NO parentId
-        // Direct partners under Founder start at Depth 1
-        calculatedDepth = 1;
-        // Level 1 upline is the Founder, levels 2-5 are null
-        uplineLevel1 = sponsor.id;
-      } else {
-        // Sponsor is a Partner - must have a node in the tree
-        const sponsorNode = await nodeRepo.findOne({ where: { userId: sponsor.id } });
-        if (!sponsorNode) {
-          throw new BadRequestException('Sponsor is not active in the genealogy tree.');
-        }
-        calculatedDepth = sponsorNode.depth + 1;
-
-        // Fetch sponsor's upline record to shift
-        const sponsorUpline = await uplineRepo.findOne({ where: { userId: sponsor.id } });
-        uplineLevel1 = sponsor.id;
-        uplineLevel2 = sponsorUpline?.level1UserId ?? null;
-        uplineLevel3 = sponsorUpline?.level2UserId ?? null;
-        uplineLevel4 = sponsorUpline?.level3UserId ?? null;
-        uplineLevel5 = sponsorUpline?.level4UserId ?? null;
-      }
-
-      // 5. Generate unique VED ID for new partner
-      let newVedId = '';
-      let isUnique = false;
-      while (!isUnique) {
-        const randomNum = Math.floor(100000 + Math.random() * 900000);
-        newVedId = `VED${randomNum}`;
-        const collision = await userRepo.findOne({ where: { vedId: newVedId } });
-        if (!collision) isUnique = true;
-      }
-
-      // 6. Create User record
-      const passwordHash = await bcrypt.hash(dto.password, 10);
-      const newUser = userRepo.create({
-        vedId: newVedId,
-        name: dto.name,
-        email: dto.email,
-        mobile: dto.mobile,
-        passwordHash,
-        role: UserRole.PARTNER,
-        status: UserStatus.PENDING,
-      });
-      await userRepo.save(newUser);
-
-      // 7. Create UserProfile if profile details provided
-      const hasProfileData =
-        dto.dateOfBirth ||
-        dto.gender ||
-        dto.addressLine1 ||
-        dto.addressLine2 ||
-        dto.city ||
-        dto.state ||
-        dto.pincode ||
-        dto.profilePhoto;
-
-      if (hasProfileData) {
-        const userProfile = profileRepo.create({
-          user: newUser,
-          dateOfBirth: dto.dateOfBirth,
-          gender: dto.gender,
-          addressLine1: dto.addressLine1,
-          addressLine2: dto.addressLine2,
-          city: dto.city,
-          state: dto.state,
-          pincode: dto.pincode,
-          profilePhoto: dto.profilePhoto,
+        // 1. Check for duplicate email or mobile
+        const existing = await userRepo.findOne({
+          where: [{ email: dto.email }, { mobile: dto.mobile }],
         });
-        await profileRepo.save(userProfile);
-      }
+        if (existing) {
+          throw new ConflictException('Email or mobile number is already registered.');
+        }
 
-      // 8. Create GenealogyNode for partner
-      const newNode = nodeRepo.create({
-        userId: newUser.id,
-        parentUserId: sponsor.id,
-        slotNumber: availableSlot,
-        depth: calculatedDepth,
-        placementStatus: PlacementStatus.ACTIVE,
-      });
-      await nodeRepo.save(newNode);
+        // 2. Validate sponsor by referral VED ID with pessimistic write lock (FOR UPDATE)
+        // Queues concurrent registrations under the same sponsor so slots 1..20 are allocated cleanly
+        const sponsor = await userRepo
+          .createQueryBuilder('user')
+          .setLock('pessimistic_write')
+          .where('user.ved_id = :vedId', { vedId: dto.referralId })
+          .getOne();
 
-      // 9. Save 5-level Commission Uplines
-      const newUpline = uplineRepo.create({
-        userId: newUser.id,
-        level1UserId: uplineLevel1,
-        level2UserId: uplineLevel2,
-        level3UserId: uplineLevel3,
-        level4UserId: uplineLevel4,
-        level5UserId: uplineLevel5,
-      });
-      await uplineRepo.save(newUpline);
+        if (!sponsor) {
+          throw new NotFoundException(`Sponsor with referral ID ${dto.referralId} does not exist.`);
+        }
 
-      return {
-        message: 'Partner successfully joined.',
-        partner: {
-          id: newUser.id,
-          vedId: newUser.vedId,
-          name: newUser.name,
-          email: newUser.email,
-          mobile: newUser.mobile,
-          role: newUser.role,
-          status: newUser.status,
+        if (sponsor.role === UserRole.ADMIN) {
+          throw new BadRequestException(
+            'Root Admin cannot be a referral sponsor. New partners must register under a Founder or an active Partner.',
+          );
+        }
+
+        if (sponsor.status === UserStatus.BLOCKED) {
+          throw new BadRequestException('Sponsor account is currently blocked.');
+        }
+
+        // 3. Verify width constraint (Maximum 20 direct partners per sponsor)
+        const existingChildren = await nodeRepo.find({
+          where: { parentUserId: sponsor.id },
+          select: { slotNumber: true },
+        });
+
+        if (existingChildren.length >= 20) {
+          throw new BadRequestException(
+            `Sponsor ${dto.referralId} has reached the maximum capacity of 20 direct partners.`,
+          );
+        }
+
+        // Determine next available slot (1 to 20)
+        const occupiedSlots = new Set(existingChildren.map((c) => c.slotNumber));
+        let availableSlot = 1;
+        while (availableSlot <= 20) {
+          if (!occupiedSlots.has(availableSlot)) {
+            break;
+          }
+          availableSlot++;
+        }
+
+        // 4. Calculate tree depth and uplines based on sponsor type
+        let calculatedDepth = 1;
+        let uplineLevel1: number | null = sponsor.id;
+        let uplineLevel2: number | null = null;
+        let uplineLevel3: number | null = null;
+        let uplineLevel4: number | null = null;
+        let uplineLevel5: number | null = null;
+
+        if (sponsor.role === UserRole.FOUNDER) {
+          // Founder is not in the tree and has NO parentId
+          // Direct partners under Founder start at Depth 1
+          calculatedDepth = 1;
+          // Level 1 upline is the Founder, levels 2-5 are null
+          uplineLevel1 = sponsor.id;
+        } else {
+          // Sponsor is a Partner - must have a node in the tree
+          const sponsorNode = await nodeRepo.findOne({ where: { userId: sponsor.id } });
+          if (!sponsorNode) {
+            throw new BadRequestException('Sponsor is not active in the genealogy tree.');
+          }
+          calculatedDepth = sponsorNode.depth + 1;
+
+          // Fetch sponsor's upline record to shift
+          const sponsorUpline = await uplineRepo.findOne({ where: { userId: sponsor.id } });
+          uplineLevel1 = sponsor.id;
+          uplineLevel2 = sponsorUpline?.level1UserId ?? null;
+          uplineLevel3 = sponsorUpline?.level2UserId ?? null;
+          uplineLevel4 = sponsorUpline?.level3UserId ?? null;
+          uplineLevel5 = sponsorUpline?.level4UserId ?? null;
+        }
+
+        // 5. Generate sequential VED ID using database sequence
+        const newVedId = await generateNextVedId(manager);
+
+        // 6. Create User record
+        const passwordHash = await bcrypt.hash(dto.password, 10);
+        const newUser = userRepo.create({
+          vedId: newVedId,
+          name: dto.name,
+          email: dto.email,
+          mobile: dto.mobile,
+          passwordHash,
+          role: UserRole.PARTNER,
+          status: UserStatus.PENDING,
+        });
+        await userRepo.save(newUser);
+
+        // 7. Create UserProfile if profile details provided
+        const hasProfileData =
+          dto.dateOfBirth ||
+          dto.gender ||
+          dto.addressLine1 ||
+          dto.addressLine2 ||
+          dto.city ||
+          dto.state ||
+          dto.pincode ||
+          dto.profilePhoto;
+
+        if (hasProfileData) {
+          const userProfile = profileRepo.create({
+            user: newUser,
+            dateOfBirth: dto.dateOfBirth,
+            gender: dto.gender,
+            addressLine1: dto.addressLine1,
+            addressLine2: dto.addressLine2,
+            city: dto.city,
+            state: dto.state,
+            pincode: dto.pincode,
+            profilePhoto: dto.profilePhoto,
+          });
+          await profileRepo.save(userProfile);
+        }
+
+        // 8. Create GenealogyNode for partner
+        const newNode = nodeRepo.create({
+          userId: newUser.id,
+          parentUserId: sponsor.id,
           slotNumber: availableSlot,
-          depth: newNode.depth,
-          sponsorVedId: sponsor.vedId,
-          sponsorName: sponsor.name,
-          sponsorRole: sponsor.role,
-        },
-      };
-    });
+          depth: calculatedDepth,
+          placementStatus: PlacementStatus.ACTIVE,
+        });
+        await nodeRepo.save(newNode);
+
+        // 9. Save 5-level Commission Uplines
+        const newUpline = uplineRepo.create({
+          userId: newUser.id,
+          level1UserId: uplineLevel1,
+          level2UserId: uplineLevel2,
+          level3UserId: uplineLevel3,
+          level4UserId: uplineLevel4,
+          level5UserId: uplineLevel5,
+        });
+        await uplineRepo.save(newUpline);
+
+        return {
+          message: 'Partner successfully joined.',
+          partner: {
+            id: newUser.id,
+            vedId: newUser.vedId,
+            name: newUser.name,
+            email: newUser.email,
+            mobile: newUser.mobile,
+            role: newUser.role,
+            status: newUser.status,
+            slotNumber: availableSlot,
+            depth: newNode.depth,
+            sponsorVedId: sponsor.vedId,
+            sponsorName: sponsor.name,
+            sponsorRole: sponsor.role,
+          },
+        };
+      });
+    } catch (error: any) {
+      if (error?.code === '23505') {
+        if (error.detail?.includes('email')) {
+          throw new ConflictException('Email is already registered.');
+        }
+        if (error.detail?.includes('mobile')) {
+          throw new ConflictException('Mobile number is already registered.');
+        }
+        if (error.detail?.includes('parent_user_id') && error.detail?.includes('slot_number')) {
+          throw new ConflictException('The target slot was just claimed by another user. Please retry.');
+        }
+      }
+      throw error;
+    }
   }
 
   async getGenealogyByVedId(vedId: string) {
@@ -306,25 +321,32 @@ export class GenealogyService {
   }
 
   async registerPartnerBySponsor(sponsorUserId: number, dto: RegisterPartnerBySponsorDto) {
-    return this.dataSource.transaction(async (manager) => {
-      const userRepo = manager.getRepository(User);
-      const profileRepo = manager.getRepository(UserProfile);
-      const nodeRepo = manager.getRepository(GenealogyNode);
-      const uplineRepo = manager.getRepository(CommissionUpline);
+    try {
+      return await this.dataSource.transaction(async (manager) => {
+        const userRepo = manager.getRepository(User);
+        const profileRepo = manager.getRepository(UserProfile);
+        const nodeRepo = manager.getRepository(GenealogyNode);
+        const uplineRepo = manager.getRepository(CommissionUpline);
 
-      // 1. Verify sponsor
-      const sponsor = await userRepo.findOne({ where: { id: sponsorUserId } });
-      if (!sponsor) {
-        throw new NotFoundException('Sponsor not found.');
-      }
+        // 1. Verify sponsor with pessimistic write lock (FOR UPDATE)
+        // Queues concurrent registrations under this sponsor so manual or auto slots are allocated cleanly
+        const sponsor = await userRepo
+          .createQueryBuilder('user')
+          .setLock('pessimistic_write')
+          .where('user.id = :id', { id: sponsorUserId })
+          .getOne();
 
-      if (sponsor.role === UserRole.ADMIN) {
-        throw new BadRequestException('Root Admin cannot directly sponsor partners.');
-      }
+        if (!sponsor) {
+          throw new NotFoundException('Sponsor not found.');
+        }
 
-      if (sponsor.status === UserStatus.BLOCKED) {
-        throw new BadRequestException('Your account is currently blocked.');
-      }
+        if (sponsor.role === UserRole.ADMIN) {
+          throw new BadRequestException('Root Admin cannot directly sponsor partners.');
+        }
+
+        if (sponsor.status === UserStatus.BLOCKED) {
+          throw new BadRequestException('Your account is currently blocked.');
+        }
 
       // 2. Check for duplicate email or mobile
       const existing = await userRepo.findOne({
@@ -398,15 +420,8 @@ export class GenealogyService {
         uplineLevel5 = sponsorUpline?.level4UserId ?? null;
       }
 
-      // 6. Generate unique VED ID
-      let newVedId = '';
-      let isUnique = false;
-      while (!isUnique) {
-        const randomNum = Math.floor(100000 + Math.random() * 900000);
-        newVedId = `VED${randomNum}`;
-        const collision = await userRepo.findOne({ where: { vedId: newVedId } });
-        if (!collision) isUnique = true;
-      }
+      // 6. Generate sequential VED ID using database sequence
+      const newVedId = await generateNextVedId(manager);
 
       // 7. Create User
       const passwordHash = await bcrypt.hash(dto.password, 10);
@@ -485,6 +500,20 @@ export class GenealogyService {
         },
       };
     });
+    } catch (error: any) {
+      if (error?.code === '23505') {
+        if (error.detail?.includes('email')) {
+          throw new ConflictException('Email is already registered.');
+        }
+        if (error.detail?.includes('mobile')) {
+          throw new ConflictException('Mobile number is already registered.');
+        }
+        if (error.detail?.includes('parent_user_id') && error.detail?.includes('slot_number')) {
+          throw new ConflictException('The target slot was just claimed by another user. Please retry.');
+        }
+      }
+      throw error;
+    }
   }
 
   async getMySlots(sponsorUserId: number) {
