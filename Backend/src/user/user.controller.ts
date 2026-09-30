@@ -3,6 +3,7 @@ import { ApiBearerAuth, ApiOperation, ApiTags, ApiResponse } from '@nestjs/swagg
 import { UserService } from './user.service';
 import { CreateUserDto, UpdateUserDto } from './dto/create-user.dto';
 import { UpdateUserStatusDto } from './dto/update-user-status.dto';
+import { ChangePasswordDto } from './dto/change-password.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 
 @ApiTags('User')
@@ -29,9 +30,17 @@ export class UserController {
   @ApiBearerAuth()
   @UseGuards(JwtAuthGuard)
   @Patch()
-  @ApiOperation({ summary: 'Update current logged-in user profile' })
+  @ApiOperation({ summary: 'Update current logged-in user profile (Password excluded)' })
   async updateProfile(@Request() req: any, @Body() dto: UpdateUserDto) {
     return this.userService.update(req.user.sub, dto);
+  }
+
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard)
+  @Patch('password')
+  @ApiOperation({ summary: 'Change current user password' })
+  async changePassword(@Request() req: any, @Body() dto: ChangePasswordDto) {
+    return this.userService.changePassword(req.user.sub, dto);
   }
 
   @ApiBearerAuth()
@@ -45,7 +54,7 @@ export class UserController {
   @ApiBearerAuth()
   @UseGuards(JwtAuthGuard)
   @Patch('status')
-  @ApiOperation({ summary: 'Change user status (Active/Inactive/Blocked)' })
+  @ApiOperation({ summary: 'Change user status (Pending/Active/Inactive/Blocked)' })
   async changeStatus(@Request() req: any, @Body() dto: UpdateUserStatusDto) {
     return this.userService.changeStatus(req.user.sub, dto);
   }

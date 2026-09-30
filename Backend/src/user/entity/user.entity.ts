@@ -41,6 +41,12 @@ export class User {
   @Column({ type: 'varchar', length: 20, default: UserStatus.PENDING })
   status: UserStatus;
 
+  @Column({ name: 'reset_token', type: 'varchar', nullable: true })
+  resetToken: string | null;
+
+  @Column({ name: 'reset_token_expires', type: 'timestamptz', nullable: true })
+  resetTokenExpires: Date | null;
+
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz', precision: 3 })
   createdAt: Date;
 
