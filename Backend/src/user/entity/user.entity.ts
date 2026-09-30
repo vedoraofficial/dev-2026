@@ -1,5 +1,7 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, OneToOne, OneToMany } from 'typeorm';
 import { Exclude } from 'class-transformer';
+import { UserBank } from './user-bank.entity';
+import { UserProfile } from './user-profile.entity';
 
 export enum UserRole {
   ADMIN = 'ADMIN',
@@ -41,11 +43,11 @@ export class User {
   @Column({ type: 'varchar', length: 20, default: UserStatus.PENDING })
   status: UserStatus;
 
-  @Column({ name: 'reset_token', type: 'varchar', nullable: true })
-  resetToken: string | null;
+  @OneToMany(() => UserBank, bank => bank.user, { cascade: true })
+  banks: UserBank[];
 
-  @Column({ name: 'reset_token_expires', type: 'timestamptz', nullable: true })
-  resetTokenExpires: Date | null;
+  @OneToOne(() => UserProfile, profile => profile.user, { cascade: true })
+  profile: UserProfile;
 
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz', precision: 3 })
   createdAt: Date;

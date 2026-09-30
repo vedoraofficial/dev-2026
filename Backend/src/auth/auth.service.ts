@@ -6,12 +6,17 @@ import { LoginDto } from './dto/login.dto';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 import { UserStatus } from '../user/entity/user.entity';
+import { Otp } from './entity/otp.entity';
+import { Repository } from 'typeorm';
+import { InjectRepository } from '@nestjs/typeorm';
 
 @Injectable()
 export class AuthService {
   constructor(
     private readonly userService: UserService,
     private readonly jwtService: JwtService,
+    @InjectRepository(Otp)
+    private readonly otpRepo: Repository<Otp>,
   ) {}
 
   async login(dto: LoginDto) {
@@ -43,21 +48,23 @@ export class AuthService {
     const user = await this.userService.findByVedId(dto.vedId);
     if (!user) throw new NotFoundException('User not found');
 
-    // Generate a simple 6-digit OTP as the reset token
-    const resetToken = Math.floor(100000 + Math.random() * 900000).toString();
+    const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
     
-    // Set expiry to 15 minutes from now
-    const expires = new Date();
-    expires.setMinutes(expires.getMinutes() + 15);
+    const expiresAt = new Date();
+    expiresAt.setMinutes(expiresAt.getMinutes() + 15);
 
-    user.resetToken = resetToken;
-    user.resetTokenExpires = expires;
-    await this.userService.save(user);
+    const otp = this.otpRepo.create({
+      otpCode,
+      purpose: 'PASSWORD_RESET',
+      expiresAt,
+      user,
+    });
+    
+    await this.otpRepo.save(otp);
 
-    // In a real app, send this via Email/SMS. Here we just return it.
     return { 
-      message: 'Password reset token generated (normally sent via email/SMS).', 
-      resetToken 
+      message: 'Password reset OTP generated (normally sent via email/SMS).', 
+      resetToken: otpCode 
     };
   }
 
@@ -65,19 +72,31 @@ export class AuthService {
     const user = await this.userService.findByVedId(dto.vedId);
     if (!user) throw new NotFoundException('User not found');
 
-    if (!user.resetToken || user.resetToken !== dto.resetToken) {
+    const otp = await this.otpRepo.findOne({
+      where: { 
+        user: { id: user.id }, 
+        otpCode: dto.resetToken, 
+        purpose: 'PASSWORD_RESET', 
+        isUsed: false 
+      },
+      order: { createdAt: 'DESC' } // get the latest one
+    });
+
+    if (!otp) {
       throw new BadRequestException('Invalid reset token');
     }
 
-    if (!user.resetTokenExpires || user.resetTokenExpires < new Date()) {
+    if (otp.expiresAt < new Date()) {
       throw new BadRequestException('Reset token has expired');
     }
 
     // Token is valid. Update password.
     user.passwordHash = await bcrypt.hash(dto.newPassword, 10);
-    user.resetToken = null; // Clear token
-    user.resetTokenExpires = null;
     await this.userService.save(user);
+
+    // Mark OTP as used
+    otp.isUsed = true;
+    await this.otpRepo.save(otp);
 
     return { success: true, message: 'Password reset successfully' };
   }
