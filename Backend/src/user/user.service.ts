@@ -2,12 +2,12 @@ import { Injectable, ConflictException, NotFoundException } from '@nestjs/common
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import * as bcrypt from 'bcrypt';
-import { User, UserRole, UserStatus } from './user.entity';
+import { User, UserRole, UserStatus } from './entity/user.entity';
 import { CreateUserDto, UpdateUserDto } from './dto/create-user.dto';
 import { UpdateUserStatusDto } from './dto/update-user-status.dto';
 
 @Injectable()
-export class UsersService {
+export class UserService {
   constructor(
     @InjectRepository(User)
     private readonly userRepo: Repository<User>,
@@ -23,7 +23,6 @@ export class UsersService {
     }
 
     const passwordHash = await bcrypt.hash(dto.password, 10);
-    
     const vedId = `VED${Math.floor(Math.random() * 90000) + 10000}`;
 
     const user = this.userRepo.create({

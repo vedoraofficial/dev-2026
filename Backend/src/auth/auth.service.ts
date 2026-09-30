@@ -1,19 +1,19 @@
 import { Injectable, UnauthorizedException, ForbiddenException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
-import { UsersService } from '../users/users.service';
+import { UserService } from '../user/user.service';
 import { LoginDto } from './dto/login.dto';
-import { UserStatus } from '../users/user.entity';
+import { UserStatus } from '../user/entity/user.entity';
 
 @Injectable()
 export class AuthService {
   constructor(
-    private readonly usersService: UsersService,
+    private readonly userService: UserService,
     private readonly jwtService: JwtService,
   ) {}
 
   async login(dto: LoginDto) {
-    const user = await this.usersService.findByEmail(dto.email);
+    const user = await this.userService.findByEmail(dto.email);
     if (!user) throw new UnauthorizedException('Invalid email or password');
 
     if (user.status === UserStatus.BLOCKED) {
