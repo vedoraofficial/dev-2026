@@ -53,7 +53,7 @@ export class GenealogyController {
   @ApiBearerAuth()
   @UseGuards(JwtAuthGuard)
   @Get(':vedId/genealogy')
-  @ApiOperation({ summary: 'Get genealogy tree details, direct downlines, and 5-level uplines by VED ID' })
+  @ApiOperation({ summary: 'Get direct partners below a specific user by VED ID' })
   async getGenealogyByVedId(@Param('vedId') vedId: string) {
     return this.genealogyService.getGenealogyByVedId(vedId);
   }

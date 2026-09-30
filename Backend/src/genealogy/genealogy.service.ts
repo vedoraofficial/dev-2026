@@ -206,13 +206,36 @@ export class GenealogyService {
       order: { slotNumber: 'ASC' },
     });
 
-    // Check if user has their own node
+    return directChildren.map((child) => ({
+      id: child.user.id,
+      vedId: child.user.vedId,
+      name: child.user.name,
+      email: child.user.email,
+      mobile: child.user.mobile,
+      slotNumber: child.slotNumber,
+      depth: child.depth,
+      status: child.placementStatus,
+    }));
+  }
+
+  async getMyGenealogy(userId: number) {
+    const user = await this.userRepo.findOne({ where: { id: userId } });
+    if (!user) throw new NotFoundException('User not found.');
+
+    // Direct children under this user
+    const directChildren = await this.nodeRepo.find({
+      where: { parentUserId: user.id },
+      relations: { user: true },
+      order: { slotNumber: 'ASC' },
+    });
+
+    // Node details of logged in user
     const node = await this.nodeRepo.findOne({
       where: { userId: user.id },
       relations: { parentUser: true },
     });
 
-    // 5-level uplines (only partners have this)
+    // 5-level uplines
     const uplines = await this.uplineRepo.findOne({
       where: { userId: user.id },
       relations: {
@@ -248,14 +271,14 @@ export class GenealogyService {
               : null,
           }
         : null,
-      isFounder: user.role === UserRole.FOUNDER,
-      isAdmin: user.role === UserRole.ADMIN,
       directPartnersCount: directChildren.length,
       maxSlots: 20,
       directPartners: directChildren.map((child) => ({
         id: child.user.id,
         vedId: child.user.vedId,
         name: child.user.name,
+        email: child.user.email,
+        mobile: child.user.mobile,
         slotNumber: child.slotNumber,
         depth: child.depth,
         status: child.placementStatus,
@@ -280,12 +303,6 @@ export class GenealogyService {
           }
         : null,
     };
-  }
-
-  async getMyGenealogy(userId: number) {
-    const user = await this.userRepo.findOne({ where: { id: userId } });
-    if (!user) throw new NotFoundException('User not found.');
-    return this.getGenealogyByVedId(user.vedId);
   }
 
   async registerPartnerBySponsor(sponsorUserId: number, dto: RegisterPartnerBySponsorDto) {
