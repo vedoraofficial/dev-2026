@@ -1,6 +1,5 @@
 "use client"
 
-import { useTheme } from "next-themes"
 import { Toaster as Sonner, type ToasterProps } from "sonner"
 import {
   CircleCheckIcon,
@@ -10,12 +9,11 @@ import {
   Loader2Icon,
 } from "lucide-react"
 
+// VEDORA is dark-only, so the toaster is pinned to dark (no next-themes provider needed).
 const Toaster = ({ ...props }: ToasterProps) => {
-  const { theme = "system" } = useTheme()
-
   return (
     <Sonner
-      theme={theme as ToasterProps["theme"]}
+      theme="dark"
       className="toaster group"
       icons={{
         success: <CircleCheckIcon className="size-4" />,
