@@ -3,6 +3,8 @@ export const ROUTES = {
   login: "/login",
   /** Old admin sign-in URL — only redirects to `login` now. */
   adminLogin: "/admin-login",
+  /** PhonePe sends the buyer back here after paying (set in the backend's PHONEPE_REDIRECT_URL). */
+  paymentStatus: "/payment/status",
   admin: {
     root: "/admin",
     overview: "/admin/overview",

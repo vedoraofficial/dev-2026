@@ -2,27 +2,13 @@ import type { ReactNode } from "react"
 
 import { MonoId } from "@/components/common/mono-id"
 import { PageBody, PageHeader } from "@/components/common/page-header"
-import { PersonAvatar } from "@/components/common/person-avatar"
-import { Panel, PanelHeader } from "@/components/common/panel"
-import { StatusPill } from "@/components/common/status-pill"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-
-function Field({
-  id,
-  label,
-  ...props
-}: { id: string; label: string } & React.ComponentProps<typeof Input>) {
-  return (
-    <div className="space-y-2">
-      <Label htmlFor={id} className="eyebrow">
-        {label}
-      </Label>
-      <Input id={id} {...props} />
-    </div>
-  )
-}
+import { Panel } from "@/components/common/panel"
+import { QueryState } from "@/components/common/query-state"
+import { BankAccountsPanel } from "@/features/account/components/bank-accounts-panel"
+import { PersonalDetailsForm } from "@/features/account/components/personal-details-form"
+import { ProfileCard } from "@/features/account/components/profile-card"
+import { useMyGenealogy } from "@/features/genealogy/queries"
+import { useSession } from "@/lib/session"
 
 function PlacementRow({ label, children }: { label: string; children: ReactNode }) {
   return (
@@ -34,46 +20,42 @@ function PlacementRow({ label, children }: { label: string; children: ReactNode 
 }
 
 export function PartnerProfilePage() {
+  const isFounder = useSession((s) => s.user?.role === "FOUNDER")
+  const genealogy = useMyGenealogy()
+  const node = genealogy.data?.node
+
   return (
     <>
-      <PageHeader
-        title="Profile"
-        subtitle="Personal and bank payout information"
-        actions={
-          <>
-            <Button variant="quiet">Cancel</Button>
-            <Button>Save changes</Button>
-          </>
-        }
-      />
+      <PageHeader title="Profile" subtitle="Personal and bank payout information" />
       <PageBody>
         <div className="grid gap-4 md:gap-5 lg:grid-cols-[19rem_minmax(0,1fr)]">
           <div className="space-y-4 md:space-y-5">
-            <Panel className="flex flex-col items-center text-center">
-              <PersonAvatar size="xl" />
-              <h2 className="mt-4 text-lg font-medium">Rohit Deshmukh</h2>
-              <MonoId tone="gold" className="mt-0.5">
-                VED000418
-              </MonoId>
-              <StatusPill variant="success" className="mt-3">
-                Verified partner
-              </StatusPill>
-              <Button variant="outline" className="mt-5 w-full">
-                Change photo
-              </Button>
-            </Panel>
+            <ProfileCard tone={isFounder ? "gold" : "striped"} />
 
             <Panel>
               <p className="mb-4 eyebrow">Placement</p>
-              <dl className="space-y-3">
-                <PlacementRow label="Sponsor">
-                  <MonoId>VED000301</MonoId>
-                </PlacementRow>
-                <PlacementRow label="Slot under sponsor">
-                  <MonoId className="text-[0.8125rem]">07 / 20</MonoId>
-                </PlacementRow>
-                <PlacementRow label="Joined">14 Mar 2026</PlacementRow>
-              </dl>
+              <QueryState query={genealogy} rows={3}>
+                <dl className="space-y-3">
+                  <PlacementRow label="Sponsor">
+                    {node?.parent ? (
+                      <MonoId>{node.parent.vedId}</MonoId>
+                    ) : (
+                      <span className="text-muted-foreground">None — top of the tree</span>
+                    )}
+                  </PlacementRow>
+                  {node?.parent ? (
+                    <PlacementRow label="Sponsor name">{node.parent.name}</PlacementRow>
+                  ) : null}
+                  <PlacementRow label="Slot under sponsor">
+                    <MonoId className="text-[0.8125rem]">
+                      {node?.slotNumber ? `${String(node.slotNumber).padStart(2, "0")} / 20` : "—"}
+                    </MonoId>
+                  </PlacementRow>
+                  <PlacementRow label="Direct partners">
+                    {genealogy.data?.directPartnersCount ?? 0} / {genealogy.data?.maxSlots ?? 20}
+                  </PlacementRow>
+                </dl>
+              </QueryState>
               <p className="mt-4 rounded-xl border border-border bg-field/60 p-3 text-[0.6875rem] leading-relaxed text-muted-foreground">
                 Placement and sponsor cannot be changed once registered — contact Admin for
                 corrections.
@@ -82,63 +64,8 @@ export function PartnerProfilePage() {
           </div>
 
           <div className="space-y-4 md:space-y-5">
-            <Panel>
-              <PanelHeader title="Personal details" />
-              <div className="grid gap-4 sm:grid-cols-2">
-                <Field
-                  id="name"
-                  label="Full name"
-                  defaultValue="Rohit Deshmukh"
-                  autoComplete="name"
-                />
-                <Field
-                  id="mobile"
-                  label="Mobile"
-                  type="tel"
-                  inputMode="tel"
-                  defaultValue="+91 98220 41288"
-                  autoComplete="tel"
-                />
-                <Field
-                  id="email"
-                  label="Email"
-                  type="email"
-                  defaultValue="rohit.d@example.com"
-                  autoComplete="email"
-                />
-                <Field
-                  id="city"
-                  label="City / State"
-                  defaultValue="Pune, Maharashtra"
-                  autoComplete="address-level2"
-                />
-              </div>
-            </Panel>
-
-            <Panel>
-              <PanelHeader
-                title="Bank details for payout"
-                aside={<StatusPill variant="success">Verified</StatusPill>}
-              />
-              <div className="grid gap-4 sm:grid-cols-2">
-                <Field id="holder" label="Account holder" defaultValue="Rohit S Deshmukh" />
-                <Field
-                  id="account"
-                  label="Account number"
-                  inputMode="numeric"
-                  defaultValue="•••• •••• 4821"
-                  className="font-mono"
-                />
-                <Field
-                  id="ifsc"
-                  label="IFSC"
-                  defaultValue="HDFC0001245"
-                  autoCapitalize="characters"
-                  className="font-mono uppercase"
-                />
-                <Field id="upi" label="UPI ID" defaultValue="rohitd@okhdfc" autoCapitalize="none" />
-              </div>
-            </Panel>
+            <PersonalDetailsForm />
+            <BankAccountsPanel />
           </div>
         </div>
       </PageBody>

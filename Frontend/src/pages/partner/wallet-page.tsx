@@ -1,89 +1,155 @@
 import { useRef, useState } from "react"
-import { toast } from "sonner"
+import { Link } from "react-router-dom"
 
+import { ROUTES } from "@/app/routes"
 import { DataTable, type Column } from "@/components/common/data-table"
 import { FilterTabs } from "@/components/common/filter-tabs"
 import { MonoId } from "@/components/common/mono-id"
 import { PageBody, PageHeader } from "@/components/common/page-header"
 import { Panel, PanelHeader } from "@/components/common/panel"
-import { StatusPill, type PillVariant } from "@/components/common/status-pill"
-import { Timeline } from "@/components/common/timeline"
+import { QueryState } from "@/components/common/query-state"
+import { StatusPill } from "@/components/common/status-pill"
+import { TablePagination } from "@/components/common/table-pagination"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import {
-  payoutTimeline,
-  walletSummary,
-  walletTransactions,
-  type WalletTxn,
-  type WalletTxnStatus,
-} from "@/features/wallet/mock-data"
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+import { useBanks } from "@/features/account/queries"
+import { categoryLabel, maskedBank, withdrawalPill } from "@/features/wallet/labels"
+import {
+  useMyWithdrawals,
+  useRequestWithdrawal,
+  useWalletSummary,
+  useWalletTransactions,
+} from "@/features/wallet/queries"
+import type { TransactionType, Withdrawal, WalletTransaction } from "@/features/wallet/types"
+import { formatDateTime } from "@/lib/date"
 import { formatINR, formatNumber, formatSignedINR } from "@/lib/format"
+import { paiseToRupees } from "@/lib/money"
+import { useSession } from "@/lib/session"
 import { cn } from "@/lib/utils"
 
-const statusPill: Record<WalletTxnStatus, { label: string; variant: PillVariant }> = {
-  success: { label: "Success", variant: "success" },
-  pending: { label: "Pending", variant: "pending" },
-  failed: { label: "Failed", variant: "danger" },
-}
+const PAGE_SIZE = 10
+/** POST /api/wallet/withdraw rejects anything below ₹100. */
+const MIN_WITHDRAWAL = 100
 
-const columns: Column<WalletTxn>[] = [
+const txnColumns: Column<WalletTransaction>[] = [
   {
     key: "description",
     header: "Description",
     primary: true,
     cell: (r) => (
       <div>
-        <p className="text-[0.875rem] font-medium">{r.title}</p>
-        <p className="text-[0.6875rem] text-muted-foreground">{r.when}</p>
+        <p className="text-[0.875rem] font-medium">{r.description || categoryLabel[r.category]}</p>
+        <p className="text-[0.6875rem] text-muted-foreground">{formatDateTime(r.createdAt)}</p>
       </div>
     ),
   },
-  { key: "source", header: "Source ID", cell: (r) => <MonoId tone="muted">{r.source}</MonoId> },
   {
-    key: "status",
-    header: "Status",
+    key: "category",
+    header: "Type",
+    cell: (r) => <StatusPill>{categoryLabel[r.category]}</StatusPill>,
+  },
+  {
+    key: "balance",
+    header: "Balance after",
     cell: (r) => (
-      <StatusPill variant={statusPill[r.status].variant}>{statusPill[r.status].label}</StatusPill>
+      <span className="font-mono text-muted-foreground">
+        {formatINR(paiseToRupees(r.balanceAfter))}
+      </span>
     ),
   },
   {
     key: "amount",
     header: "Amount",
     align: "right",
+    cell: (r) => {
+      const rupees = paiseToRupees(r.amount) * (r.type === "DEBIT" ? -1 : 1)
+      return (
+        <span className={cn("font-mono", rupees > 0 ? "text-success" : "text-gold-light")}>
+          {formatSignedINR(rupees)}
+        </span>
+      )
+    },
+  },
+]
+
+const withdrawalColumns: Column<Withdrawal>[] = [
+  {
+    key: "amount",
+    header: "Amount",
+    primary: true,
     cell: (r) => (
-      <span
-        className={cn(
-          "font-mono",
-          r.status === "failed"
-            ? "text-muted-foreground"
-            : r.amount > 0
-              ? "text-success"
-              : "text-gold-light",
-        )}
-      >
-        {formatSignedINR(r.amount)}
-      </span>
+      <div>
+        <p className="font-mono text-[0.875rem] font-medium">
+          {formatINR(paiseToRupees(r.amount))}
+        </p>
+        <p className="text-[0.6875rem] text-muted-foreground">{formatDateTime(r.createdAt)}</p>
+      </div>
+    ),
+  },
+  {
+    key: "bank",
+    header: "Bank",
+    cell: (r) => <span className="font-mono text-xs">{maskedBank(r.bank)}</span>,
+  },
+  {
+    key: "status",
+    header: "Status",
+    align: "right",
+    cell: (r) => (
+      <div className="md:text-right">
+        <StatusPill variant={withdrawalPill[r.status].variant}>
+          {withdrawalPill[r.status].label}
+        </StatusPill>
+        {r.adminRemarks ? (
+          <p className="mt-1 text-[0.6875rem] text-muted-foreground">{r.adminRemarks}</p>
+        ) : null}
+      </div>
     ),
   },
 ]
 
 export function PartnerWalletPage() {
-  const [tab, setTab] = useState("all")
-  const [amount, setAmount] = useState("25000")
-  const [balance, setBalance] = useState(walletSummary.balance)
-  const [pendingPayout, setPendingPayout] = useState(walletSummary.pendingPayout)
-  const [transactions, setTransactions] = useState(walletTransactions)
+  const me = useSession((s) => s.user)
+  const [tab, setTab] = useState<"all" | TransactionType>("all")
+  const [page, setPage] = useState(1)
+  const [amount, setAmount] = useState("")
+  const [bankId, setBankId] = useState<string>("")
   const withdrawPanelRef = useRef<HTMLDivElement>(null)
   const amountInputRef = useRef<HTMLInputElement>(null)
 
-  const quickAmounts = [5000, 10000, balance]
-  const numericAmount = Number(amount) || 0
-  const canSubmit = numericAmount > 0 && numericAmount <= balance
+  const summary = useWalletSummary()
+  const transactions = useWalletTransactions({
+    type: tab === "all" ? undefined : tab,
+    page,
+    limit: PAGE_SIZE,
+  })
+  const withdrawals = useMyWithdrawals()
+  const banks = useBanks()
+  const requestWithdrawal = useRequestWithdrawal()
 
-  const rows = transactions.filter((t) =>
-    tab === "credit" ? t.amount > 0 : tab === "debit" ? t.amount < 0 : true,
-  )
+  const balance = paiseToRupees(summary.data?.availableBalance)
+  const verifiedBanks = (banks.data ?? []).filter((b) => b.verificationStatus === "VERIFIED")
+  // Default to the primary verified bank.
+  const selectedBankId =
+    bankId || String(verifiedBanks.find((b) => b.isPrimary)?.id ?? verifiedBanks[0]?.id ?? "")
+
+  const quickAmounts = [500, 1000, Math.floor(balance)]
+  const numericAmount = Number(amount) || 0
+  const canSubmit =
+    numericAmount >= MIN_WITHDRAWAL &&
+    numericAmount <= balance &&
+    !!selectedBankId &&
+    !requestWithdrawal.isPending
+
+  const pagination = transactions.data?.pagination
 
   const focusWithdrawPanel = () => {
     withdrawPanelRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })
@@ -92,21 +158,10 @@ export function PartnerWalletPage() {
 
   const submitWithdrawal = () => {
     if (!canSubmit) return
-    setBalance((b) => b - numericAmount)
-    setPendingPayout((p) => p + numericAmount)
-    setTransactions((prev) => [
-      {
-        id: crypto.randomUUID(),
-        title: "Withdrawal request",
-        when: "Just now",
-        source: `WD-${Math.floor(10000 + Math.random() * 90000)}`,
-        status: "pending",
-        amount: -numericAmount,
-      },
-      ...prev,
-    ])
-    toast.success(`Withdrawal request of ${formatINR(numericAmount)} submitted`)
-    setAmount("")
+    requestWithdrawal.mutate(
+      { amount: numericAmount, bankId: Number(selectedBankId) },
+      { onSuccess: () => setAmount("") },
+    )
   }
 
   return (
@@ -119,31 +174,40 @@ export function PartnerWalletPage() {
       <PageBody>
         <div className="grid gap-4 md:gap-5 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
           <div className="space-y-4 md:space-y-5">
-            <Panel className="flex flex-wrap items-end justify-between gap-x-8 gap-y-5 md:p-6">
-              <div>
-                <p className="eyebrow text-gold">Available balance</p>
-                <p className="mt-2 font-display text-5xl leading-none md:text-6xl">
-                  {formatINR(balance)}
-                </p>
-                <p className="mt-3 text-[0.6875rem] text-muted-foreground">
-                  <MonoId tone="muted" className="text-[0.6875rem]">
-                    {walletSummary.partnerId}
-                  </MonoId>{" "}
-                  · <span className="font-mono">{walletSummary.bank}</span>
-                </p>
-              </div>
-              <div className="flex gap-8">
-                <div>
-                  <p className="eyebrow text-[0.625rem]">Pending payout</p>
-                  <p className="mt-1 font-display text-2xl text-gold-light">
-                    {formatINR(pendingPayout)}
-                  </p>
+            <Panel className="md:p-6">
+              <QueryState query={summary} rows={2}>
+                <div className="flex flex-wrap items-end justify-between gap-x-8 gap-y-5">
+                  <div>
+                    <p className="eyebrow text-gold">Available balance</p>
+                    <p className="mt-2 font-display text-5xl leading-none md:text-6xl">
+                      {formatINR(balance)}
+                    </p>
+                    <p className="mt-3 text-[0.6875rem] text-muted-foreground">
+                      <MonoId tone="muted" className="text-[0.6875rem]">
+                        {me?.vedId}
+                      </MonoId>{" "}
+                      · Total earned{" "}
+                      <span className="font-mono">
+                        {formatINR(paiseToRupees(summary.data?.totalEarned))}
+                      </span>
+                    </p>
+                  </div>
+                  <div className="flex gap-8">
+                    <div>
+                      <p className="eyebrow text-[0.625rem]">Pending payout</p>
+                      <p className="mt-1 font-display text-2xl text-gold-light">
+                        {formatINR(paiseToRupees(summary.data?.lockedBalance))}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="eyebrow text-[0.625rem]">Withdrawn</p>
+                      <p className="mt-1 font-display text-2xl">
+                        {formatINR(paiseToRupees(summary.data?.totalWithdrawn))}
+                      </p>
+                    </div>
+                  </div>
                 </div>
-                <div>
-                  <p className="eyebrow text-[0.625rem]">Withdrawn</p>
-                  <p className="mt-1 font-display text-2xl">{formatINR(walletSummary.withdrawn)}</p>
-                </div>
-              </div>
+              </QueryState>
             </Panel>
 
             <Panel>
@@ -153,17 +217,35 @@ export function PartnerWalletPage() {
                   <FilterTabs
                     aria-label="Transaction type"
                     value={tab}
-                    onValueChange={setTab}
+                    onValueChange={(v) => {
+                      setTab(v as typeof tab)
+                      setPage(1)
+                    }}
                     tabs={[
                       { value: "all", label: "All" },
-                      { value: "credit", label: "Credit" },
-                      { value: "debit", label: "Debit" },
+                      { value: "CREDIT", label: "Credit" },
+                      { value: "DEBIT", label: "Debit" },
                     ]}
                     className="[scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
                   />
                 }
               />
-              <DataTable columns={columns} rows={rows} getRowKey={(r) => r.id} />
+              <QueryState query={transactions}>
+                <DataTable
+                  columns={txnColumns}
+                  rows={transactions.data?.items ?? []}
+                  getRowKey={(r) => r.id}
+                  emptyMessage="No transactions yet — commissions appear here once your team orders."
+                />
+                {pagination && pagination.totalPages > 1 ? (
+                  <TablePagination
+                    key={tab}
+                    summary={`Page ${pagination.page} of ${pagination.totalPages} · ${formatNumber(pagination.total)} transactions`}
+                    pages={pagination.totalPages}
+                    onPageChange={setPage}
+                  />
+                ) : null}
+              </QueryState>
             </Panel>
           </div>
 
@@ -183,42 +265,73 @@ export function PartnerWalletPage() {
                     id="amount"
                     ref={amountInputRef}
                     inputMode="numeric"
+                    placeholder={`Min ${MIN_WITHDRAWAL}`}
                     value={amount ? formatNumber(Number(amount)) : ""}
                     onChange={(e) => setAmount(e.target.value.replace(/\D/g, "").slice(0, 7))}
                     className="h-12 pl-8 font-mono text-lg md:h-12 md:text-lg"
                   />
                 </div>
                 <div className="flex flex-wrap gap-2">
-                  {quickAmounts.map((q, i) => (
-                    <button
-                      key={q}
-                      type="button"
-                      onClick={() => setAmount(String(q))}
-                      className="rounded-lg border border-border px-3 py-1.5 text-xs text-muted-foreground hover:bg-muted"
-                    >
-                      {i === quickAmounts.length - 1 ? "Max" : formatINR(q)}
-                    </button>
-                  ))}
+                  {quickAmounts.map((q, i) =>
+                    q >= MIN_WITHDRAWAL ? (
+                      <button
+                        key={`${i}-${q}`}
+                        type="button"
+                        onClick={() => setAmount(String(q))}
+                        className="rounded-lg border border-border px-3 py-1.5 text-xs text-muted-foreground hover:bg-muted"
+                      >
+                        {i === quickAmounts.length - 1 ? "Max" : formatINR(q)}
+                      </button>
+                    ) : null,
+                  )}
                 </div>
                 {numericAmount > balance ? (
                   <p className="text-[0.6875rem] text-danger">
                     Amount exceeds your available balance of {formatINR(balance)}.
+                  </p>
+                ) : numericAmount > 0 && numericAmount < MIN_WITHDRAWAL ? (
+                  <p className="text-[0.6875rem] text-danger">
+                    Minimum withdrawal is {formatINR(MIN_WITHDRAWAL)}.
                   </p>
                 ) : null}
               </div>
 
               <div className="mt-5 space-y-2">
                 <p className="eyebrow">Payout to</p>
-                <div className="flex items-center justify-between rounded-xl border border-border bg-field px-3.5 py-3 text-[0.8125rem]">
-                  <span>HDFC Bank ****4821</span>
-                  <button type="button" className="text-xs font-medium text-gold hover:underline">
-                    Change
-                  </button>
-                </div>
+                <QueryState query={banks} rows={1}>
+                  {verifiedBanks.length > 0 ? (
+                    <Select value={selectedBankId} onValueChange={setBankId}>
+                      <SelectTrigger className="w-full" aria-label="Payout bank">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {verifiedBanks.map((b) => (
+                          <SelectItem key={b.id} value={String(b.id)}>
+                            {maskedBank(b)}
+                            {b.isPrimary ? " · Primary" : ""}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    <div className="rounded-xl border border-border bg-field px-3.5 py-3 text-[0.8125rem] text-muted-foreground">
+                      {banks.data?.length
+                        ? "Your bank is waiting for verification."
+                        : "No bank account added yet."}{" "}
+                      <Link
+                        to={ROUTES.partner.profile}
+                        className="font-medium text-gold hover:underline"
+                      >
+                        Manage banks
+                      </Link>
+                    </div>
+                  )}
+                </QueryState>
               </div>
 
               <p className="mt-4 rounded-xl border border-border bg-field/60 p-3 text-[0.6875rem] leading-relaxed text-muted-foreground">
-                Requests are reviewed by Admin and settled to your bank via Razorpay or PhonePe.
+                Requests are reviewed by Admin. The amount is held as pending payout until it is
+                approved or rejected.
               </p>
               <Button
                 size="lg"
@@ -226,13 +339,23 @@ export function PartnerWalletPage() {
                 disabled={!canSubmit}
                 onClick={submitWithdrawal}
               >
-                Submit request
+                {requestWithdrawal.isPending ? "Submitting…" : "Submit request"}
               </Button>
             </Panel>
 
             <Panel>
-              <PanelHeader title="Payout timeline" />
-              <Timeline steps={payoutTimeline} />
+              <PanelHeader title="My withdrawals" />
+              <QueryState
+                query={withdrawals}
+                empty={withdrawals.data?.length === 0}
+                emptyMessage="No withdrawal requests yet."
+              >
+                <DataTable
+                  columns={withdrawalColumns}
+                  rows={withdrawals.data ?? []}
+                  getRowKey={(r) => r.id}
+                />
+              </QueryState>
             </Panel>
           </div>
         </div>

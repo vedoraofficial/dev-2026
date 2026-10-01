@@ -1,8 +1,9 @@
 import { zodResolver } from "@hookform/resolvers/zod"
+import { useMutation } from "@tanstack/react-query"
 import { Eye, EyeOff } from "lucide-react"
 import { useState } from "react"
 import { useForm } from "react-hook-form"
-import { useNavigate } from "react-router-dom"
+import { Navigate, useNavigate } from "react-router-dom"
 
 import { ROUTES } from "@/app/routes"
 import logo from "@/assets/images/vedora-logo.jpg"
@@ -10,23 +11,51 @@ import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { login } from "@/features/auth/api"
+import { ForgotPasswordDialog } from "@/features/auth/components/forgot-password-dialog"
 import { loginSchema, type LoginValues } from "@/features/auth/schemas"
+import { JoinPartnerDialog } from "@/features/genealogy/components/join-partner-dialog"
+import { apiErrorMessage } from "@/lib/api"
+import { useSession } from "@/lib/session"
+import type { UserRole } from "@/types/session"
+
+/** Where each role lands after signing in. */
+const homeFor = (role: UserRole) =>
+  role === "ADMIN" ? ROUTES.admin.overview : ROUTES.partner.dashboard
 
 export function LoginPage() {
   const navigate = useNavigate()
   const [showPassword, setShowPassword] = useState(false)
+  const [remember, setRemember] = useState(true)
+  const signedInUser = useSession((s) => s.user)
+  const signIn = useSession((s) => s.signIn)
   const {
     register,
     handleSubmit,
-    formState: { errors, isSubmitting },
+    setValue,
+    setFocus,
+    formState: { errors },
   } = useForm<LoginValues>({ resolver: zodResolver(loginSchema) })
 
-  // Temporary: no auth API yet. One sign-in for everyone — the ID decides where you land:
-  // Root Admin (VED108, also typed VED0108 / VED000108) → Admin panel, everyone else → Partner portal.
-  const onSubmit = ({ vedoraId }: LoginValues) => {
-    const isRootAdmin = Number(vedoraId.replace(/\D/g, "")) === 108
-    navigate(isRootAdmin ? ROUTES.admin.overview : ROUTES.partner.dashboard)
+  // One sign-in for everyone — the role the backend returns decides where you land.
+  const loginMutation = useMutation({
+    mutationFn: ({ vedoraId, password }: LoginValues) => login(vedoraId, password),
+    onSuccess: ({ access_token, user }) => {
+      signIn({ token: access_token, user }, remember)
+      navigate(homeFor(user.role), { replace: true })
+    },
+  })
+  const onSubmit = (values: LoginValues) => loginMutation.mutate(values)
+
+  /** After joining or a password reset: fill in the ID and jump to the password box. */
+  const prefillId = (vedId: string) => {
+    setValue("vedoraId", vedId)
+    setValue("password", "")
+    setTimeout(() => setFocus("password"), 0)
   }
+
+  // Already signed in (e.g. opened /login again) → straight to their portal.
+  if (signedInUser) return <Navigate to={homeFor(signedInUser.role)} replace />
 
   return (
     <div className="grid min-h-svh lg:grid-cols-[1.1fr_1fr]">
@@ -121,23 +150,31 @@ export function LoginPage() {
               htmlFor="remember"
               className="flex cursor-pointer items-center gap-2 text-muted-foreground"
             >
-              <Checkbox id="remember" />
+              <Checkbox
+                id="remember"
+                checked={remember}
+                onCheckedChange={(v) => setRemember(v === true)}
+              />
               Remember me
             </label>
-            <button type="button" className="font-medium text-gold hover:underline">
-              Forgot password?
-            </button>
+            <ForgotPasswordDialog onReset={prefillId} />
           </div>
 
-          <Button type="submit" size="lg" className="w-full" disabled={isSubmitting}>
-            Sign in
+          {loginMutation.isError ? (
+            <p
+              role="alert"
+              className="rounded-xl border border-danger/40 bg-danger-soft/40 px-3.5 py-2.5 text-xs text-danger"
+            >
+              {apiErrorMessage(loginMutation.error, "Couldn't sign in. Try again.")}
+            </p>
+          ) : null}
+
+          <Button type="submit" size="lg" className="w-full" disabled={loginMutation.isPending}>
+            {loginMutation.isPending ? "Signing in…" : "Sign in"}
           </Button>
 
           <p className="text-center text-xs text-muted-foreground">
-            New partner?{" "}
-            <button type="button" className="font-medium text-gold hover:underline">
-              Join under your sponsor
-            </button>
+            New partner? <JoinPartnerDialog onJoined={prefillId} />
           </p>
 
           <p className="rounded-xl border border-border bg-card/70 p-3.5 text-center text-[0.6875rem] leading-relaxed text-muted-foreground">

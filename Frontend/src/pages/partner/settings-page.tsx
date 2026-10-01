@@ -1,12 +1,8 @@
-import { useState } from "react"
-
 import { PageBody, PageHeader } from "@/components/common/page-header"
 import { Panel, PanelHeader } from "@/components/common/panel"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
-import { cn } from "@/lib/utils"
+import { ChangePasswordForm } from "@/features/account/components/change-password-form"
 
 const notifications = [
   ["Income credited", "Every commission posted to your wallet"],
@@ -14,28 +10,7 @@ const notifications = [
   ["Withdrawal status", "Approved, rejected or credited"],
 ]
 
-/** 0–4: length ≥ 8, a number, a symbol, length ≥ 12 */
-function passwordStrength(value: string): number {
-  return [
-    value.length >= 8,
-    /\d/.test(value),
-    /[^A-Za-z0-9]/.test(value),
-    value.length >= 12,
-  ].filter(Boolean).length
-}
-
-const strengthLabel = [
-  "",
-  "Weak",
-  "Fair",
-  "Strong — 8+ characters with a number and symbol",
-  "Very strong",
-]
-
 export function PartnerSettingsPage() {
-  const [next, setNext] = useState("")
-  const strength = passwordStrength(next)
-
   return (
     <>
       <PageHeader title="Settings" subtitle="Security, notifications and preferences" />
@@ -43,38 +18,7 @@ export function PartnerSettingsPage() {
         <div className="grid gap-4 md:gap-5 lg:grid-cols-2">
           <Panel>
             <PanelHeader title="Change password" />
-            <form className="space-y-4" onSubmit={(e) => e.preventDefault()}>
-              <div className="space-y-2">
-                <Label htmlFor="current" className="eyebrow">
-                  Current password
-                </Label>
-                <Input id="current" type="password" autoComplete="current-password" />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="new" className="eyebrow">
-                  New password
-                </Label>
-                <Input
-                  id="new"
-                  type="password"
-                  autoComplete="new-password"
-                  value={next}
-                  onChange={(e) => setNext(e.target.value)}
-                />
-                <div className="grid grid-cols-4 gap-1.5 pt-1" aria-hidden>
-                  {[1, 2, 3, 4].map((n) => (
-                    <div
-                      key={n}
-                      className={cn("h-1 rounded-full", n <= strength ? "bg-success" : "bg-forest")}
-                    />
-                  ))}
-                </div>
-                <p className="min-h-4 text-[0.6875rem] text-muted-foreground" aria-live="polite">
-                  {strengthLabel[strength]}
-                </p>
-              </div>
-              <Button type="submit">Update password</Button>
-            </form>
+            <ChangePasswordForm />
           </Panel>
 
           <div className="space-y-4 md:space-y-5">

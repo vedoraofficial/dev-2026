@@ -4,60 +4,97 @@ import { toast } from "sonner"
 
 import { ROUTES } from "@/app/routes"
 import { MonoId } from "@/components/common/mono-id"
-import { indexTree } from "@/components/common/genealogy-tree"
 import { PageBody, PageHeader } from "@/components/common/page-header"
 import { PersonAvatar } from "@/components/common/person-avatar"
 import { Panel, PanelHeader } from "@/components/common/panel"
 import { ProgressBar } from "@/components/common/progress-bar"
+import { QueryState } from "@/components/common/query-state"
 import { StatCard, StatGrid } from "@/components/common/stat-card"
-import { StatusPill } from "@/components/common/status-pill"
+import { StatusPill, type PillVariant } from "@/components/common/status-pill"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import {
-  idActivation,
-  levelIncome,
-  partnerSummary as me,
-  recentJoinings,
-  srpSummary,
-} from "@/features/dashboard/mock-data"
-import { partnerTree } from "@/features/genealogy/mock-data"
-import { products } from "@/features/products/mock-data"
-import { formatINR, formatNumber } from "@/lib/format"
+import { useMe } from "@/features/account/queries"
+import { srpSummary } from "@/features/dashboard/mock-data"
+import { useMySlots } from "@/features/genealogy/queries"
+import { productArt } from "@/features/products/catalog"
+import { useProducts } from "@/features/products/queries"
+import { useCommissionIncome, useWalletSummary } from "@/features/wallet/queries"
+import { formatDate, startOfMonth, timeAgo } from "@/lib/date"
+import { formatBV, formatINR, formatNumber } from "@/lib/format"
+import { paiseToRupees } from "@/lib/money"
+import { useSession } from "@/lib/session"
 import { cn } from "@/lib/utils"
+import { normalizeVedId } from "@/lib/ved-id"
+import type { UserStatus } from "@/types/user"
 
-const featured = products[0]
-const maxLevel = Math.max(...levelIncome.map((l) => l.amount))
-const levelTotal = levelIncome.reduce((sum, l) => sum + l.amount, 0)
 const levelShade = ["bg-chart-1", "bg-chart-2", "bg-chart-3", "bg-chart-4", "bg-chart-5"]
 
-const myTeamById = indexTree(partnerTree)
-
-/** "631" -> "VED000631"; "ved000631" -> "VED000631"; anything else is returned as typed. */
-function normalizeId(input: string): string {
-  const trimmed = input.trim().toUpperCase()
-  return /^\d+$/.test(trimmed) ? `VED${trimmed.padStart(6, "0")}` : trimmed
+const accountPill: Record<UserStatus, { label: string; variant: PillVariant; note: string }> = {
+  ACTIVE: {
+    label: "Active",
+    variant: "success",
+    note: "Your ID is active — commissions from your team are credited to your wallet.",
+  },
+  PENDING: {
+    label: "Pending",
+    variant: "pending",
+    note: "Your ID is not active yet. Commissions are credited only to active IDs.",
+  },
+  INACTIVE: {
+    label: "Inactive",
+    variant: "neutral",
+    note: "Your ID is inactive. No BV or level income is credited while inactive.",
+  },
+  BLOCKED: {
+    label: "Blocked",
+    variant: "danger",
+    note: "Your ID is blocked. Contact Admin.",
+  },
 }
 
 export function PartnerDashboardPage() {
   const navigate = useNavigate()
+  const sessionUser = useSession((s) => s.user)
+  const me = useMe()
+  const wallet = useWalletSummary()
+  const slots = useMySlots()
+  const allIncome = useCommissionIncome()
+  const monthIncome = useCommissionIncome({ fromDate: startOfMonth() })
+  const products = useProducts()
   const [query, setQuery] = useState("")
+
+  const firstName = (me.data?.name ?? sessionUser?.name ?? "").split(" ")[0]
+  const filled = slots.data?.filledSlots ?? []
+  const used = slots.data?.totalFilled ?? 0
+  const max = slots.data?.maxSlots ?? 20
+  const activeTeam = filled.filter((f) => f.partner.status === "ACTIVE").length
+  const recent = [...filled]
+    .sort((a, b) => b.partner.joinedAt.localeCompare(a.partner.joinedAt))
+    .slice(0, 5)
+
+  const levels = monthIncome.data?.levels ?? [0, 0, 0, 0, 0]
+  const levelTotal = levels.reduce((a, b) => a + b, 0)
+  const maxLevel = Math.max(1, ...levels)
+
+  const featured = (products.data ?? []).find((p) => p.status === "ACTIVE")
+  const status = me.data ? accountPill[me.data.status] : null
 
   const searchTeam = () => {
     if (!query.trim()) return
-    const id = normalizeId(query)
-    const match = myTeamById.get(id)
+    const id = normalizeVedId(query)
+    const match = filled.find((f) => f.partner.vedId === id)
     if (!match) {
-      toast.error(`${id} isn't in your team`)
+      toast.error(`${id} isn't in your direct team`)
       return
     }
-    navigate(`${ROUTES.partner.genealogy}?id=${match.id}`)
+    navigate(`${ROUTES.partner.genealogy}?id=${match.partner.vedId}`)
   }
 
   return (
     <>
       <PageHeader
         title="Dashboard"
-        subtitle={`Welcome back, ${me.firstName} · Partner since ${me.partnerSince}`}
+        subtitle={`Welcome back, ${firstName}${me.data ? ` · Partner since ${formatDate(me.data.createdAt)}` : ""}`}
         actions={
           <Input
             type="search"
@@ -75,67 +112,73 @@ export function PartnerDashboardPage() {
           <StatCard
             href={ROUTES.partner.wallet}
             label="Wallet balance"
-            value={formatINR(me.walletBalance)}
-            hint={<span className="text-success">▲ {formatINR(me.walletThisWeek)} this week</span>}
+            value={wallet.data ? formatINR(paiseToRupees(wallet.data.availableBalance)) : "—"}
+            hint={
+              wallet.data?.lockedBalance
+                ? `${formatINR(paiseToRupees(wallet.data.lockedBalance))} pending payout`
+                : "Available to withdraw"
+            }
           />
           <StatCard
             href={ROUTES.partner.incomeReports}
             label="Total income"
-            value={formatINR(me.totalIncome)}
-            hint={`Direct ${formatINR(me.directIncome)} · BV ${formatINR(me.bvIncome)}`}
+            value={allIncome.data ? formatINR(allIncome.data.total) : "—"}
+            hint={
+              allIncome.data
+                ? `Direct ${formatINR(allIncome.data.direct)} · BV ${formatINR(allIncome.data.total - allIncome.data.direct)}`
+                : undefined
+            }
           />
           <StatCard
             href={ROUTES.partner.team}
             label="Direct slots used"
             value={
               <>
-                {me.slotsUsed}{" "}
-                <span className="text-lg text-muted-foreground">/ {me.slotsMax}</span>
+                {used} <span className="text-lg text-muted-foreground">/ {max}</span>
               </>
             }
-            hint={
-              <ProgressBar
-                value={me.slotsUsed}
-                max={me.slotsMax}
-                label="Direct slots used"
-                className="mt-1"
-              />
-            }
+            hint={<ProgressBar value={used} max={max} label="Direct slots used" className="mt-1" />}
           />
           <StatCard
             href={ROUTES.partner.team}
-            label="Team size"
-            value={formatNumber(me.teamSize)}
-            hint={`Across 5 income levels · ${me.teamActive} active`}
+            label="Direct team"
+            value={formatNumber(used)}
+            hint={`${activeTeam} active`}
           />
         </StatGrid>
 
         <div className="grid gap-4 md:gap-5 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
           <div className="space-y-4 md:space-y-5">
-            <section className="grid overflow-hidden rounded-2xl border border-border bg-card sm:grid-cols-[1fr_minmax(0,42%)]">
-              <div className="order-2 flex flex-col justify-center gap-3 p-5 sm:order-1 md:p-6">
-                <p className="text-[0.625rem] tracking-[0.2em] text-gold uppercase">
-                  New this month
-                </p>
-                <h2 className="font-display text-3xl leading-tight font-medium md:text-4xl">
-                  {featured.name}
-                </h2>
-                <p className="text-xs text-muted-foreground">{featured.gemstones.join(" · ")}</p>
-                <div className="mt-1 flex flex-wrap items-center gap-3">
-                  <Button asChild>
-                    <Link to={ROUTES.partner.products}>Order stock</Link>
-                  </Button>
-                  <span className="font-mono text-xs text-gold-light">₹1,999 · 1,000 BV</span>
+            {featured ? (
+              <section className="grid overflow-hidden rounded-2xl border border-border bg-card sm:grid-cols-[1fr_minmax(0,42%)]">
+                <div className="order-2 flex flex-col justify-center gap-3 p-5 sm:order-1 md:p-6">
+                  <p className="text-[0.625rem] tracking-[0.2em] text-gold uppercase">
+                    In the catalogue
+                  </p>
+                  <h2 className="font-display text-3xl leading-tight font-medium md:text-4xl">
+                    {featured.name}
+                  </h2>
+                  <p className="text-xs text-muted-foreground">
+                    {productArt(featured.name).gemstones.join(" · ")}
+                  </p>
+                  <div className="mt-1 flex flex-wrap items-center gap-3">
+                    <Button asChild>
+                      <Link to={ROUTES.partner.products}>Order stock</Link>
+                    </Button>
+                    <span className="font-mono text-xs text-gold-light">
+                      {formatINR(paiseToRupees(featured.salePrice))} · {formatBV(featured.bvAmount)}
+                    </span>
+                  </div>
                 </div>
-              </div>
-              <img
-                src={featured.image}
-                alt={featured.name}
-                width={1000}
-                height={750}
-                className="order-1 aspect-[16/9] h-full w-full object-cover sm:order-2 sm:aspect-auto"
-              />
-            </section>
+                <img
+                  src={productArt(featured.name).image}
+                  alt={featured.name}
+                  width={1000}
+                  height={750}
+                  className="order-1 aspect-[16/9] h-full w-full object-cover sm:order-2 sm:aspect-auto"
+                />
+              </section>
+            ) : null}
 
             <Panel>
               <PanelHeader
@@ -152,29 +195,31 @@ export function PartnerDashboardPage() {
                   </span>
                 }
               />
-              <div
-                role="img"
-                aria-label="Bar chart of BV level income for levels 1 to 5, falling from level 1 to level 5"
-                className="flex h-60 items-end gap-2 sm:h-72 md:gap-4"
-              >
-                {levelIncome.map((l, i) => (
-                  <div
-                    key={l.level}
-                    className="flex h-full min-w-0 flex-1 flex-col justify-end gap-2 text-center"
-                  >
-                    <span className="font-mono text-[0.6875rem] text-foreground/85">
-                      {formatINR(l.amount)}
-                    </span>
+              <QueryState query={monthIncome} rows={4}>
+                <div
+                  role="img"
+                  aria-label="Bar chart of BV level income for levels 1 to 5 this month"
+                  className="flex h-60 items-end gap-2 sm:h-72 md:gap-4"
+                >
+                  {levels.map((amount, i) => (
                     <div
-                      className={cn("w-full rounded-t-md", levelShade[i])}
-                      style={{ height: `${(l.amount / maxLevel) * 78}%` }}
-                    />
-                    <span className="text-[0.625rem] leading-tight text-muted-foreground">
-                      {l.level}
-                    </span>
-                  </div>
-                ))}
-              </div>
+                      key={i}
+                      className="flex h-full min-w-0 flex-1 flex-col justify-end gap-2 text-center"
+                    >
+                      <span className="font-mono text-[0.6875rem] text-foreground/85">
+                        {formatINR(amount)}
+                      </span>
+                      <div
+                        className={cn("w-full rounded-t-md", levelShade[i])}
+                        style={{ height: `${Math.max(2, (amount / maxLevel) * 78)}%` }}
+                      />
+                      <span className="text-[0.625rem] leading-tight text-muted-foreground">
+                        Level {i + 1}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </QueryState>
             </Panel>
           </div>
 
@@ -182,28 +227,13 @@ export function PartnerDashboardPage() {
             <Panel>
               <PanelHeader
                 title="ID activation"
-                aside={<StatusPill variant="success">{idActivation.status}</StatusPill>}
+                aside={
+                  status ? <StatusPill variant={status.variant}>{status.label}</StatusPill> : null
+                }
               />
               <p className="text-xs leading-relaxed text-muted-foreground">
-                1 confirmed sale done this month — you are Active through{" "}
-                <strong className="font-medium text-foreground">
-                  {idActivation.activeThrough}
-                </strong>
-                .
+                {status?.note ?? "Loading your account status…"}
               </p>
-              <div className="mt-4 grid grid-cols-3 gap-2">
-                {idActivation.months.map((m) => (
-                  <div key={m.label}>
-                    <div
-                      className={cn(
-                        "h-1.5 rounded-full",
-                        m.state === "active" ? "bg-success" : "bg-forest",
-                      )}
-                    />
-                    <p className="mt-1.5 text-[0.625rem] text-muted-foreground">{m.label}</p>
-                  </div>
-                ))}
-              </div>
               <p className="mt-4 border-t border-border/70 pt-3 text-[0.6875rem] text-muted-foreground">
                 No BV or level income is credited on days your ID is inactive.
               </p>
@@ -215,7 +245,7 @@ export function PartnerDashboardPage() {
                 <p className="font-display text-4xl">
                   {srpSummary.balance} <span className="text-lg text-muted-foreground">SRP</span>
                 </p>
-                <p className="text-xs font-medium text-success">≈ 2 months free activation</p>
+                <p className="text-xs font-medium text-muted-foreground">Sample — no SRP API yet</p>
               </div>
               <ProgressBar
                 value={srpSummary.balance}
@@ -239,28 +269,34 @@ export function PartnerDashboardPage() {
                   </Link>
                 }
               />
-              <ul>
-                {recentJoinings.map((j) => (
-                  <li
-                    key={j.id}
-                    className="flex items-center gap-3 border-b border-border/70 py-3 first:pt-0 last:border-b-0 last:pb-0"
-                  >
-                    <PersonAvatar tone="plain" size="sm" />
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-[0.8125rem] font-medium">{j.name}</p>
-                      <p className="text-[0.6875rem] text-muted-foreground">
-                        <MonoId tone="muted" className="text-[0.6875rem]">
-                          {j.id}
-                        </MonoId>{" "}
-                        · Level {j.level}
-                      </p>
-                    </div>
-                    <span className="shrink-0 text-[0.6875rem] text-muted-foreground">
-                      {j.when}
-                    </span>
-                  </li>
-                ))}
-              </ul>
+              <QueryState
+                query={slots}
+                empty={recent.length === 0}
+                emptyMessage="No one has joined under you yet."
+              >
+                <ul>
+                  {recent.map((j) => (
+                    <li
+                      key={j.partner.vedId}
+                      className="flex items-center gap-3 border-b border-border/70 py-3 first:pt-0 last:border-b-0 last:pb-0"
+                    >
+                      <PersonAvatar tone="plain" size="sm" />
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-[0.8125rem] font-medium">{j.partner.name}</p>
+                        <p className="text-[0.6875rem] text-muted-foreground">
+                          <MonoId tone="muted" className="text-[0.6875rem]">
+                            {j.partner.vedId}
+                          </MonoId>{" "}
+                          · Slot {j.slotNumber}
+                        </p>
+                      </div>
+                      <span className="shrink-0 text-[0.6875rem] text-muted-foreground">
+                        {timeAgo(j.partner.joinedAt)}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </QueryState>
             </Panel>
           </div>
         </div>

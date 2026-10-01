@@ -130,4 +130,15 @@ export const router = createBrowserRouter([
       },
     ],
   },
+  {
+    // Outside /partner because PhonePe's return URL is fixed, but inside the partner shell.
+    element: <PartnerLayout />,
+    ErrorBoundary: RouteError,
+    children: [
+      {
+        path: ROUTES.paymentStatus,
+        ...page(() => import("@/pages/partner/payment-status-page"), "PaymentStatusPage"),
+      },
+    ],
+  },
 ])

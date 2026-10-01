@@ -9,53 +9,110 @@ import { MonoId } from "@/components/common/mono-id"
 import { PageBody, PageHeader } from "@/components/common/page-header"
 import { Panel } from "@/components/common/panel"
 import { PersonAvatar } from "@/components/common/person-avatar"
+import { QueryState } from "@/components/common/query-state"
 import { StatCard, StatGrid } from "@/components/common/stat-card"
 import { StatusPill, type PillVariant } from "@/components/common/status-pill"
 import { TablePagination } from "@/components/common/table-pagination"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { partnerTree } from "@/features/genealogy/mock-data"
-import {
-  levelCounts,
-  teamMembers,
-  type TeamMember,
-  type TeamMemberStatus,
-} from "@/features/team/mock-data"
+import { useMySlots } from "@/features/genealogy/queries"
+import type { MySlots } from "@/features/genealogy/types"
 import { downloadCsv } from "@/lib/csv"
-import { formatNumber } from "@/lib/format"
-import { cn } from "@/lib/utils"
+import { formatDate } from "@/lib/date"
+import type { UserStatus } from "@/types/user"
 
-const statusPill: Record<TeamMemberStatus, { label: string; variant: PillVariant }> = {
-  active: { label: "Active", variant: "success" },
-  "free-active": { label: "Free Active", variant: "pending" },
-  "no-bv": { label: "No BV", variant: "danger" },
+type TeamRow = MySlots["filledSlots"][number]["partner"] & { slot: number }
+
+const statusPill: Record<UserStatus, { label: string; variant: PillVariant }> = {
+  ACTIVE: { label: "Active", variant: "success" },
+  PENDING: { label: "Pending", variant: "pending" },
+  INACTIVE: { label: "Inactive", variant: "neutral" },
+  BLOCKED: { label: "Blocked", variant: "danger" },
 }
 
-const STATUS_OPTIONS = ["All", "Active", "Free Active", "No BV"]
+const STATUS_OPTIONS = ["All", "Active", "Pending", "Inactive", "Blocked"]
 const PAGE_SIZE = 10
 
-function matchesQuery(m: TeamMember, query: string): boolean {
+function matchesQuery(m: TeamRow, query: string): boolean {
   const q = query.trim().toLowerCase()
   if (!q) return true
   const qDigits = q.replace(/\s+/g, "")
   return (
-    m.name.toLowerCase().includes(q) || m.id.toLowerCase().replace(/\s+/g, "").includes(qDigits)
+    m.name.toLowerCase().includes(q) ||
+    m.vedId.toLowerCase().includes(qDigits) ||
+    m.mobile.includes(qDigits) ||
+    m.email.toLowerCase().includes(q)
   )
 }
 
-function matchesStatus(m: TeamMember, status: string): boolean {
-  return status === "All" || statusPill[m.status].label === status
-}
+const columns: Column<TeamRow>[] = [
+  {
+    key: "partner",
+    header: "Partner",
+    primary: true,
+    cell: (r) => (
+      <div className="flex items-center gap-3">
+        <PersonAvatar size="sm" tone={r.status === "ACTIVE" ? "striped" : "muted"} />
+        <div className="min-w-0">
+          <p className="truncate text-[0.875rem] font-medium">{r.name}</p>
+          <MonoId tone="muted" className="text-[0.6875rem]">
+            {r.vedId}
+          </MonoId>
+        </div>
+      </div>
+    ),
+  },
+  {
+    key: "contact",
+    header: "Contact",
+    cell: (r) => (
+      <div className="text-[0.75rem]">
+        <p className="font-mono">{r.mobile}</p>
+        <p className="text-muted-foreground">{r.email}</p>
+      </div>
+    ),
+  },
+  {
+    key: "joined",
+    header: "Joined",
+    cell: (r) => <span className="text-muted-foreground">{formatDate(r.joinedAt)}</span>,
+  },
+  {
+    key: "slot",
+    header: "Slot",
+    cell: (r) => (
+      <MonoId className="text-[0.8125rem] text-gold">{String(r.slot).padStart(2, "0")}</MonoId>
+    ),
+  },
+  {
+    key: "status",
+    header: "Status",
+    align: "right",
+    cell: (r) => (
+      <StatusPill variant={statusPill[r.status].variant}>{statusPill[r.status].label}</StatusPill>
+    ),
+  },
+]
 
 export function PartnerTeamPage() {
+  const slots = useMySlots()
   const [level, setLevel] = useState("1")
   const [status, setStatus] = useState("All")
   const [query, setQuery] = useState("")
   const isSearching = query.trim().length > 0
 
-  const rows = teamMembers.filter(
-    (m) => String(m.level) === level && matchesStatus(m, status) && matchesQuery(m, query),
-  )
+  const direct: TeamRow[] = (slots.data?.filledSlots ?? []).map((f) => ({
+    ...f.partner,
+    slot: f.slotNumber,
+  }))
+  // Only Level 1 comes from the server (GET /api/partner/my-slots); deeper levels have no API yet.
+  const rows =
+    level === "1"
+      ? direct.filter(
+          (m) =>
+            (status === "All" || statusPill[m.status].label === status) && matchesQuery(m, query),
+        )
+      : []
 
   const filterKey = `${level}|${status}|${query}`
   const [page, setPage] = useState(1)
@@ -69,84 +126,35 @@ export function PartnerTeamPage() {
   const rangeStart = rows.length === 0 ? 0 : (page - 1) * PAGE_SIZE + 1
   const rangeEnd = Math.min(page * PAGE_SIZE, rows.length)
 
-  const columns: Column<TeamMember>[] = [
-    {
-      key: "partner",
-      header: "Partner",
-      primary: true,
-      cell: (r) => (
-        <div className="flex items-center gap-3">
-          <PersonAvatar size="sm" tone={r.status === "no-bv" ? "muted" : "striped"} />
-          <div className="min-w-0">
-            <p className="truncate text-[0.875rem] font-medium">{r.name}</p>
-            <MonoId tone="muted" className="text-[0.6875rem]">
-              {r.id}
-            </MonoId>
-          </div>
-        </div>
-      ),
-    },
-    {
-      key: "joined",
-      header: "Joined",
-      cell: (r) => <span className="text-muted-foreground">{r.joined}</span>,
-    },
-    {
-      key: "slot",
-      header: "Slot",
-      cell: (r) => (
-        <MonoId className={cn("text-[0.8125rem]", r.slot > 20 ? "text-danger" : "text-gold")}>
-          {String(r.slot).padStart(2, "0")}
-        </MonoId>
-      ),
-    },
-    {
-      key: "downline",
-      header: "Own downline",
-      cell: (r) => <span className="text-muted-foreground">{r.downline} partners</span>,
-    },
-    {
-      key: "srp",
-      header: "SRP",
-      cell: (r) => <span className="font-mono text-xs text-gold-light">{r.srp} SRP</span>,
-    },
-    {
-      key: "status",
-      header: "Status",
-      align: "right",
-      cell: (r) => (
-        <StatusPill variant={statusPill[r.status].variant}>{statusPill[r.status].label}</StatusPill>
-      ),
-    },
-  ]
-
   const exportCsv = () => {
     downloadCsv(
-      `vedora-my-team-level${level}${status === "All" ? "" : `-${status.toLowerCase().replace(" ", "")}`}.csv`,
-      ["VEDORA ID", "Name", "Level", "Joined", "Slot", "Own downline", "SRP", "Status"],
+      `vedora-my-team-level${level}${status === "All" ? "" : `-${status.toLowerCase()}`}.csv`,
+      ["VEDORA ID", "Name", "Mobile", "Email", "Joined", "Slot", "Status"],
       rows.map((r) => [
-        r.id,
+        r.vedId,
         r.name,
-        r.level,
-        r.joined,
+        r.mobile,
+        r.email,
+        formatDate(r.joinedAt),
         r.slot,
-        r.downline,
-        r.srp,
         statusPill[r.status].label,
       ]),
     )
   }
 
+  const filled = slots.data?.totalFilled ?? 0
+  const max = slots.data?.maxSlots ?? 20
+
   return (
     <>
       <PageHeader
         title="My Team"
-        subtitle={`${formatNumber(partnerTree.downline)} partners across 5 levels · ${partnerTree.direct} of 20 direct slots used`}
+        subtitle={`${filled} of ${max} direct slots used`}
         actions={
           <>
             <Input
               type="search"
-              placeholder="Search name or VEDORA ID…"
+              placeholder="Search name, ID, mobile…"
               aria-label="Search team"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
@@ -160,20 +168,22 @@ export function PartnerTeamPage() {
       />
       <PageBody>
         <StatGrid cols={5} className="[&>*:first-child]:col-span-2 lg:[&>*:first-child]:col-span-1">
-          {levelCounts.map((l) => (
+          {[1, 2, 3, 4, 5].map((l) => (
             <StatCard
-              key={l.level}
-              highlight={String(l.level) === level}
-              label={l.level === 1 ? "Level 1 · Direct" : `Level ${l.level}`}
+              key={l}
+              highlight={String(l) === level}
+              label={l === 1 ? "Level 1 · Direct" : `Level ${l}`}
               value={
-                <>
-                  {l.count}
-                  {l.cap ? (
-                    <span className="text-base text-muted-foreground"> / {l.cap}</span>
-                  ) : null}
-                </>
+                l === 1 ? (
+                  <>
+                    {filled}
+                    <span className="text-base text-muted-foreground"> / {max}</span>
+                  </>
+                ) : (
+                  <span className="text-muted-foreground">—</span>
+                )
               }
-              onClick={() => setLevel(String(l.level))}
+              onClick={() => setLevel(String(l))}
             />
           ))}
         </StatGrid>
@@ -203,25 +213,30 @@ export function PartnerTeamPage() {
               </Button>
             </div>
           </div>
-          <DataTable
-            columns={columns}
-            rows={pagedRows}
-            getRowKey={(r) => r.id}
-            rowClassName={(r) => (r.status === "no-bv" ? "bg-muted/30" : undefined)}
-            emptyMessage={
-              isSearching ? `No partners match "${query.trim()}".` : "No partners at this level."
-            }
-          />
-          <TablePagination
-            key={filterKey}
-            summary={
-              rows.length === 0
-                ? "No partners to show"
-                : `Showing ${rangeStart}–${rangeEnd} of ${rows.length} partner${rows.length === 1 ? "" : "s"}`
-            }
-            pages={totalPages}
-            onPageChange={setPage}
-          />
+          <QueryState query={slots} rows={5}>
+            <DataTable
+              columns={columns}
+              rows={pagedRows}
+              getRowKey={(r) => r.vedId}
+              emptyMessage={
+                level !== "1"
+                  ? `Level ${level} isn't available from the server yet.`
+                  : isSearching
+                    ? `No partners match "${query.trim()}".`
+                    : "No direct partners yet — register your first partner."
+              }
+            />
+            <TablePagination
+              key={filterKey}
+              summary={
+                rows.length === 0
+                  ? "No partners to show"
+                  : `Showing ${rangeStart}–${rangeEnd} of ${rows.length} partner${rows.length === 1 ? "" : "s"}`
+              }
+              pages={totalPages}
+              onPageChange={setPage}
+            />
+          </QueryState>
         </Panel>
       </PageBody>
     </>

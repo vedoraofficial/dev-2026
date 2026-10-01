@@ -15,10 +15,16 @@ const pincode = z
   .trim()
   .regex(/^[1-9]\d{5}$/, "Pincode is 6 digits")
 
-export const GENDERS = ["Male", "Female", "Other"] as const
-export const PAYMENT_METHODS = ["Online (UPI)", "Card"] as const
+/** The 10-digit number the backend stores: "+91 98220 41288" → "9822041288". */
+export const toMobile10 = (value: string) => digits(value).replace(/^91(?=\d{10}$)/, "")
 
-/** Manual Placement form. The backend re-validates everything (PAN / Aadhaar uniqueness, slot). */
+export const GENDERS = ["Male", "Female", "Other"] as const
+
+/**
+ * Manual Placement form. Sent to POST /api/partner/register-downline: name, email, mobile,
+ * password, slot, gender and address. Age, Aadhaar and PAN are checked here but the backend has
+ * no fields for them yet; product and shipping are for the joining order (no backend API yet).
+ */
 export const placementSchema = z
   .object({
     fullName: z.string().trim().min(3, "Enter the full name"),
@@ -29,6 +35,7 @@ export const placementSchema = z
       .refine((v) => Number(v) >= 18 && Number(v) <= 100, "Partner must be 18 or older"),
     gender: z.enum(GENDERS, { message: "Choose a gender" }),
     mobile,
+    email: z.string().trim().email("Enter a valid email"),
     aadhaar: z
       .string()
       .trim()
@@ -52,12 +59,6 @@ export const placementSchema = z
       .regex(/[^A-Za-z0-9]/, "Add a symbol"),
     confirmPassword: z.string(),
 
-    /** Set from the chosen slot (next ID in sequence) — read-only on screen. The backend checks it is free. */
-    newId: z
-      .string()
-      .trim()
-      .toUpperCase()
-      .refine((v) => v === "" || /^VED\d{6}$/.test(v), "IDs look like VED006500"),
     upline: z
       .string()
       .trim()
@@ -76,7 +77,6 @@ export const placementSchema = z
     shipState: z.string().trim().min(2, "Enter the state"),
     shipPincode: pincode,
 
-    paymentMethod: z.enum(PAYMENT_METHODS),
     agree: z.boolean().refine((v) => v, "Accept the agreement to continue"),
   })
   .refine((v) => v.password === v.confirmPassword, {

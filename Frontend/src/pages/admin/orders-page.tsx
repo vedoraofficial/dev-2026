@@ -1,217 +1,92 @@
 import { useState } from "react"
-import { toast } from "sonner"
 
 import { DataTable, type Column } from "@/components/common/data-table"
-import { FilterSelect } from "@/components/common/filter-select"
 import { FilterTabs } from "@/components/common/filter-tabs"
 import { MonoId } from "@/components/common/mono-id"
 import { PageBody, PageHeader } from "@/components/common/page-header"
 import { Panel, PanelHeader } from "@/components/common/panel"
+import { QueryState } from "@/components/common/query-state"
 import { StatCard, StatGrid } from "@/components/common/stat-card"
 import { StatusPill } from "@/components/common/status-pill"
 import { TablePagination } from "@/components/common/table-pagination"
-import { Timeline } from "@/components/common/timeline"
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { CashOrderDialog } from "@/features/orders/components/cash-order-dialog"
+import { OrderDetailDialog } from "@/features/orders/components/order-detail-dialog"
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog"
-import {
-  adminOrders as initialOrders,
-  deliverySla,
-  orderStatusPill,
-  orderTabs,
-  shipmentTimeline,
-  warrantyClaims,
-  type AdminOrder,
-} from "@/features/orders/mock-data"
-import { downloadTextFile } from "@/lib/download"
-import { formatINR } from "@/lib/format"
+  orderNo,
+  orderStage,
+  paymentMethodLabel,
+  STAGE_TABS,
+  stagePill,
+  type OrderStage,
+} from "@/features/orders/labels"
+import { deliverySla } from "@/features/orders/mock-data"
+import { useAllOrders } from "@/features/orders/queries"
+import type { ApiOrder } from "@/features/orders/types"
+import { useProducts } from "@/features/products/queries"
+import { downloadCsv } from "@/lib/csv"
+import { formatDate, formatDateTime } from "@/lib/date"
+import { formatCompactINR, formatINR, formatNumber } from "@/lib/format"
+import { paiseToRupees } from "@/lib/money"
 
-/** "refunds" and "all" aren't OrderStatus values — map the tab to what it should match. */
-function matchesTab(order: AdminOrder, tab: string): boolean {
-  if (tab === "all") return true
-  if (tab === "refunds") return order.status === "refunding"
-  return order.status === tab
-}
+type Tab = "all" | OrderStage
+const PAGE_SIZE = 15
 
-function TrackOrderDialog({ row }: { row: AdminOrder }) {
+const isToday = (iso: string) => new Date(iso).toDateString() === new Date().toDateString()
+const sumRupees = (orders: ApiOrder[]) =>
+  orders.reduce((sum, o) => sum + paiseToRupees(o.totalAmount), 0)
+
+function matchesQuery(o: ApiOrder, query: string) {
+  const q = query.trim().toLowerCase()
+  if (!q) return true
   return (
-    <Dialog>
-      <DialogTrigger asChild>
-        <Button variant="quiet" size="sm">
-          Track
-        </Button>
-      </DialogTrigger>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Track {row.id}</DialogTitle>
-          <DialogDescription>
-            {row.partner} · <MonoId tone="muted">{row.partnerId}</MonoId> · {row.shipment}
-          </DialogDescription>
-        </DialogHeader>
-        <Timeline steps={shipmentTimeline} />
-      </DialogContent>
-    </Dialog>
+    orderNo(o.id).toLowerCase().includes(q) ||
+    String(o.id) === q ||
+    (o.user?.vedId.toLowerCase().includes(q) ?? false) ||
+    (o.user?.name.toLowerCase().includes(q) ?? false) ||
+    o.product.name.toLowerCase().includes(q)
   )
-}
-
-function InvoiceDialog({ row }: { row: AdminOrder }) {
-  const downloadInvoice = () => {
-    const lines = [
-      "VEDORA — Tax Invoice",
-      `Order: ${row.id}`,
-      `Partner: ${row.partner} (${row.partnerId})`,
-      `Items: ${row.items}`,
-      `Amount: ${formatINR(row.amount)} (GST inclusive)`,
-      `Status: ${orderStatusPill[row.status].label}`,
-      `Shipment: ${row.shipment}`,
-    ]
-    downloadTextFile(`${row.id}-invoice.txt`, lines.join("\n"))
-    toast.success(`Invoice downloaded for ${row.id}`)
-  }
-
-  return (
-    <Dialog>
-      <DialogTrigger asChild>
-        <Button variant="quiet" size="sm">
-          Invoice
-        </Button>
-      </DialogTrigger>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Invoice — {row.id}</DialogTitle>
-          <DialogDescription>
-            {row.partner} · <MonoId tone="muted">{row.partnerId}</MonoId>
-          </DialogDescription>
-        </DialogHeader>
-        <dl className="space-y-3 text-[0.8125rem]">
-          <div className="flex justify-between gap-4">
-            <dt className="text-muted-foreground">Items</dt>
-            <dd className="text-right font-medium">{row.items}</dd>
-          </div>
-          <div className="flex justify-between gap-4">
-            <dt className="text-muted-foreground">Amount (GST incl.)</dt>
-            <dd className="text-right font-mono font-medium">{formatINR(row.amount)}</dd>
-          </div>
-          <div className="flex justify-between gap-4">
-            <dt className="text-muted-foreground">Status</dt>
-            <dd>
-              <StatusPill variant={orderStatusPill[row.status].variant}>
-                {orderStatusPill[row.status].label}
-              </StatusPill>
-            </dd>
-          </div>
-        </dl>
-        <DialogFooter>
-          <Button onClick={downloadInvoice}>Download invoice</Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  )
-}
-
-function RowActions({
-  row,
-  held,
-  onDispatch,
-  onCancel,
-  onHold,
-  onApproveRefund,
-}: {
-  row: AdminOrder
-  held: boolean
-  onDispatch: () => void
-  onCancel: () => void
-  onHold: () => void
-  onApproveRefund: () => void
-}) {
-  switch (row.status) {
-    case "delivered":
-      return <InvoiceDialog row={row} />
-    case "shipped":
-      return <TrackOrderDialog row={row} />
-    case "confirmed":
-      return (
-        <>
-          <Button
-            size="sm"
-            onClick={() => {
-              onDispatch()
-              toast.success(`${row.id} dispatched`)
-            }}
-          >
-            Dispatch
-          </Button>
-          <Button
-            variant="destructive"
-            size="sm"
-            onClick={() => {
-              onCancel()
-              toast.success(`${row.id} cancelled`)
-            }}
-          >
-            Cancel
-          </Button>
-        </>
-      )
-    case "failed":
-      return (
-        <Button
-          variant="quiet"
-          size="sm"
-          disabled={held}
-          onClick={() => {
-            onHold()
-            toast.success(`${row.id} held for review`)
-          }}
-        >
-          {held ? "On hold" : "Hold"}
-        </Button>
-      )
-    case "refunding":
-      return (
-        <Button
-          size="sm"
-          onClick={() => {
-            onApproveRefund()
-            toast.success(`Refund approved for ${row.id}`)
-          }}
-        >
-          Approve refund
-        </Button>
-      )
-    default:
-      return null
-  }
 }
 
 export function AdminOrdersPage() {
-  const [orders, setOrders] = useState(initialOrders)
-  const [heldIds, setHeldIds] = useState<Set<string>>(new Set())
-  const [tab, setTab] = useState<string>(orderTabs[0].value)
+  const orders = useAllOrders()
+  const products = useProducts()
+  const [tab, setTab] = useState<Tab>("all")
+  const [query, setQuery] = useState("")
+  const [page, setPage] = useState(1)
+  const [openId, setOpenId] = useState<number | null>(null)
 
-  const rows = orders.filter((o) => matchesTab(o, tab))
+  const list = orders.data ?? []
+  const inStage = (stage: Tab) => list.filter((o) => stage === "all" || orderStage(o) === stage)
+  const rows = inStage(tab).filter((o) => matchesQuery(o, query))
+  const pageRows = rows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
+  const tabs = STAGE_TABS.map((t) => ({ ...t, label: `${t.label} ${inStage(t.value).length}` }))
 
-  const updateStatus = (id: string, status: AdminOrder["status"], shipment?: string) =>
-    setOrders((prev) =>
-      prev.map((o) => (o.id === id ? { ...o, status, ...(shipment ? { shipment } : {}) } : o)),
-    )
+  const paidToday = list.filter((o) => o.paymentStatus === "PAID" && isToday(o.createdAt))
+  const awaiting = inStage("awaiting")
+  const confirmed = inStage("confirmed")
+  const refunded = inStage("refunded")
 
-  const columns: Column<AdminOrder>[] = [
+  const filterKey = `${tab}|${query}`
+  const [syncedKey, setSyncedKey] = useState(filterKey)
+  if (filterKey !== syncedKey) {
+    setSyncedKey(filterKey)
+    setPage(1)
+  }
+
+  const columns: Column<ApiOrder>[] = [
     {
       key: "order",
       header: "Order",
       primary: true,
       cell: (r) => (
-        <MonoId tone="gold" className="text-[0.8125rem]">
-          {r.id}
-        </MonoId>
+        <div>
+          <MonoId tone="gold" className="text-[0.8125rem]">
+            {orderNo(r.id)}
+          </MonoId>
+          <p className="text-[0.6875rem] text-muted-foreground">{formatDateTime(r.createdAt)}</p>
+        </div>
       ),
     },
     {
@@ -219,9 +94,9 @@ export function AdminOrdersPage() {
       header: "Partner",
       cell: (r) => (
         <div>
-          <p className="font-medium">{r.partner}</p>
+          <p className="font-medium">{r.user?.name ?? "—"}</p>
           <MonoId tone="muted" className="text-[0.6875rem]">
-            {r.partnerId}
+            {r.user?.vedId}
           </MonoId>
         </div>
       ),
@@ -229,24 +104,30 @@ export function AdminOrdersPage() {
     {
       key: "items",
       header: "Items",
-      cell: (r) => <span className="text-muted-foreground">{r.items}</span>,
+      cell: (r) => (
+        <span className="text-muted-foreground">
+          {r.product.name} × {r.quantity}
+        </span>
+      ),
     },
     {
       key: "amount",
       header: "Amount",
-      cell: (r) => <span className="font-mono">{formatINR(r.amount)}</span>,
+      cell: (r) => <span className="font-mono">{formatINR(paiseToRupees(r.totalAmount))}</span>,
     },
     {
-      key: "shipment",
-      header: "Shipment",
-      cell: (r) => <span className="text-muted-foreground">{r.shipment}</span>,
+      key: "payment",
+      header: "Payment",
+      cell: (r) => (
+        <span className="text-muted-foreground">{paymentMethodLabel[r.paymentMethod]}</span>
+      ),
     },
     {
       key: "status",
       header: "Status",
       cell: (r) => (
-        <StatusPill variant={orderStatusPill[r.status].variant}>
-          {orderStatusPill[r.status].label}
+        <StatusPill variant={stagePill[orderStage(r)].variant}>
+          {stagePill[orderStage(r)].label}
         </StatusPill>
       ),
     },
@@ -255,60 +136,128 @@ export function AdminOrdersPage() {
       header: "Action",
       actions: true,
       cell: (r) => (
-        <RowActions
-          row={r}
-          held={heldIds.has(r.id)}
-          onDispatch={() => updateStatus(r.id, "shipped", "Dispatched · awaiting courier scan")}
-          onCancel={() => updateStatus(r.id, "cancelled", "Cancelled by admin — pre-dispatch")}
-          onHold={() => setHeldIds((prev) => new Set(prev).add(r.id))}
-          onApproveRefund={() => updateStatus(r.id, "refunded", "Refund approved and processed")}
-        />
+        <Button variant="quiet" size="sm" onClick={() => setOpenId(r.id)}>
+          Details
+        </Button>
       ),
     },
   ]
+
+  const exportCsv = () =>
+    downloadCsv(
+      "vedora-orders.csv",
+      [
+        "Order",
+        "Date",
+        "VEDORA ID",
+        "Partner",
+        "Product",
+        "Qty",
+        "Amount (₹)",
+        "BV",
+        "Payment",
+        "Status",
+      ],
+      rows.map((o) => [
+        orderNo(o.id),
+        formatDate(o.createdAt),
+        o.user?.vedId ?? "",
+        o.user?.name ?? "",
+        o.product.name,
+        o.quantity,
+        paiseToRupees(o.totalAmount),
+        o.bvTotal,
+        paymentMethodLabel[o.paymentMethod],
+        stagePill[orderStage(o)].label,
+      ]),
+    )
 
   return (
     <>
       <PageHeader
         title="Orders"
-        subtitle="Processing within 24–48 business hours of payment · prepaid only"
+        subtitle="Processing within 24–48 business hours of payment · prepaid or cash"
+        actions={
+          <>
+            <Input
+              type="search"
+              placeholder="Order, partner, product…"
+              aria-label="Search orders"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              className="w-full md:w-64"
+            />
+            <CashOrderDialog
+              products={(products.data ?? [])
+                .filter((p) => p.status === "ACTIVE")
+                .map((p) => ({ id: p.id, name: p.name, priceRupees: paiseToRupees(p.salePrice) }))}
+            />
+          </>
+        }
       />
       <PageBody>
         <StatGrid cols={5} className="[&>*:last-child]:col-span-2 lg:[&>*:last-child]:col-span-1">
-          <StatCard label="Orders today" value="64" hint="₹1.28L collected" />
-          <StatCard label="Awaiting dispatch" value="18" hint="Within 24–48 h SLA" />
-          <StatCard label="In transit" value="112" />
-          <StatCard label="Delivered this month" value="1,642" />
-          <StatCard label="Refunds pending" value="3" hint="₹5,997" />
+          <StatCard
+            label="Paid today"
+            value={formatNumber(paidToday.length)}
+            hint={`${formatCompactINR(sumRupees(paidToday))} collected`}
+          />
+          <StatCard
+            label="Awaiting payment"
+            value={formatNumber(awaiting.length)}
+            onClick={() => setTab("awaiting")}
+            highlight={tab === "awaiting"}
+          />
+          <StatCard
+            label="Confirmed"
+            value={formatNumber(confirmed.length)}
+            hint="Paid · to dispatch"
+            onClick={() => setTab("confirmed")}
+            highlight={tab === "confirmed"}
+          />
+          <StatCard
+            label="All orders"
+            value={formatNumber(list.length)}
+            onClick={() => setTab("all")}
+          />
+          <StatCard
+            label="Refunded"
+            value={formatNumber(refunded.length)}
+            hint={refunded.length ? formatINR(sumRupees(refunded)) : undefined}
+            onClick={() => setTab("refunded")}
+            highlight={tab === "refunded"}
+          />
         </StatGrid>
 
         <Panel>
           <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
             <FilterTabs
-              tabs={orderTabs}
+              tabs={tabs}
               value={tab}
-              onValueChange={setTab}
+              onValueChange={(v) => setTab(v as Tab)}
               aria-label="Order status"
             />
-            <div className="flex items-center gap-2">
-              <FilterSelect label="Courier" options={["All", "Blue Dart", "Delhivery"]} />
-              <FilterSelect label="Range" options={["Today", "Last 7 days", "This month"]} />
-            </div>
+            <Button variant="outline" disabled={rows.length === 0} onClick={exportCsv}>
+              Export
+            </Button>
           </div>
-          <DataTable
-            columns={columns}
-            rows={rows}
-            getRowKey={(r) => r.id}
-            emptyMessage="No orders in this status."
-          />
-          <TablePagination
-            key={tab}
-            summary={`Showing ${rows.length} order${rows.length === 1 ? "" : "s"} · prepaid only, no COD`}
-            pages={1}
-          />
+          <QueryState query={orders} rows={6}>
+            <DataTable
+              columns={columns}
+              rows={pageRows}
+              getRowKey={(r) => r.id}
+              emptyMessage={list.length ? "No orders match." : "No orders yet."}
+            />
+            <TablePagination
+              key={filterKey}
+              summary={`Showing ${rows.length ? (page - 1) * PAGE_SIZE + 1 : 0}–${Math.min(page * PAGE_SIZE, rows.length)} of ${rows.length} order${rows.length === 1 ? "" : "s"}`}
+              pages={Math.max(1, Math.ceil(rows.length / PAGE_SIZE))}
+              onPageChange={setPage}
+            />
+          </QueryState>
         </Panel>
 
-        <div className="grid gap-4 md:gap-5 lg:grid-cols-3">
+        <div className="grid gap-4 md:gap-5 lg:grid-cols-2">
           <Panel>
             <PanelHeader title="Delivery SLA by zone" />
             <ul>
@@ -328,29 +277,6 @@ export function AdminOrdersPage() {
           </Panel>
 
           <Panel>
-            <PanelHeader title="Warranty claims" />
-            <ul className="space-y-4">
-              {warrantyClaims.map((c) => (
-                <li key={c.id} className="flex items-center justify-between gap-3">
-                  <div>
-                    <MonoId tone="gold">{c.id}</MonoId>
-                    <p className="text-[0.6875rem] text-muted-foreground">
-                      <MonoId tone="muted" className="text-[0.6875rem]">
-                        {c.partnerId}
-                      </MonoId>{" "}
-                      · {c.issue}
-                    </p>
-                  </div>
-                  <StatusPill variant={c.variant}>{c.status}</StatusPill>
-                </li>
-              ))}
-            </ul>
-            <p className="mt-4 text-[0.6875rem] text-muted-foreground">
-              7-day window from delivery · photo or video proof required
-            </p>
-          </Panel>
-
-          <Panel>
             <p className="mb-3 eyebrow text-gold">Cancellation rules</p>
             <div className="space-y-3 text-[0.8125rem] leading-relaxed text-muted-foreground">
               <p>
@@ -366,6 +292,8 @@ export function AdminOrdersPage() {
           </Panel>
         </div>
       </PageBody>
+
+      <OrderDetailDialog orderId={openId} onClose={() => setOpenId(null)} />
     </>
   )
 }

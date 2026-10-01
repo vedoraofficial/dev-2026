@@ -1,24 +1,17 @@
 import { zodResolver } from "@hookform/resolvers/zod"
-import { Loader2 } from "lucide-react"
 import { useEffect, useState, type FormEvent, type ReactNode } from "react"
 import { Controller, useForm, useWatch, type DefaultValues } from "react-hook-form"
 import { toast } from "sonner"
 
+import { FieldError, FormField as Field } from "@/components/common/form-field"
 import { MonoId } from "@/components/common/mono-id"
 import { PageBody, PageHeader } from "@/components/common/page-header"
 import { Panel } from "@/components/common/panel"
 import { ProgressBar } from "@/components/common/progress-bar"
+import { QueryState } from "@/components/common/query-state"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
 import {
   Select,
   SelectContent,
@@ -27,31 +20,35 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
+import { useMySlots, useRegisterDownline } from "@/features/genealogy/queries"
 import { AreaSelect, PincodeHint } from "@/features/placement/components/pincode-lookup"
-import { PlacementSuccess } from "@/features/placement/components/placement-success"
+import {
+  PlacementSuccess,
+  type RegisteredPartner,
+} from "@/features/placement/components/placement-success"
 import { ProductPicker } from "@/features/placement/components/product-picker"
 import {
-  defaultUpline,
-  dummyPlacementResult,
-  previewNextId,
-  takenSlots,
-  type PlacementResult,
-} from "@/features/placement/mock-data"
-import {
   GENDERS,
-  PAYMENT_METHODS,
   placementSchema,
+  toMobile10,
   type PlacementInput,
   type PlacementValues,
 } from "@/features/placement/schemas"
 import { isPincode, usePincodeLookup } from "@/features/placement/queries"
 import { products } from "@/features/products/mock-data"
 import { formatBV, formatINR } from "@/lib/format"
+import { useSession } from "@/lib/session"
 import { cn } from "@/lib/utils"
+import type { Gender } from "@/types/user"
 
 const TOTAL_SLOTS = 20
-/** DUMMY: how long the fake payment "processes" before succeeding. */
-const PAYMENT_DELAY_MS = 1800
+
+/** Form labels → the backend's gender values. */
+const GENDER_API: Record<(typeof GENDERS)[number], Gender> = {
+  Male: "MALE",
+  Female: "FEMALE",
+  Other: "OTHER",
+}
 
 function Step({ n, title, children }: { n: number; title: string; children: ReactNode }) {
   return (
@@ -67,47 +64,16 @@ function Step({ n, title, children }: { n: number; title: string; children: Reac
   )
 }
 
-function FieldError({ message }: { message?: string }) {
-  return message ? (
-    <p role="alert" className="text-xs text-danger">
-      {message}
-    </p>
-  ) : null
-}
-
-function Field({
-  label,
-  htmlFor,
-  error,
-  className,
-  children,
-}: {
-  label: string
-  htmlFor: string
-  error?: string
-  className?: string
-  children: ReactNode
-}) {
-  return (
-    <div className={cn("min-w-0 space-y-2", className)}>
-      <Label htmlFor={htmlFor} className="eyebrow">
-        {label}
-      </Label>
-      {children}
-      <FieldError message={error} />
-    </div>
-  )
-}
-
 const textareaClass =
   "min-h-20 rounded-xl bg-field px-3.5 py-2.5 focus-visible:border-gold/60 focus-visible:ring-gold/20"
 
 /** Empty form (gender is left unset so the partner has to pick one). */
-function blankForm(slot: number, newId: string): DefaultValues<PlacementInput> {
+function blankForm(slot: number, upline: string): DefaultValues<PlacementInput> {
   return {
     fullName: "",
     age: "",
     mobile: "",
+    email: "",
     aadhaar: "",
     pan: "",
     address: "",
@@ -117,8 +83,7 @@ function blankForm(slot: number, newId: string): DefaultValues<PlacementInput> {
     area: "",
     password: "",
     confirmPassword: "",
-    newId,
-    upline: defaultUpline.id,
+    upline,
     slot,
     productSku: "",
     shipName: "",
@@ -129,43 +94,28 @@ function blankForm(slot: number, newId: string): DefaultValues<PlacementInput> {
     shipCity: "",
     shipState: "",
     shipPincode: "",
-    paymentMethod: PAYMENT_METHODS[0],
     agree: false,
   }
 }
 
-/** IDs that can never be given to a new partner: Root Admin and the three Founders. */
-const RESERVED_IDS = ["VED108", "VED000001", "VED000002", "VED000003"]
-
-type Placed = { slot: number; id: string }
-type Completed = { values: PlacementValues; result: PlacementResult }
+type Completed = { values: PlacementValues; partner: RegisteredPartner }
 
 export function PartnerManualPlacementPage() {
-  // Partners placed from this screen (demo only) — they take their slot and their ID.
-  const [placed, setPlaced] = useState<Placed[]>([])
-  const takenBySlot = new Map<number, string>(takenSlots.map((id, i) => [i + 1, id]))
-  placed.forEach((p) => takenBySlot.set(p.slot, p.id))
+  // The new partner is always placed under the signed-in user (backend: register-downline).
+  const me = useSession((s) => s.user)
+  const slotsQuery = useMySlots()
+  const registerDownline = useRegisterDownline()
+
+  const takenBySlot = new Map<number, string>(
+    (slotsQuery.data?.filledSlots ?? []).map((f) => [f.slotNumber, f.partner.vedId]),
+  )
   const freeSlots = Array.from({ length: TOTAL_SLOTS }, (_, i) => i + 1).filter(
     (n) => !takenBySlot.has(n),
   )
-  const firstFreeSlot = freeSlots[0] ?? TOTAL_SLOTS + 1
+  const firstFreeSlot = freeSlots[0] ?? 1
+  const slotsUsed = slotsQuery.data?.totalFilled ?? takenBySlot.size
+  const allSlotsFull = !!slotsQuery.data && freeSlots.length === 0
 
-  // IDs already in use (sample data + this session).
-  const usedIds = new Set([
-    ...RESERVED_IDS,
-    defaultUpline.id,
-    ...takenSlots,
-    ...placed.map((p) => p.id),
-  ])
-  // Free slots get the next unused IDs in order: 1st free slot → next ID, 2nd → the one after…
-  const slotIds = new Map<number, string>()
-  for (let i = 0, seq = 0; i < freeSlots.length; seq++) {
-    const id = previewNextId(seq)
-    if (!usedIds.has(id)) slotIds.set(freeSlots[i++], id)
-  }
-  const idForSlot = (n: number) => slotIds.get(n) ?? previewNextId(0)
-
-  const [phase, setPhase] = useState<"form" | "processing" | "success">("form")
   const [completed, setCompleted] = useState<Completed | null>(null)
   const [shipSameAsRegistered, setShipSameAsRegistered] = useState(false)
 
@@ -180,37 +130,23 @@ export function PartnerManualPlacementPage() {
     formState: { errors },
   } = useForm<PlacementInput, unknown, PlacementValues>({
     resolver: zodResolver(placementSchema),
-    defaultValues: blankForm(firstFreeSlot, idForSlot(firstFreeSlot)),
+    defaultValues: blankForm(firstFreeSlot, me?.vedId ?? ""),
   })
 
-  const [
-    slot,
-    upline,
-    productSku,
-    paymentMethod,
-    regAddress,
-    regCity,
-    regState,
-    regPincode,
-    typedNewId,
-    regArea,
-    shipPincode,
-  ] = useWatch({
-    control,
-    name: [
-      "slot",
-      "upline",
-      "productSku",
-      "paymentMethod",
-      "address",
-      "city",
-      "state",
-      "pincode",
-      "newId",
-      "area",
-      "shipPincode",
-    ],
-  })
+  const [slot, productSku, regAddress, regCity, regState, regPincode, regArea, shipPincode] =
+    useWatch({
+      control,
+      name: ["slot", "productSku", "address", "city", "state", "pincode", "area", "shipPincode"],
+    })
+
+  // Once the real slots arrive, move the selection off a slot that is already taken.
+  useEffect(() => {
+    if (slotsQuery.data && takenBySlot.has(getValues("slot"))) {
+      setValue("slot", firstFreeSlot)
+    }
+    // takenBySlot / firstFreeSlot are derived from slotsQuery.data
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [slotsQuery.data])
 
   // Pincode → city / state / areas. A found pincode fills City and State (still editable).
   const regLookup = usePincodeLookup(regPincode ?? "")
@@ -230,19 +166,7 @@ export function PartnerManualPlacementPage() {
     setValue("shipState", info.state, { shouldValidate: true })
     setValue("shipArea", "")
   }, [shipLookup.data, shipSameAsRegistered, setValue])
-  const uplineKnown = (upline ?? "").trim().toUpperCase() === defaultUpline.id
   const product = products.find((p) => p.sku === productSku)
-  const slotsUsed = Math.min(takenBySlot.size, TOTAL_SLOTS)
-
-  const slotId = idForSlot(slot)
-  const chosenId = (typedNewId ?? "").trim().toUpperCase()
-  const newId = /^VED\d{6}$/.test(chosenId) ? chosenId : slotId
-
-  /** Picking a slot fills New ID with that slot's ID in the sequence. */
-  const chooseSlot = (n: number) => {
-    setValue("slot", n, { shouldValidate: true })
-    setValue("newId", idForSlot(n), { shouldValidate: true })
-  }
 
   /** "Same as registered address" → the registered name, mobile and address become the shipping ones. */
   const copyRegisteredToShipping = () => {
@@ -257,31 +181,31 @@ export function PartnerManualPlacementPage() {
   }
 
   const onValid = (values: PlacementValues) => {
-    if (values.upline !== defaultUpline.id) {
-      setError("upline", { message: "No partner with this ID in your downline" })
-      return
-    }
-    if (values.newId && usedIds.has(values.newId)) {
-      setError("newId", {
-        message: `${values.newId} is already in use — pick another slot`,
-      })
-      return
-    }
     if (takenBySlot.has(values.slot)) {
       setError("slot", { message: `Slot ${values.slot} is already taken` })
       return
     }
-    const vedoraId = values.newId || idForSlot(values.slot)
-    setPhase("processing")
-    // DUMMY: stands in for the placement API + PhonePe payment.
-    setTimeout(() => {
-      const result = { ...dummyPlacementResult(placed.length), vedoraId }
-      setPlaced((prev) => [...prev, { slot: values.slot, id: vedoraId }])
-      setCompleted({ values, result })
-      setPhase("success")
-      toast.success(`Payment successful — ${values.fullName} placed as ${result.vedoraId}`)
-      window.scrollTo({ top: 0, behavior: "smooth" })
-    }, PAYMENT_DELAY_MS)
+    registerDownline.mutate(
+      {
+        name: values.fullName,
+        email: values.email,
+        mobile: toMobile10(values.mobile),
+        password: values.password,
+        slotNumber: values.slot,
+        gender: GENDER_API[values.gender],
+        addressLine1: values.address,
+        addressLine2: values.area || undefined,
+        city: values.city,
+        state: values.state,
+        pincode: values.pincode,
+      },
+      {
+        onSuccess: ({ partner }) => {
+          setCompleted({ values, partner })
+          window.scrollTo({ top: 0, behavior: "smooth" })
+        },
+      },
+    )
   }
 
   const submit = (e: FormEvent<HTMLFormElement>) => {
@@ -293,28 +217,25 @@ export function PartnerManualPlacementPage() {
   }
 
   const startOver = () => {
-    reset(blankForm(firstFreeSlot, idForSlot(firstFreeSlot)))
+    reset(blankForm(firstFreeSlot, me?.vedId ?? ""))
     setShipSameAsRegistered(false)
     setCompleted(null)
-    setPhase("form")
     window.scrollTo({ top: 0, behavior: "smooth" })
   }
 
-  if (phase === "success" && completed) {
+  if (completed) {
     const done = products.find((p) => p.sku === completed.values.productSku) ?? products[0]
     return (
       <>
         <PageHeader
           title="Manual Placement"
-          subtitle="Partner placed · payment received · joining order created"
+          subtitle="Partner registered and placed in your tree"
         />
         <PageBody>
           <PlacementSuccess
+            partner={completed.partner}
             values={completed.values}
             product={done}
-            result={completed.result}
-            upline={defaultUpline}
-            uplineIsYou
             onPlaceAnother={startOver}
           />
         </PageBody>
@@ -385,7 +306,7 @@ export function PartnerManualPlacementPage() {
                 </Field>
               </div>
 
-              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <div className="grid gap-3 sm:grid-cols-3">
                 <Field label="Mobile" htmlFor="mobile" error={errors.mobile?.message}>
                   <Input
                     id="mobile"
@@ -396,6 +317,26 @@ export function PartnerManualPlacementPage() {
                     {...register("mobile")}
                   />
                 </Field>
+                <Field label="Email" htmlFor="email" error={errors.email?.message}>
+                  <Input
+                    id="email"
+                    type="email"
+                    autoComplete="off"
+                    aria-invalid={!!errors.email}
+                    {...register("email")}
+                  />
+                </Field>
+                <Field label="New ID" htmlFor="newId">
+                  <Input
+                    id="newId"
+                    readOnly
+                    tabIndex={-1}
+                    value="Assigned by system"
+                    className="border-gold/40 bg-gold/10 font-mono text-gold"
+                  />
+                </Field>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2">
                 <Field label="Aadhaar number" htmlFor="aadhaar" error={errors.aadhaar?.message}>
                   <Input
                     id="aadhaar"
@@ -416,16 +357,6 @@ export function PartnerManualPlacementPage() {
                     className="font-mono uppercase placeholder:normal-case"
                     aria-invalid={!!errors.pan}
                     {...register("pan")}
-                  />
-                </Field>
-                <Field label="New ID" htmlFor="newId" error={errors.newId?.message}>
-                  <Input
-                    id="newId"
-                    readOnly
-                    tabIndex={-1}
-                    className="border-gold/40 bg-gold/10 font-mono text-gold"
-                    aria-invalid={!!errors.newId}
-                    {...register("newId")}
                   />
                 </Field>
               </div>
@@ -510,34 +441,30 @@ export function PartnerManualPlacementPage() {
                 </Field>
               </div>
               <p className="text-[0.6875rem] text-muted-foreground">
-                New ID follows the slot you pick (step 2) · one PAN and one Aadhaar can hold only
-                one VEDORA ID · the partner signs in with this ID and password.
+                The VEDORA ID is created by the system when you register · the partner signs in with
+                that ID and this password.
               </p>
             </Step>
 
             <Step n={2} title="Upline & slot">
               <div className="grid gap-3 sm:grid-cols-2">
-                <Field label="Upline VEDORA ID" htmlFor="upline" error={errors.upline?.message}>
+                <Field label="Upline VEDORA ID" htmlFor="upline">
                   <div className="relative">
                     <Input
                       id="upline"
-                      className="border-gold/50 pr-24 font-mono uppercase"
-                      aria-invalid={!!errors.upline}
+                      readOnly
+                      tabIndex={-1}
+                      className="border-gold/50 pr-20 font-mono uppercase"
                       {...register("upline")}
                     />
-                    <span
-                      className={cn(
-                        "pointer-events-none absolute inset-y-0 right-3.5 flex items-center text-xs font-medium",
-                        uplineKnown ? "text-success" : "text-muted-foreground",
-                      )}
-                    >
-                      {uplineKnown ? "Valid ✓" : "Not found"}
+                    <span className="pointer-events-none absolute inset-y-0 right-3.5 flex items-center text-xs font-medium text-success">
+                      You ✓
                     </span>
                   </div>
                 </Field>
                 <div className="self-end rounded-xl border border-border bg-field/60 px-3.5 py-2.5">
                   <div className="mb-1.5 flex items-center justify-between text-xs">
-                    <span className="text-foreground/85">{defaultUpline.name}</span>
+                    <span className="text-foreground/85">{me?.name}</span>
                     <span className="font-medium text-success">
                       {TOTAL_SLOTS - slotsUsed} of {TOTAL_SLOTS} free
                     </span>
@@ -562,53 +489,57 @@ export function PartnerManualPlacementPage() {
                     </span>
                   </p>
                 </div>
-                <div className="grid grid-cols-5 gap-1.5 sm:grid-cols-10">
-                  {Array.from({ length: TOTAL_SLOTS }, (_, i) => i + 1).map((n) => {
-                    const takenBy = takenBySlot.get(n)
-                    const selected = n === slot
-                    return (
-                      <button
-                        key={n}
-                        type="button"
-                        disabled={!!takenBy}
-                        aria-pressed={selected}
-                        aria-label={
-                          takenBy
-                            ? `Slot ${n}, taken by ${takenBy}`
-                            : selected
-                              ? `Slot ${n}, selected for ${newId}`
-                              : `Slot ${n}, free`
-                        }
-                        title={takenBy ? `Slot ${n} · ${takenBy}` : `Slot ${n} · free`}
-                        onClick={() => chooseSlot(n)}
-                        className={cn(
-                          "flex h-12 min-w-0 flex-col items-center justify-center gap-0.5 rounded-lg border px-0.5 text-xs font-medium tabular-nums transition-colors",
-                          takenBy && "border-border bg-field/70 text-muted-foreground/70",
-                          !takenBy &&
-                            !selected &&
-                            "border-dashed border-gold/40 text-gold hover:bg-gold/10",
-                          selected &&
-                            "border-gold bg-gold text-primary-foreground ring-3 ring-gold/25",
-                        )}
-                      >
-                        {String(n).padStart(2, "0")}
-                        <span
+                <QueryState query={slotsQuery} rows={2}>
+                  <div className="grid grid-cols-5 gap-1.5 sm:grid-cols-10">
+                    {Array.from({ length: TOTAL_SLOTS }, (_, i) => i + 1).map((n) => {
+                      const takenBy = takenBySlot.get(n)
+                      const selected = n === slot && !takenBy
+                      return (
+                        <button
+                          key={n}
+                          type="button"
+                          disabled={!!takenBy}
+                          aria-pressed={selected}
+                          aria-label={
+                            takenBy
+                              ? `Slot ${n}, taken by ${takenBy}`
+                              : selected
+                                ? `Slot ${n}, selected for the new partner`
+                                : `Slot ${n}, free`
+                          }
+                          title={takenBy ? `Slot ${n} · ${takenBy}` : `Slot ${n} · free`}
+                          onClick={() => setValue("slot", n, { shouldValidate: true })}
                           className={cn(
-                            "max-w-full truncate font-mono text-[0.5625rem] leading-none",
-                            takenBy ? "opacity-70" : selected ? "font-bold" : "opacity-60",
+                            "flex h-12 min-w-0 flex-col items-center justify-center gap-0.5 rounded-lg border px-0.5 text-xs font-medium tabular-nums transition-colors",
+                            takenBy && "border-border bg-field/70 text-muted-foreground/70",
+                            !takenBy &&
+                              !selected &&
+                              "border-dashed border-gold/40 text-gold hover:bg-gold/10",
+                            selected &&
+                              "border-gold bg-gold text-primary-foreground ring-3 ring-gold/25",
                           )}
                         >
-                          {takenBy ?? (selected ? newId : idForSlot(n))}
-                        </span>
-                      </button>
-                    )
-                  })}
-                </div>
+                          {String(n).padStart(2, "0")}
+                          {takenBy || selected ? (
+                            <span
+                              className={cn(
+                                "max-w-full truncate font-mono text-[0.5625rem] leading-none",
+                                takenBy ? "opacity-70" : "font-bold",
+                              )}
+                            >
+                              {takenBy ?? "New"}
+                            </span>
+                          ) : null}
+                        </button>
+                      )
+                    })}
+                  </div>
+                </QueryState>
                 <FieldError message={errors.slot?.message} />
                 <p className="mt-2 text-[0.6875rem] text-muted-foreground">
-                  Grey slots show who is in them · free slots show the ID the next partner there
-                  will get · picking a slot fills New ID · slots 1–20 are BV-eligible — a 21st
-                  partner stays valid in the tree but earns this sponsor no BV level income.
+                  {allSlotsFull
+                    ? "All 20 slots under you are taken — the backend allows 20 direct partners."
+                    : "Grey slots show who is in them · pick a free slot for the new partner · slots 1–20 are BV-eligible."}
                 </p>
               </div>
             </Step>
@@ -761,7 +692,7 @@ export function PartnerManualPlacementPage() {
           </div>
 
           <div className="min-w-0 xl:sticky xl:top-24 xl:self-start">
-            <Step n={5} title="Payment & confirm">
+            <Step n={5} title="Confirm">
               <dl className="space-y-2.5 rounded-xl border border-border bg-field/60 p-3.5 text-[0.8125rem]">
                 <div className="flex justify-between gap-4">
                   <dt className="text-muted-foreground">Product</dt>
@@ -775,54 +706,23 @@ export function PartnerManualPlacementPage() {
                 </div>
                 <div className="flex justify-between gap-4">
                   <dt className="text-muted-foreground">New ID</dt>
-                  <dd>
-                    <MonoId tone="gold">{newId}</MonoId>
-                  </dd>
+                  <dd className="text-muted-foreground">Assigned by system</dd>
                 </div>
                 <div className="flex justify-between gap-4">
                   <dt className="text-muted-foreground">Placement</dt>
                   <dd className="text-right">
-                    Slot {slot} under <MonoId tone="gold">{defaultUpline.id}</MonoId>
+                    Slot {slot} under <MonoId tone="gold">{me?.vedId}</MonoId>
                   </dd>
                 </div>
                 <div className="flex justify-between gap-4">
-                  <dt className="text-muted-foreground">BV generated</dt>
+                  <dt className="text-muted-foreground">BV on joining order</dt>
                   <dd className="font-mono text-gold">{formatBV(product?.bv ?? 1000)}</dd>
                 </div>
                 <div className="flex items-baseline justify-between gap-4 border-t border-border/70 pt-2.5">
-                  <dt className="font-medium">Total payable</dt>
+                  <dt className="font-medium">Joining order</dt>
                   <dd className="font-display text-2xl">{formatINR(product?.price ?? 1999)}</dd>
                 </div>
               </dl>
-
-              <div className="space-y-2">
-                <p className="eyebrow">Payment method</p>
-                <Controller
-                  control={control}
-                  name="paymentMethod"
-                  render={({ field }) => (
-                    <div role="radiogroup" aria-label="Payment method" className="grid gap-2">
-                      {PAYMENT_METHODS.map((method) => (
-                        <button
-                          key={method}
-                          type="button"
-                          role="radio"
-                          aria-checked={field.value === method}
-                          onClick={() => field.onChange(method)}
-                          className={cn(
-                            "rounded-xl border px-3 py-2.5 text-left text-xs font-medium transition-colors",
-                            field.value === method
-                              ? "border-gold/60 bg-gold/10 text-gold-light"
-                              : "border-border text-muted-foreground hover:bg-muted/50",
-                          )}
-                        >
-                          {method}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                />
-              </div>
 
               <Controller
                 control={control}
@@ -848,31 +748,22 @@ export function PartnerManualPlacementPage() {
               />
               <FieldError message={errors.agree?.message} />
 
-              <Button type="submit" size="lg" className="w-full">
-                Pay {formatINR(product?.price ?? 1999)} &amp; confirm
+              <Button
+                type="submit"
+                size="lg"
+                className="w-full"
+                disabled={registerDownline.isPending || allSlotsFull || !slotsQuery.data}
+              >
+                {registerDownline.isPending ? "Registering…" : "Register partner"}
               </Button>
-              <p className="text-center text-[0.625rem] text-muted-foreground">
-                Demo mode — no real payment is taken and the delivery is simulated.
+              <p className="text-center text-[0.625rem] leading-relaxed text-muted-foreground">
+                Registers the partner in the backend. The joining order and its payment are not in
+                the backend yet — the partner can order from Products after signing in.
               </p>
             </Step>
           </div>
         </form>
       </PageBody>
-
-      <Dialog open={phase === "processing"}>
-        <DialogContent showCloseButton={false} onEscapeKeyDown={(e) => e.preventDefault()}>
-          <DialogHeader>
-            <DialogTitle>Processing payment</DialogTitle>
-            <DialogDescription>
-              {formatINR(product?.price ?? 1999)} via {paymentMethod} — please don&apos;t close this
-              page.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="flex justify-center py-4">
-            <Loader2 className="size-8 animate-spin text-gold" aria-label="Processing" />
-          </div>
-        </DialogContent>
-      </Dialog>
     </>
   )
 }

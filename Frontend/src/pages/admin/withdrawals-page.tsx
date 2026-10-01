@@ -1,115 +1,125 @@
+import { useQueryClient } from "@tanstack/react-query"
 import { useState } from "react"
 import { toast } from "sonner"
 
+import { ConfirmDialog } from "@/components/common/confirm-dialog"
 import { DataTable, type Column } from "@/components/common/data-table"
-import { FilterSelect } from "@/components/common/filter-select"
 import { FilterTabs } from "@/components/common/filter-tabs"
 import { MonoId } from "@/components/common/mono-id"
 import { PageBody, PageHeader } from "@/components/common/page-header"
 import { Panel } from "@/components/common/panel"
+import { QueryState } from "@/components/common/query-state"
 import { StatCard, StatGrid } from "@/components/common/stat-card"
+import { StatusPill } from "@/components/common/status-pill"
 import { TablePagination } from "@/components/common/table-pagination"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
+import { approveWithdrawal, rejectWithdrawal } from "@/features/wallet/api"
+import { RejectWithdrawalDialog } from "@/features/wallet/components/reject-withdrawal-dialog"
+import { maskedBank, withdrawalPill } from "@/features/wallet/labels"
 import {
-  withdrawalRequests as initialRequests,
-  type WithdrawalRequest,
-  type WithdrawalStatus,
-} from "@/features/withdrawals/mock-data"
+  useAllWithdrawals,
+  useApproveWithdrawal,
+  useRejectWithdrawal,
+  walletKeys,
+} from "@/features/wallet/queries"
+import type { AdminWithdrawal } from "@/features/wallet/types"
+import { apiErrorMessage } from "@/lib/api"
+import { formatDateTime } from "@/lib/date"
 import { formatINR } from "@/lib/format"
+import { paiseToRupees } from "@/lib/money"
 
-const TABS = [
-  { value: "pending", label: "Pending" },
-  { value: "approved", label: "Approved" },
-  { value: "rejected", label: "Rejected" },
+type Tab = "PENDING" | "APPROVED" | "REJECTED"
+const TABS: { value: Tab; label: string }[] = [
+  { value: "PENDING", label: "Pending" },
+  { value: "APPROVED", label: "Approved" },
+  { value: "REJECTED", label: "Rejected" },
 ]
 
-function matchesQuery(r: WithdrawalRequest, query: string): boolean {
-  const q = query.trim().toLowerCase()
+const wdNo = (id: number) => `WD-${String(id).padStart(5, "0")}`
+const sum = (list: AdminWithdrawal[]) => list.reduce((s, w) => s + paiseToRupees(w.amount), 0)
+
+function matchesQuery(r: AdminWithdrawal, query: string): boolean {
+  const q = query.trim().toLowerCase().replace(/\s+/g, "")
   if (!q) return true
   return (
-    r.id.toLowerCase().includes(q) ||
-    r.partner.toLowerCase().includes(q) ||
-    r.partnerId.toLowerCase().replace(/\s+/g, "").includes(q.replace(/\s+/g, ""))
+    wdNo(r.id).toLowerCase().includes(q) ||
+    r.user.name.toLowerCase().replace(/\s+/g, "").includes(q) ||
+    r.user.vedId.toLowerCase().includes(q)
   )
 }
 
 export function AdminWithdrawalsPage() {
-  const [requests, setRequests] = useState(initialRequests)
-  const [tab, setTab] = useState<WithdrawalStatus>("pending")
+  const withdrawals = useAllWithdrawals()
+  const approve = useApproveWithdrawal()
+  const reject = useRejectWithdrawal()
+  const queryClient = useQueryClient()
+  const [tab, setTab] = useState<Tab>("PENDING")
   const [query, setQuery] = useState("")
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set())
+  const [bulkBusy, setBulkBusy] = useState(false)
 
-  const pendingTotal = requests
-    .filter((r) => r.status === "pending")
-    .reduce((sum, r) => sum + r.amount, 0)
-  const tabCounts = {
-    pending: requests.filter((r) => r.status === "pending").length,
-    approved: requests.filter((r) => r.status === "approved").length,
-    rejected: requests.filter((r) => r.status === "rejected").length,
-  }
+  const all = withdrawals.data ?? []
+  const byStatus = (s: Tab) => all.filter((w) => w.status === s)
+  const pending = byStatus("PENDING")
+  const rows = byStatus(tab).filter((r) => matchesQuery(r, query))
+  const selectedRows = rows.filter((r) => selectedIds.has(r.id))
+  const allSelected = rows.length > 0 && selectedRows.length === rows.length
 
-  const rows = requests.filter((r) => r.status === tab && matchesQuery(r, query))
-  const allSelected = rows.length > 0 && rows.every((r) => selectedIds.has(r.id))
-  const someSelected = rows.some((r) => selectedIds.has(r.id))
-
-  const setStatus = (id: string, status: WithdrawalStatus) => {
-    setRequests((prev) => prev.map((r) => (r.id === id ? { ...r, status } : r)))
-    setSelectedIds((prev) => {
-      const next = new Set(prev)
-      next.delete(id)
-      return next
-    })
-  }
-
-  const toggleOne = (id: string) =>
+  const toggleOne = (id: number) =>
     setSelectedIds((prev) => {
       const next = new Set(prev)
       if (next.has(id)) next.delete(id)
       else next.add(id)
       return next
     })
+  const toggleAll = () => setSelectedIds(allSelected ? new Set() : new Set(rows.map((r) => r.id)))
 
-  const toggleAll = () =>
-    setSelectedIds((prev) => {
-      if (allSelected) {
-        const next = new Set(prev)
-        rows.forEach((r) => next.delete(r.id))
-        return next
+  /** One request at a time — the backend has no bulk endpoint. */
+  const bulk = async (action: "approve" | "reject", remarks?: string) => {
+    setBulkBusy(true)
+    let done = 0
+    for (const r of selectedRows) {
+      try {
+        if (action === "approve") await approveWithdrawal(r.id)
+        else await rejectWithdrawal({ id: r.id, remarks })
+        done++
+      } catch (error) {
+        toast.error(`${wdNo(r.id)}: ${apiErrorMessage(error)}`)
       }
-      return new Set([...prev, ...rows.map((r) => r.id)])
-    })
-
-  const bulkAction = (status: "approved" | "rejected") => {
-    const ids = rows.filter((r) => selectedIds.has(r.id)).map((r) => r.id)
-    setRequests((prev) => prev.map((r) => (ids.includes(r.id) ? { ...r, status } : r)))
+    }
+    await queryClient.invalidateQueries({ queryKey: walletKeys.all })
     setSelectedIds(new Set())
-    toast.success(`${ids.length} request${ids.length === 1 ? "" : "s"} ${status}`)
+    setBulkBusy(false)
+    if (done) toast.success(`${done} request${done === 1 ? "" : "s"} ${action}d`)
   }
 
-  const selectColumn: Column<WithdrawalRequest> = {
+  const selectColumn: Column<AdminWithdrawal> = {
     key: "select",
     header: "Select",
     cell: (r) => (
       <Checkbox
         checked={selectedIds.has(r.id)}
         onCheckedChange={() => toggleOne(r.id)}
-        aria-label={`Select ${r.id}`}
+        aria-label={`Select ${wdNo(r.id)}`}
       />
     ),
   }
 
-  const columns: Column<WithdrawalRequest>[] = [
-    ...(tab === "pending" ? [selectColumn] : []),
+  const columns: Column<AdminWithdrawal>[] = [
+    ...(tab === "PENDING" ? [selectColumn] : []),
     {
       key: "request",
       header: "Request",
       primary: true,
       cell: (r) => (
-        <MonoId tone="gold" className="text-[0.8125rem]">
-          {r.id}
-        </MonoId>
+        <div>
+          <MonoId tone="gold" className="text-[0.8125rem]">
+            {wdNo(r.id)}
+          </MonoId>
+          <p className="text-[0.6875rem] text-muted-foreground">{formatDateTime(r.createdAt)}</p>
+        </div>
       ),
     },
     {
@@ -117,9 +127,9 @@ export function AdminWithdrawalsPage() {
       header: "Partner",
       cell: (r) => (
         <div>
-          <p className="font-medium">{r.partner}</p>
+          <p className="font-medium">{r.user.name}</p>
           <MonoId tone="muted" className="text-[0.6875rem]">
-            {r.partnerId}
+            {r.user.vedId}
           </MonoId>
         </div>
       ),
@@ -127,51 +137,58 @@ export function AdminWithdrawalsPage() {
     {
       key: "bank",
       header: "Bank",
-      cell: (r) => <span className="font-mono text-xs text-muted-foreground">{r.bank}</span>,
-    },
-    {
-      key: "wallet",
-      header: "Wallet bal.",
       cell: (r) => (
-        <span className="font-mono text-xs text-muted-foreground">
-          {formatINR(r.walletBalance)}
-        </span>
+        <div className="font-mono text-xs text-muted-foreground">
+          <p>{maskedBank(r.bank)}</p>
+          <p>{r.bank?.ifscCode}</p>
+        </div>
       ),
     },
     {
       key: "amount",
       header: "Amount",
-      cell: (r) => <span className="font-mono font-medium">{formatINR(r.amount)}</span>,
+      cell: (r) => (
+        <span className="font-mono font-medium">{formatINR(paiseToRupees(r.amount))}</span>
+      ),
     },
     {
       key: "actions",
       header: "Action",
       actions: true,
       cell: (r) =>
-        r.status === "pending" ? (
+        r.status === "PENDING" ? (
           <>
-            <Button
-              size="sm"
-              onClick={() => {
-                setStatus(r.id, "approved")
-                toast.success(`${r.id} approved`)
-              }}
-            >
-              Approve
-            </Button>
-            <Button
-              variant="destructive"
-              size="sm"
-              onClick={() => {
-                setStatus(r.id, "rejected")
-                toast.success(`${r.id} rejected`)
-              }}
-            >
-              Reject
-            </Button>
+            <ConfirmDialog
+              trigger={
+                <Button size="sm" disabled={approve.isPending || bulkBusy}>
+                  Approve
+                </Button>
+              }
+              title={`Approve ${wdNo(r.id)}?`}
+              description={`${formatINR(paiseToRupees(r.amount))} to ${r.user.name} (${maskedBank(r.bank)}).`}
+              confirmLabel="Approve"
+              onConfirm={() => approve.mutate(r.id)}
+            />
+            <RejectWithdrawalDialog
+              trigger={
+                <Button variant="destructive" size="sm" disabled={reject.isPending || bulkBusy}>
+                  Reject
+                </Button>
+              }
+              what={wdNo(r.id)}
+              busy={reject.isPending}
+              onReject={(remarks) => reject.mutate({ id: r.id, remarks: remarks || undefined })}
+            />
           </>
         ) : (
-          <span className="text-xs text-muted-foreground capitalize">{r.status}</span>
+          <div className="md:text-right">
+            <StatusPill variant={withdrawalPill[r.status].variant}>
+              {withdrawalPill[r.status].label}
+            </StatusPill>
+            <p className="mt-1 text-[0.6875rem] text-muted-foreground">
+              {r.adminRemarks ?? (r.adminUser ? `by ${r.adminUser.vedId}` : "")}
+            </p>
+          </div>
         ),
     },
   ]
@@ -180,7 +197,7 @@ export function AdminWithdrawalsPage() {
     <>
       <PageHeader
         title="Withdrawal Requests"
-        subtitle={`${tabCounts.pending} pending · ${formatINR(pendingTotal)} awaiting approval`}
+        subtitle={`${pending.length} pending · ${formatINR(sum(pending))} awaiting approval`}
         actions={
           <Input
             type="search"
@@ -193,65 +210,91 @@ export function AdminWithdrawalsPage() {
         }
       />
       <PageBody>
-        <StatGrid cols={5} className="[&>*:last-child]:col-span-2 lg:[&>*:last-child]:col-span-1">
-          <StatCard label="Total partners" value="6,482" />
-          <StatCard label="Joined today" value="64" />
-          <StatCard label="BV this month" value="18.4L" />
-          <StatCard label="Commission paid" value="₹11.0L" />
-          <StatCard label="Pending payouts" value={formatINR(pendingTotal)} />
+        <StatGrid>
+          <StatCard
+            label="Pending requests"
+            value={pending.length}
+            onClick={() => setTab("PENDING")}
+          />
+          <StatCard label="Pending payouts" value={formatINR(sum(pending))} />
+          <StatCard
+            label="Approved"
+            value={formatINR(sum(byStatus("APPROVED")))}
+            hint={`${byStatus("APPROVED").length} requests`}
+            onClick={() => setTab("APPROVED")}
+          />
+          <StatCard
+            label="Rejected"
+            value={byStatus("REJECTED").length}
+            onClick={() => setTab("REJECTED")}
+          />
         </StatGrid>
 
         <Panel>
           <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
             <FilterTabs
               aria-label="Withdrawal status"
-              tabs={TABS.map((t) => ({
-                ...t,
-                label: `${t.label} ${tabCounts[t.value as WithdrawalStatus]}`,
-              }))}
+              tabs={TABS.map((t) => ({ ...t, label: `${t.label} ${byStatus(t.value).length}` }))}
               value={tab}
-              onValueChange={(v) => setTab(v as WithdrawalStatus)}
+              onValueChange={(v) => {
+                setTab(v as Tab)
+                setSelectedIds(new Set())
+              }}
             />
-            <div className="flex items-center gap-3">
-              <FilterSelect label="Gateway" options={["PhonePe"]} />
-              {tab === "pending" ? (
-                <label className="flex cursor-pointer items-center gap-2 text-xs text-muted-foreground">
-                  <Checkbox
-                    checked={someSelected && !allSelected ? "indeterminate" : allSelected}
-                    onCheckedChange={toggleAll}
-                    aria-label="Select all pending requests"
-                  />
-                  Select all
-                </label>
-              ) : null}
-            </div>
+            {tab === "PENDING" ? (
+              <label className="flex cursor-pointer items-center gap-2 text-xs text-muted-foreground">
+                <Checkbox
+                  checked={selectedRows.length > 0 && !allSelected ? "indeterminate" : allSelected}
+                  onCheckedChange={toggleAll}
+                  aria-label="Select all pending requests"
+                />
+                Select all
+              </label>
+            ) : null}
           </div>
 
-          {tab === "pending" && selectedIds.size > 0 ? (
+          {tab === "PENDING" && selectedRows.length > 0 ? (
             <div className="mb-3 flex items-center justify-end gap-2 border-b border-border/70 pb-3">
-              <span className="text-xs text-muted-foreground">{selectedIds.size} selected</span>
-              <Button size="sm" onClick={() => bulkAction("approved")}>
-                Approve selected
-              </Button>
-              <Button variant="destructive" size="sm" onClick={() => bulkAction("rejected")}>
-                Reject selected
-              </Button>
+              <span className="text-xs text-muted-foreground">{selectedRows.length} selected</span>
+              <ConfirmDialog
+                trigger={
+                  <Button size="sm" disabled={bulkBusy}>
+                    Approve selected
+                  </Button>
+                }
+                title={`Approve ${selectedRows.length} requests?`}
+                description={`${formatINR(sum(selectedRows))} in total.`}
+                confirmLabel="Approve all"
+                onConfirm={() => void bulk("approve")}
+              />
+              <RejectWithdrawalDialog
+                trigger={
+                  <Button variant="destructive" size="sm" disabled={bulkBusy}>
+                    Reject selected
+                  </Button>
+                }
+                what={`${selectedRows.length} requests`}
+                busy={bulkBusy}
+                onReject={(remarks) => void bulk("reject", remarks || undefined)}
+              />
             </div>
           ) : null}
 
-          <DataTable
-            columns={columns}
-            rows={rows}
-            getRowKey={(r) => r.id}
-            emptyMessage={
-              query.trim() ? `No requests match "${query.trim()}".` : "No requests here."
-            }
-          />
-          <TablePagination
-            key={tab}
-            summary={`Showing ${rows.length} of ${tabCounts[tab]} ${tab} request${tabCounts[tab] === 1 ? "" : "s"}`}
-            pages={1}
-          />
+          <QueryState query={withdrawals} rows={5}>
+            <DataTable
+              columns={columns}
+              rows={rows}
+              getRowKey={(r) => r.id}
+              emptyMessage={
+                query.trim() ? `No requests match "${query.trim()}".` : "No requests here."
+              }
+            />
+            <TablePagination
+              key={tab}
+              summary={`Showing ${rows.length} of ${byStatus(tab).length} ${tab.toLowerCase()} request${byStatus(tab).length === 1 ? "" : "s"}`}
+              pages={1}
+            />
+          </QueryState>
         </Panel>
       </PageBody>
     </>

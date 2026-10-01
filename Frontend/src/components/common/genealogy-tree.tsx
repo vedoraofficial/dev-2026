@@ -1,8 +1,8 @@
-import { ChevronDown, ChevronUp, Plus } from "lucide-react"
+import { ChevronDown, ChevronUp, Loader2, Plus } from "lucide-react"
 import { useEffect, useRef, useState } from "react"
 
 import { MonoId } from "@/components/common/mono-id"
-import type { TreeMember } from "@/features/genealogy/mock-data"
+import type { TreeMember } from "@/features/genealogy/types"
 import { cn } from "@/lib/utils"
 
 /** Every node under `root`, flattened (root itself excluded). */
@@ -25,12 +25,20 @@ const branch =
 
 /** How many members can be open at once. Older ones shrink to just the path you followed. */
 const MAX_OPEN = 3
-/** Sample trees are generated down to Level 5 — nothing deeper to open past that. */
+/** Income runs 5 levels deep — nothing deeper to open past that. */
 const MAX_LEVEL = 5
 /** Members shown in a team row before "+N more". */
 const VISIBLE = 3
 
-const canOpen = (m: TreeMember) => m.level < MAX_LEVEL && m.children.length > 0
+const canOpen = (m: TreeMember) => m.level < MAX_LEVEL && (m.children.length > 0 || !!m.pending)
+
+/** "3 / 20" — or just the slot when the backend didn't send the count. */
+const directLabel = (m: TreeMember) =>
+  m.direct === null
+    ? `Slot ${String(m.slot).padStart(2, "0")}`
+    : m.direct >= 20
+      ? "20 / 20 full"
+      : `${m.direct} / 20`
 
 type TreeState = {
   openPath: string[]
@@ -75,6 +83,22 @@ function TeamRow({ member, only, ...tree }: TreeState & { member: TreeMember; on
     ? member.children.filter((c) => c.id === only)
     : member.children.filter((c, i) => all || i < VISIBLE || tree.openPath.includes(c.id))
   const hidden = member.children.length - list.length
+
+  if (member.children.length === 0) {
+    return (
+      <div className={childRow}>
+        <p className="flex items-center gap-1.5 rounded-xl border border-dashed border-border px-3 py-2 text-[0.6875rem] text-muted-foreground">
+          {member.pending ? (
+            <>
+              <Loader2 className="size-3.5 animate-spin" /> Loading team…
+            </>
+          ) : (
+            "No partners yet"
+          )}
+        </p>
+      </div>
+    )
+  }
 
   return (
     <ul className={childRow}>
@@ -126,9 +150,7 @@ function MemberCard({
           beyondCap ? "text-danger" : "text-muted-foreground",
         )}
       >
-        {beyondCap
-          ? `Slot ${member.slot} · no BV`
-          : `L${member.level} · ${member.direct >= 20 ? "20 / 20 full" : `${member.direct} / 20`}`}
+        {beyondCap ? `Slot ${member.slot} · no BV` : `L${member.level} · ${directLabel(member)}`}
       </p>
       {hasTeam ? (
         <Chevron
@@ -215,7 +237,13 @@ export function GenealogyTree({ root, rootLabel, selectedId, onSelect }: Genealo
           </MonoId>
           <p className="mt-1 font-medium">{rootLabel}</p>
           <p className="mt-1 text-[0.6875rem] text-muted-foreground">
-            {root.direct} / 20 direct · <span className="text-gold">{root.downline} downline</span>
+            {root.direct ?? root.children.length} / 20 direct
+            {root.downline === null ? null : (
+              <>
+                {" "}
+                · <span className="text-gold">{root.downline} downline</span>
+              </>
+            )}
           </p>
         </div>
 

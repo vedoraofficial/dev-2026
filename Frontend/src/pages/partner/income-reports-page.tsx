@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react"
+import { useState } from "react"
 
 import { DataTable, type Column } from "@/components/common/data-table"
 import { FilterSelect } from "@/components/common/filter-select"
@@ -6,130 +6,94 @@ import { FilterTabs } from "@/components/common/filter-tabs"
 import { MonoId } from "@/components/common/mono-id"
 import { PageBody, PageHeader } from "@/components/common/page-header"
 import { Panel } from "@/components/common/panel"
+import { QueryState } from "@/components/common/query-state"
 import { StatCard, StatGrid } from "@/components/common/stat-card"
 import { Button } from "@/components/ui/button"
-import {
-  partnerIncome,
-  partnerIncomeSummary,
-  partnerIncomeTabs,
-  type PartnerIncomeEntry,
-} from "@/features/income/mock-data"
+import { categoryLabel } from "@/features/wallet/labels"
+import { useCommissionIncome } from "@/features/wallet/queries"
+import type { WalletTransaction } from "@/features/wallet/types"
 import { downloadCsv } from "@/lib/csv"
-import { formatINR, formatNumber } from "@/lib/format"
-import { cn } from "@/lib/utils"
+import { formatDate, formatDateTime, startOfMonth } from "@/lib/date"
+import { formatINR } from "@/lib/format"
+import { paiseToRupees } from "@/lib/money"
 
-const excluded = (r: PartnerIncomeEntry) => r.amount === 0
+const PERIODS = ["This month", "Last month", "All time"] as const
+type Period = (typeof PERIODS)[number]
 
-const columns: Column<PartnerIncomeEntry>[] = [
+/** Date range for the backend's fromDate / toDate filters. */
+function rangeFor(period: Period): { fromDate?: string; toDate?: string } {
+  if (period === "All time") return {}
+  const now = new Date()
+  if (period === "This month") return { fromDate: startOfMonth(now) }
+  const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1)
+  return { fromDate: startOfMonth(lastMonth), toDate: startOfMonth(now) }
+}
+
+const TABS = [
+  { value: "all", label: "All Income" },
+  { value: "direct", label: "Direct Sale" },
+  { value: "bv", label: "BV Level" },
+]
+
+const columns: Column<WalletTransaction>[] = [
   {
     key: "date",
     header: "Date",
-    cell: (r) => <span className="text-muted-foreground">{r.date}</span>,
-  },
-  {
-    key: "source",
-    header: "Source partner",
-    primary: true,
-    cell: (r) => <MonoId className="text-[0.8125rem]">{r.source}</MonoId>,
+    cell: (r) => <span className="text-muted-foreground">{formatDateTime(r.createdAt)}</span>,
   },
   {
     key: "type",
     header: "Income type",
-    cell: (r) => (
-      <span className={excluded(r) ? "text-muted-foreground" : undefined}>
-        {r.type}
-        {r.flag ? <span className="text-danger"> — {r.flag}</span> : null}
-      </span>
-    ),
+    primary: true,
+    cell: (r) => <span className="font-medium">{categoryLabel[r.category]}</span>,
   },
   {
-    key: "bv",
-    header: "BV",
-    cell: (r) => (
-      <span className={cn("font-mono text-xs", r.bv === 0 ? "text-gold" : "text-muted-foreground")}>
-        {formatNumber(r.bv)}
-      </span>
-    ),
-  },
-  {
-    key: "level",
-    header: "Level",
-    cell: (r) => (
-      <span
-        className={cn(
-          "font-mono text-xs",
-          excluded(r)
-            ? "text-muted-foreground"
-            : r.level === "—" || r.level === "No new ID"
-              ? "text-muted-foreground"
-              : "text-gold-light",
-        )}
-      >
-        {r.level}
-      </span>
-    ),
+    key: "source",
+    header: "From",
+    cell: (r) =>
+      r.referenceType === "ORDER" && r.referenceId ? (
+        <MonoId className="text-[0.8125rem]">Order #{r.referenceId}</MonoId>
+      ) : (
+        <span className="text-muted-foreground">{r.description ?? "—"}</span>
+      ),
   },
   {
     key: "amount",
     header: "Amount",
     align: "right",
     cell: (r) => (
-      <span className={cn("font-mono", excluded(r) ? "text-danger" : "text-success")}>
-        {excluded(r) ? formatINR(0) : `+${formatINR(r.amount)}`}
-      </span>
+      <span className="font-mono text-success">+{formatINR(paiseToRupees(r.amount))}</span>
     ),
   },
 ]
 
-const periodDateLabels: Record<string, string> = {
-  "This month": "01 Sep – 18 Sep 2026",
-  "Last month": "01 Aug – 31 Aug 2026",
-  Custom: "01 Aug – 18 Sep 2026",
-}
-
 export function PartnerIncomeReportsPage() {
   const [activeTab, setActiveTab] = useState("all")
-  const [period, setPeriod] = useState("This month")
+  const [period, setPeriod] = useState<Period>("This month")
+  const range = rangeFor(period)
+  const income = useCommissionIncome(range)
 
-  // Filter rows based on the selected tab
-  const filteredRows = useMemo(() => {
-    if (activeTab === "all") return partnerIncome
-    if (activeTab === "capped") {
-      return partnerIncome.filter((r) => r.category === "capped" || r.amount === 0 || Boolean(r.flag))
-    }
-    return partnerIncome.filter((r) => r.category === activeTab)
-  }, [activeTab])
-
-  // Earned total displayed in the tab bar
-  const displayedEarned = useMemo(() => {
-    if (activeTab === "all") {
-      return partnerIncomeSummary.reduce((sum, s) => sum + s.amount, 0)
-    }
-    if (activeTab === "direct") {
-      return partnerIncomeSummary.find((s) => s.label === "Direct Sale")?.amount ?? 22000
-    }
-    if (activeTab === "bv") {
-      return partnerIncomeSummary
-        .filter((s) => s.label.startsWith("Level"))
-        .reduce((sum, s) => sum + s.amount, 0)
-    }
-    if (activeTab === "activation") {
-      return filteredRows.reduce((sum, r) => sum + r.amount, 0)
-    }
-    return 0
-  }, [activeTab, filteredRows])
+  const all = income.data?.commissions ?? []
+  const rows = all.filter((r) =>
+    activeTab === "direct"
+      ? r.category === "COMMISSION_DIRECT"
+      : activeTab === "bv"
+        ? r.category !== "COMMISSION_DIRECT"
+        : true,
+  )
+  const earned = rows.reduce((sum, r) => sum + paiseToRupees(r.amount), 0)
+  const levels = income.data?.levels ?? [0, 0, 0, 0, 0]
 
   const handleDownloadCsv = () => {
     downloadCsv(
       `vedora-partner-income-${activeTab}-${period.toLowerCase().replace(/\s+/g, "-")}.csv`,
-      ["Date", "Source Partner", "Income Type", "BV", "Level", "Amount (INR)"],
-      filteredRows.map((r) => [
-        r.date,
-        r.source,
-        r.flag ? `${r.type} (${r.flag})` : r.type,
-        r.bv,
-        r.level,
-        r.amount,
+      ["Date", "Income Type", "Reference", "Description", "Amount (INR)"],
+      rows.map((r) => [
+        formatDate(r.createdAt),
+        categoryLabel[r.category],
+        r.referenceId ? `${r.referenceType ?? ""} ${r.referenceId}`.trim() : "",
+        r.description ?? "",
+        paiseToRupees(r.amount),
       ]),
     )
   }
@@ -138,16 +102,20 @@ export function PartnerIncomeReportsPage() {
     <>
       <PageHeader
         title="Income Reports"
-        subtitle={periodDateLabels[period] ?? "01 Sep – 18 Sep 2026"}
+        subtitle={
+          range.fromDate
+            ? `${formatDate(range.fromDate)} – ${range.toDate ? formatDate(new Date(new Date(range.toDate).getTime() - 864e5).toISOString()) : "today"}`
+            : "All commissions since you joined"
+        }
         actions={
           <>
             <FilterSelect
               label="Period"
-              options={["This month", "Last month", "Custom"]}
+              options={[...PERIODS]}
               defaultValue={period}
-              onValueChange={setPeriod}
+              onValueChange={(v) => setPeriod(v as Period)}
             />
-            <Button variant="outline" onClick={handleDownloadCsv}>
+            <Button variant="outline" onClick={handleDownloadCsv} disabled={rows.length === 0}>
               Download CSV
             </Button>
           </>
@@ -155,57 +123,47 @@ export function PartnerIncomeReportsPage() {
       />
       <PageBody>
         <StatGrid cols={6}>
-          {partnerIncomeSummary.map((s) => {
-            const isDirect = s.label === "Direct Sale"
-            const isLevel = s.label.startsWith("Level")
-            const isHighlight =
-              (activeTab === "direct" && isDirect) ||
-              (activeTab === "bv" && isLevel) ||
-              (activeTab === "all" && s.highlight)
-
-            return (
-              <StatCard
-                key={s.label}
-                highlight={isHighlight}
-                label={s.label}
-                value={formatINR(s.amount)}
-                hint={s.hint}
-                onClick={() => {
-                  if (isDirect) {
-                    setActiveTab("direct")
-                  } else if (isLevel) {
-                    setActiveTab("bv")
-                  }
-                }}
-              />
-            )
-          })}
+          <StatCard
+            highlight={activeTab === "direct" || activeTab === "all"}
+            label="Direct Sale"
+            value={formatINR(income.data?.direct ?? 0)}
+            hint="₹200 per unit your direct team buys"
+            onClick={() => setActiveTab("direct")}
+          />
+          {levels.map((amount, i) => (
+            <StatCard
+              key={i}
+              highlight={activeTab === "bv"}
+              label={`Level ${i + 1}`}
+              value={formatINR(amount)}
+              hint={`${i < 3 ? 10 : 5}% of BV`}
+              onClick={() => setActiveTab("bv")}
+            />
+          ))}
         </StatGrid>
 
         <Panel>
           <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
             <FilterTabs
-              tabs={partnerIncomeTabs}
+              tabs={TABS}
               value={activeTab}
               onValueChange={setActiveTab}
               aria-label="Income type"
             />
             <span className="font-mono text-xs text-gold">
-              {activeTab === "capped"
-                ? `₹0 earned · ${filteredRows.length} excluded`
-                : `${formatINR(displayedEarned)} earned · ${filteredRows.length} entries`}
+              {formatINR(earned)} earned · {rows.length} entries
             </span>
           </div>
-          <DataTable
-            columns={columns}
-            rows={filteredRows}
-            getRowKey={(r) => r.id}
-            rowClassName={(r) => (excluded(r) ? "bg-muted/30" : undefined)}
-            emptyMessage="No entries found for this income category."
-          />
+          <QueryState query={income} rows={5}>
+            <DataTable
+              columns={columns}
+              rows={rows}
+              getRowKey={(r) => r.id}
+              emptyMessage="No commissions in this period yet."
+            />
+          </QueryState>
         </Panel>
       </PageBody>
     </>
   )
 }
-

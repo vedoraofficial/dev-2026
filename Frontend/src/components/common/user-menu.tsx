@@ -1,5 +1,5 @@
 import { LogOut, Settings, UserRound } from "lucide-react"
-import { Link } from "react-router-dom"
+import { Link, useNavigate } from "react-router-dom"
 
 import { ROUTES } from "@/app/routes"
 import { MonoId } from "@/components/common/mono-id"
@@ -14,10 +14,21 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { usePortalUser } from "@/lib/portal-user"
+import { queryClient } from "@/lib/query-client"
+import { useSession } from "@/lib/session"
 
 /** The avatar circle beside the notification bell — opens Profile / Settings / Log out. */
 export function UserMenu() {
   const user = usePortalUser()
+  const navigate = useNavigate()
+  const signOut = useSession((s) => s.signOut)
+
+  // Forget the token and any data cached for this user, then back to sign-in.
+  const logOut = () => {
+    signOut()
+    queryClient.clear()
+    navigate(ROUTES.login, { replace: true })
+  }
 
   return (
     <DropdownMenu>
@@ -56,11 +67,9 @@ export function UserMenu() {
           </Link>
         </DropdownMenuItem>
         <DropdownMenuSeparator />
-        <DropdownMenuItem asChild variant="destructive">
-          <Link to={ROUTES.login}>
-            <LogOut />
-            Log out
-          </Link>
+        <DropdownMenuItem variant="destructive" onSelect={logOut}>
+          <LogOut />
+          Log out
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

@@ -1,28 +1,33 @@
 import { CircleCheck } from "lucide-react"
-import { useEffect, useState, type ReactNode } from "react"
+import type { ReactNode } from "react"
 import { Link } from "react-router-dom"
 
 import { ROUTES } from "@/app/routes"
 import { MonoId } from "@/components/common/mono-id"
 import { Panel, PanelHeader } from "@/components/common/panel"
 import { StatusPill } from "@/components/common/status-pill"
-import { Timeline, type TimelineStep } from "@/components/common/timeline"
 import { Button } from "@/components/ui/button"
 import type { PickerProduct } from "@/features/placement/components/product-picker"
-import type { PlacementResult } from "@/features/placement/mock-data"
 import type { PlacementValues } from "@/features/placement/schemas"
 import { formatBV, formatINR } from "@/lib/format"
 
-/** How long each dummy delivery step takes to tick over (real tracking will come from Shiprocket). */
-const STEP_MS = 1400
+/** The partner the backend created (POST /api/partner/register-downline → `partner`). */
+export type RegisteredPartner = {
+  vedId: string
+  name: string
+  email: string
+  mobile: string
+  status: string
+  slotNumber: number
+  depth: number
+  sponsorVedId: string
+  sponsorName: string
+}
 
 type Props = {
+  partner: RegisteredPartner
   values: PlacementValues
   product: PickerProduct & { name: string }
-  result: PlacementResult
-  upline: { id: string; name: string }
-  /** The upline is the signed-in partner — the new ID is their Level 1. */
-  uplineIsYou: boolean
   onPlaceAnother: () => void
 }
 
@@ -35,52 +40,22 @@ function Row({ label, value }: { label: string; value: ReactNode }) {
   )
 }
 
-const time = (d: Date) =>
-  d.toLocaleString("en-IN", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })
-
-export function PlacementSuccess({
-  values,
-  product,
-  result,
-  upline,
-  uplineIsYou,
-  onPlaceAnother,
-}: Props) {
-  const beyondCap = values.slot > 20
-
-  // DUMMY delivery: steps tick over one by one until "Delivered".
-  const steps: Omit<TimelineStep, "done">[] = [
-    { title: "Order confirmed", meta: `Payment received · ${result.txnId}` },
-    { title: "Packed at VEDORA warehouse", meta: "Pune, Maharashtra" },
-    { title: "Shipped", meta: `${result.courier} · AWB ${result.awb}` },
-    { title: "In transit", meta: `Reached ${values.shipCity} hub` },
-    { title: "Out for delivery", meta: `${values.shipCity} · ${values.shipPincode}` },
-    { title: "Delivered", meta: `Received by ${values.shipName}` },
-  ]
-  const [reached, setReached] = useState(1)
-  useEffect(() => {
-    if (reached >= steps.length) return
-    const t = setTimeout(() => setReached((n) => n + 1), STEP_MS)
-    return () => clearTimeout(t)
-  }, [reached, steps.length])
-  const delivered = reached >= steps.length
-  const current = steps[reached - 1]
-
+/** Shown after a successful Manual Placement — every value comes from the backend's response. */
+export function PlacementSuccess({ partner, values, product, onPlaceAnother }: Props) {
   return (
     <div className="space-y-4 md:space-y-5">
       <Panel className="flex flex-wrap items-center gap-4 border-success/40 bg-success-soft/20">
         <CircleCheck className="size-10 shrink-0 text-success" aria-hidden />
         <div className="min-w-0 flex-1">
-          <h2 className="font-display text-2xl leading-tight md:text-3xl">Payment successful</h2>
+          <h2 className="font-display text-2xl leading-tight md:text-3xl">Partner registered</h2>
           <p className="mt-1 text-xs text-muted-foreground">
-            {formatINR(product.price)} paid via {values.paymentMethod} ·{" "}
-            <MonoId tone="muted">{result.txnId}</MonoId> · {time(result.paidAt)}
+            {partner.name} can now sign in with this ID and the password you set.
           </p>
         </div>
         <div className="text-right">
           <p className="eyebrow text-[0.625rem]">New VEDORA ID</p>
           <MonoId tone="gold" className="text-lg">
-            {result.vedoraId}
+            {partner.vedId}
           </MonoId>
         </div>
       </Panel>
@@ -89,42 +64,33 @@ export function PlacementSuccess({
         <Panel>
           <PanelHeader
             title="Placed in the tree"
-            aside={
-              beyondCap ? (
-                <StatusPill variant="danger">Beyond 20 · no BV</StatusPill>
-              ) : (
-                <StatusPill variant="success">BV-eligible</StatusPill>
-              )
-            }
+            aside={<StatusPill variant="pending">{partner.status}</StatusPill>}
           />
           <div className="mb-5 flex flex-col items-center">
             <div className="w-full max-w-60 rounded-xl border border-border bg-field/60 p-3 text-center">
               <MonoId tone="gold" className="text-[0.6875rem]">
-                {upline.id}
+                {partner.sponsorVedId}
               </MonoId>
-              <p className="mt-0.5 text-[0.8125rem] font-medium">
-                {upline.name}
-                {uplineIsYou ? " — You" : ""}
-              </p>
+              <p className="mt-0.5 text-[0.8125rem] font-medium">{partner.sponsorName} — You</p>
             </div>
             <span aria-hidden className="h-6 w-px bg-gold/50" />
             <div className="w-full max-w-60 rounded-xl border border-gold bg-gold/10 p-3 text-center ring-3 ring-gold/20">
               <MonoId tone="gold" className="text-[0.6875rem]">
-                {result.vedoraId}
+                {partner.vedId}
               </MonoId>
-              <p className="mt-0.5 text-[0.8125rem] font-medium">{values.fullName}</p>
+              <p className="mt-0.5 text-[0.8125rem] font-medium">{partner.name}</p>
               <p className="text-[0.6875rem] text-muted-foreground">
-                Slot {String(values.slot).padStart(2, "0")}
-                {uplineIsYou ? " · Level 1" : ""}
+                Slot {String(partner.slotNumber).padStart(2, "0")} · Level 1
               </p>
             </div>
           </div>
           <dl className="space-y-2.5 border-t border-border/70 pt-4">
-            <Row label="Upline / sponsor" value={<MonoId>{upline.id}</MonoId>} />
-            <Row label="Slot" value={`${values.slot} of 20`} />
-            {uplineIsYou ? <Row label="Level" value="Level 1 · your direct partner" /> : null}
-            <Row label="Joined" value={time(result.paidAt)} />
-            <Row label="Login" value={<MonoId>{result.vedoraId}</MonoId>} />
+            <Row label="Sponsor" value={<MonoId>{partner.sponsorVedId}</MonoId>} />
+            <Row label="Slot" value={`${partner.slotNumber} of 20`} />
+            <Row label="Depth in tree" value={partner.depth} />
+            <Row label="Email" value={partner.email} />
+            <Row label="Mobile" value={partner.mobile} />
+            <Row label="Login" value={<MonoId>{partner.vedId}</MonoId>} />
           </dl>
           <Button asChild variant="outline" className="mt-5 w-full">
             <Link to={ROUTES.partner.genealogy}>View in Genealogy Tree</Link>
@@ -132,10 +98,7 @@ export function PlacementSuccess({
         </Panel>
 
         <Panel>
-          <PanelHeader
-            title="Joining order"
-            aside={<MonoId tone="gold">{result.orderId}</MonoId>}
-          />
+          <PanelHeader title="Joining order" aside={<StatusPill>Not sent</StatusPill>} />
           <div className="flex gap-3">
             <img
               src={product.image}
@@ -154,13 +117,8 @@ export function PlacementSuccess({
               </p>
             </div>
           </div>
-          <dl className="mt-4 space-y-2.5 border-t border-border/70 pt-4">
-            <Row label="Amount paid" value={formatINR(product.price)} />
-            <Row label="Payment" value={values.paymentMethod} />
-            <Row label="Transaction" value={<MonoId>{result.txnId}</MonoId>} />
-          </dl>
           <div className="mt-4 rounded-xl border border-border bg-field/60 p-3.5 text-[0.8125rem] leading-relaxed">
-            <p className="mb-1 eyebrow text-[0.625rem]">Shipping to</p>
+            <p className="mb-1 eyebrow text-[0.625rem]">Ship to</p>
             <p className="font-medium">{values.shipName}</p>
             <p className="text-muted-foreground">
               {values.shipLine1}
@@ -172,32 +130,16 @@ export function PlacementSuccess({
               {values.shipMobile}
             </p>
           </div>
+          <p className="mt-4 text-[0.6875rem] leading-relaxed text-muted-foreground">
+            The backend has no joining-order API yet, so this order was not created. The new partner
+            can sign in and order from Products, which goes through PhonePe.
+          </p>
         </Panel>
       </div>
 
-      <Panel>
-        <PanelHeader
-          title="Delivery tracking"
-          aside={
-            delivered ? (
-              <StatusPill variant="success">Delivered</StatusPill>
-            ) : (
-              <StatusPill variant="pending">{current.title}</StatusPill>
-            )
-          }
-        />
-        <div aria-live="polite">
-          <Timeline steps={steps.map((s, i) => ({ ...s, done: i < reached }))} />
-        </div>
-        <p className="mt-4 border-t border-border/70 pt-3 text-[0.6875rem] text-muted-foreground">
-          Demo delivery — real courier tracking will come from Shiprocket once it is connected.
-          {delivered ? " The 7-day warranty window starts today." : ""}
-        </p>
-      </Panel>
-
       <div className="flex flex-wrap justify-end gap-2">
         <Button asChild variant="outline">
-          <Link to={ROUTES.partner.orders}>Go to My Orders</Link>
+          <Link to={ROUTES.partner.team}>Go to My Team</Link>
         </Button>
         <Button onClick={onPlaceAnother}>Place another partner</Button>
       </div>
