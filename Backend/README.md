@@ -1,124 +1,87 @@
+# VEDORA Backend
+
 <p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
+  <img src="https://nestjs.com/img/logo-small.svg" width="100" alt="Nest Logo" />
 </p>
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
-
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
+<p align="center">
+  <b>Enterprise Multi-Level Marketing (MLM), E-Commerce, Digital Wallet & PhonePe Payment Processing Backend</b>
 </p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
 
-## Description
+---
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
+## 📖 Overview
 
-## Project setup
+The **VEDORA Backend** is an enterprise-grade REST API backend built on **NestJS 12**, **TypeScript**, **TypeORM**, and **PostgreSQL**. It powers:
+- **Sequential VED ID Generation** via PostgreSQL atomic sequence (`ved_id_seq`).
+- **20-Slot Width MLM Genealogy Matrix** with pessimistic write locking to prevent concurrency race conditions.
+- **Pre-computed 5-Level Commission Engine** ($O(1)$ lookup for Direct Referral Bonus ₹200 + 5-level percentage splits on Business Volume).
+- **Double-Entry Wallet Ledger** with balance locking for fraud-free withdrawal requests and approvals.
+- **PhonePe V2 Standard Checkout Payment Gateway** with S2S webhook processing.
+- **End-to-End Role-Based Access Control (RBAC)** securing admin routes across all controllers.
 
+---
+
+## 📚 Complete Project Documentation
+
+All detailed architectural and technical documentation is available in the [`docs/`](./docs) folder:
+
+- 🏛️ **[System Architecture](./docs/ARCHITECTURE.md)** — Core modules, layer structure, concurrency patterns, and security model.
+- 🗄️ **[Database Schema & ERD](./docs/DATABASE-SCHEMA.md)** — PostgreSQL ER diagram (Mermaid) and full specifications for all 13 tables.
+- 🌳 **[Genealogy & Compensation Plan](./docs/GENEALOGY-AND-COMMISSIONS.md)** — 20-slot matrix rules and 5-level commission calculations.
+- 🔌 **[API Specification](./docs/API-SPECIFICATION.md)** — Full technical reference for all 40+ endpoints with request/response schemas.
+- ⚙️ **[Operations & Deployment](./docs/OPERATIONS-AND-DEPLOYMENT.md)** — Environment setup, migrations, database seeding, testing, and production deployment.
+
+---
+
+## 🚀 Quick Start
+
+### 1. Install Dependencies
 ```bash
-$ npm install
+pnpm install
 ```
 
-## Compile and run the project
-
-```bash
-# development
-$ npm run start
-
-# watch mode
-$ npm run start:dev
-
-# production mode
-$ npm run start:prod
+### 2. Configure Environment
+Copy `.env.example` to `.env` and fill in your database credentials:
+```env
+PORT=8000
+DATABASE_URL=postgresql://postgres:password@localhost:5432/vedora_db
+JWT_SECRET=supersecretjwtkey_change_in_production
 ```
 
-## Run tests
-
+### 3. Seed Database
+Seeds Root Admin (`VED108`) and the 3 Fixed Founders (`VED000001` - `VED000003`):
 ```bash
-# unit tests
-$ npm run test
-
-# e2e tests
-$ npm run test:e2e
-
-# test coverage
-$ npm run test:cov
+pnpm run db:seed
 ```
 
-## Deployment
-
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
-
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
-
+### 4. Run Development Server
 ```bash
-$ npm install -g @nestjs/mau
-$ mau deploy
+pnpm run start:dev
+```
+- API Base: `http://localhost:8000/api`
+- Interactive Swagger UI: `http://localhost:8000/api/docs`
+
+---
+
+## 🧪 Automated Testing
+
+Run the full end-to-end test suite testing all 40+ API routes:
+```bash
+# Run the complete API test suite
+pnpm run test:apis
+
+# Or run all e2e tests
+pnpm run test:e2e
 ```
 
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
+---
 
-## Observability
+## 👥 Seed Credentials (Development)
 
-In production applications, observability is essential for understanding how your system behaves, detecting issues early, and maintaining reliable performance.
-
-[NestJS Observe](https://observe.nestjs.com) automatically instruments your NestJS application, giving you deep visibility into your system with minimal setup:
-
-- **Distributed tracing:** Follow requests across services and understand how they flow through your system.
-- **Waterfall analysis:** Visualize request execution and identify slow operations, bottlenecks, and unexpected delays.
-- **Performance analysis:** Analyze application performance in real time and quickly pinpoint areas that need optimization.
-- **Metrics:** Track key application and infrastructure metrics to understand system health and performance trends.
-- **Logging:** Centralize and correlate logs with traces and other telemetry to make debugging easier.
-- **Error tracking:** Detect errors quickly and investigate their root causes with the surrounding context.
-- **SLA monitoring:** Track service-level objectives and identify when your application is approaching or exceeding defined thresholds.
-- **Alarms and alerts:** Set up alerts for critical errors, performance degradation, SLA violations, and other anomalies so your team can react quickly.
-
-To add it to this project:
-
-```bash
-$ npm install @nestjs/observe
-```
-
-Then follow the [setup guide](https://docs.nestjs.com/observability/overview) - it takes a single import and an app key.
-
-The free plan needs no payment details and covers 300,000 events a month. You can also browse the [live demo](https://www.observe-demo.nestjs.com/dashboard) first - the whole dashboard over a busy service's data, with nothing to install.
-
-## Resources
-
-Check out a few resources that may come in handy when working with NestJS:
-
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
-- Auto-instrument your application with [NestJS Observe](https://observe.nestjs.com). Distributed tracing, metrics, and logging made easy. Error tracking and performance monitoring for your NestJS applications.
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
-
-## Support
-
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
-
-## Stay in touch
-
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
-
-## License
-
-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
+| Role | VED ID | Password | Access |
+|---|---|---|---|
+| **Root Admin** | `VED108` | `root@123` | Full admin control, product creation, cash orders, withdrawal approvals |
+| **Founder 1** | `VED000001` | `founder@123` | Primary referral sponsor for testing incoming joins |
+| **Founder 2** | `VED000002` | `founder@123` | Secondary sponsor with active wallet |
+| **Founder 3** | `VED000003` | `founder@123` | Additional founder node |

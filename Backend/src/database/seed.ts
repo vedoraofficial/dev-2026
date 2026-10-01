@@ -2,6 +2,7 @@ import { AppDataSource } from '../config/data-source';
 import { User, UserRole, UserStatus } from '../user/entity/user.entity';
 import { GenealogyNode } from '../genealogy/entity/genealogy-node.entity';
 import { CommissionUpline } from '../genealogy/entity/commission-upline.entity';
+import { Wallet } from '../wallet/entity/wallet.entity';
 import * as bcrypt from 'bcrypt';
 
 async function seed() {
@@ -74,6 +75,23 @@ async function seed() {
   }
 
   console.log('🎉 Root Admin and Fixed Founders verified (NOT in genealogy tree).');
+
+  // 3. Ensure wallets exist for Root Admin and all Founders
+  const walletRepo = AppDataSource.getRepository(Wallet);
+  const allUserIds = [rootAdmin.id, ...founderIds];
+
+  for (const userId of allUserIds) {
+    const existingWallet = await walletRepo.findOne({ where: { userId } });
+    if (!existingWallet) {
+      const wallet = walletRepo.create({ userId });
+      await walletRepo.save(wallet);
+      console.log(`💰 Wallet created for user ID ${userId}.`);
+    } else {
+      console.log(`⏭️  Wallet already exists for user ID ${userId}.`);
+    }
+  }
+
+  console.log('💰 All wallets verified.');
 
   await AppDataSource.destroy();
   console.log('🔌 Database connection closed.');

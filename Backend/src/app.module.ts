@@ -7,6 +7,9 @@ import { UserModule } from './user/user.module';
 import { AuthModule } from './auth/auth.module';
 import { ProductModule } from './product/product.module';
 import { GenealogyModule } from './genealogy/genealogy.module';
+import { WalletModule } from './wallet/wallet.module';
+import { OrderModule } from './order/order.module';
+import { PaymentModule } from './payment/payment.module';
 
 @Module({
   imports: [
@@ -26,6 +29,9 @@ import { GenealogyModule } from './genealogy/genealogy.module';
     AuthModule,
     ProductModule,
     GenealogyModule,
+    WalletModule,
+    OrderModule,
+    PaymentModule,
   ],
   controllers: [AppController],
   providers: [AppService],

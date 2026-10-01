@@ -9,6 +9,7 @@ import { CommissionUpline } from './entity/commission-upline.entity';
 import { JoinPartnerDto } from './dto/join-partner.dto';
 import { RegisterPartnerBySponsorDto } from './dto/register-partner-by-sponsor.dto';
 import { generateNextVedId } from '../common/utils/ved-id.generator';
+import { WalletService } from '../wallet/wallet.service';
 
 @Injectable()
 export class GenealogyService {
@@ -20,6 +21,7 @@ export class GenealogyService {
     private readonly nodeRepo: Repository<GenealogyNode>,
     @InjectRepository(CommissionUpline)
     private readonly uplineRepo: Repository<CommissionUpline>,
+    private readonly walletService: WalletService,
   ) {}
 
   async joinPartner(dto: JoinPartnerDto) {
@@ -175,6 +177,9 @@ export class GenealogyService {
           level5UserId: uplineLevel5,
         });
         await uplineRepo.save(newUpline);
+
+        // 10. Create Wallet for the new partner
+        await this.walletService.createWallet(newUser.id, manager);
 
         return {
           message: 'Partner successfully joined.',
@@ -482,6 +487,9 @@ export class GenealogyService {
         level5UserId: uplineLevel5,
       });
       await uplineRepo.save(newUpline);
+
+      // 11. Create Wallet for the new partner
+      await this.walletService.createWallet(newUser.id, manager);
 
       return {
         message: `Partner successfully registered into slot ${chosenSlot}.`,

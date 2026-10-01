@@ -5,6 +5,14 @@ import { AppModule } from './app.module';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+
+  // Enable CORS for frontend development
+  app.enableCors();
+
+  // All routes are prefixed with /api (e.g. /api/auth/login, /api/wallet)
+  app.setGlobalPrefix('api', {
+    exclude: [], // Add paths to exclude if needed
+  });
   
   // Enable global validation for our DTOs (e.g. @IsEmail, @IsNotEmpty)
   app.useGlobalPipes(new ValidationPipe({ whitelist: true }));
