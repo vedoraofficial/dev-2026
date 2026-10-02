@@ -10,6 +10,8 @@ import { JoinPartnerDto } from './dto/join-partner.dto';
 import { RegisterPartnerBySponsorDto } from './dto/register-partner-by-sponsor.dto';
 import { generateNextVedId } from '../common/utils/ved-id.generator';
 import { WalletService } from '../wallet/wallet.service';
+import { NotificationService } from '../notification/notification.service';
+import { NotificationKey } from '../notification/notification.constants';
 
 @Injectable()
 export class GenealogyService {
@@ -22,6 +24,7 @@ export class GenealogyService {
     @InjectRepository(CommissionUpline)
     private readonly uplineRepo: Repository<CommissionUpline>,
     private readonly walletService: WalletService,
+    private readonly notificationService: NotificationService,
   ) {}
 
   async joinPartner(dto: JoinPartnerDto) {
@@ -180,6 +183,69 @@ export class GenealogyService {
 
         // 10. Create Wallet for the new partner
         await this.walletService.createWallet(newUser.id, manager);
+
+        // In-app Notifications:
+        // 1. PARTNER_WELCOME (to new partner)
+        await this.notificationService.create(
+          newUser.id,
+          NotificationKey.PARTNER_WELCOME,
+          `Welcome to VEDORA, ${newUser.name}`,
+          `Your VEDORA ID is ${newUser.vedId}. You are placed under ${sponsor.name} (${sponsor.vedId}) in slot ${availableSlot}. Sign in at http://localhost:5173/login.`,
+          { vedId: newUser.vedId, sponsorVedId: sponsor.vedId, slotNumber: availableSlot },
+          manager,
+        );
+
+        // 2. TEAM_DIRECT_JOINED (to sponsor)
+        const filledSlots = existingChildren.length + 1;
+        await this.notificationService.create(
+          sponsor.id,
+          NotificationKey.TEAM_DIRECT_JOINED,
+          `${newUser.name} joined your team`,
+          `${newUser.name} (${newUser.vedId}) joined under you in slot ${availableSlot}. ${filledSlots}/20 slots filled.`,
+          { newVedId: newUser.vedId, newName: newUser.name, slotNumber: availableSlot, filledSlots },
+          manager,
+        );
+
+        // 3. TEAM_SLOTS_ALMOST_FULL (if 18) or TEAM_SLOTS_FULL (if 20)
+        if (filledSlots === 18) {
+          await this.notificationService.create(
+            sponsor.id,
+            NotificationKey.TEAM_SLOTS_ALMOST_FULL,
+            'Only 2 direct slots left',
+            'You have filled 18 of your 20 direct slots.',
+            { filledSlots: 18 },
+            manager,
+          );
+        } else if (filledSlots === 20) {
+          await this.notificationService.create(
+            sponsor.id,
+            NotificationKey.TEAM_SLOTS_FULL,
+            'All 20 direct slots are full',
+            'All 20 of your direct slots are filled. New partners can join under your team members.',
+            { filledSlots: 20 },
+            manager,
+          );
+        }
+
+        // 4. TEAM_DOWNLINE_JOINED (to level 2-5 uplines)
+        const uplines = [
+          { id: uplineLevel2, level: 2 },
+          { id: uplineLevel3, level: 3 },
+          { id: uplineLevel4, level: 4 },
+          { id: uplineLevel5, level: 5 },
+        ];
+        for (const u of uplines) {
+          if (u.id) {
+            await this.notificationService.create(
+              u.id,
+              NotificationKey.TEAM_DOWNLINE_JOINED,
+              `New partner at Level ${u.level}`,
+              `${newUser.name} (${newUser.vedId}) joined your team at Level ${u.level}, under ${sponsor.name}.`,
+              { newVedId: newUser.vedId, newName: newUser.name, level: u.level, sponsorName: sponsor.name },
+              manager,
+            );
+          }
+        }
 
         return {
           message: 'Partner successfully joined.',
@@ -490,6 +556,59 @@ export class GenealogyService {
 
       // 11. Create Wallet for the new partner
       await this.walletService.createWallet(newUser.id, manager);
+
+      // In-app Notifications:
+      // 1. PARTNER_WELCOME (to new partner)
+      await this.notificationService.create(
+        newUser.id,
+        NotificationKey.PARTNER_WELCOME,
+        `Welcome to VEDORA, ${newUser.name}`,
+        `Your VEDORA ID is ${newUser.vedId}. You are placed under ${sponsor.name} (${sponsor.vedId}) in slot ${chosenSlot}. Sign in at http://localhost:5173/login.`,
+        { vedId: newUser.vedId, sponsorVedId: sponsor.vedId, slotNumber: chosenSlot },
+        manager,
+      );
+
+      // 2. TEAM_SLOTS_ALMOST_FULL (if 18) or TEAM_SLOTS_FULL (if 20)
+      const filledSlots = existingChildren.length + 1;
+      if (filledSlots === 18) {
+        await this.notificationService.create(
+          sponsor.id,
+          NotificationKey.TEAM_SLOTS_ALMOST_FULL,
+          'Only 2 direct slots left',
+          'You have filled 18 of your 20 direct slots.',
+          { filledSlots: 18 },
+          manager,
+        );
+      } else if (filledSlots === 20) {
+        await this.notificationService.create(
+          sponsor.id,
+          NotificationKey.TEAM_SLOTS_FULL,
+          'All 20 direct slots are full',
+          'All 20 of your direct slots are filled. New partners can join under your team members.',
+          { filledSlots: 20 },
+          manager,
+        );
+      }
+
+      // 3. TEAM_DOWNLINE_JOINED (to level 2-5 uplines)
+      const uplines = [
+        { id: uplineLevel2, level: 2 },
+        { id: uplineLevel3, level: 3 },
+        { id: uplineLevel4, level: 4 },
+        { id: uplineLevel5, level: 5 },
+      ];
+      for (const u of uplines) {
+        if (u.id) {
+          await this.notificationService.create(
+            u.id,
+            NotificationKey.TEAM_DOWNLINE_JOINED,
+            `New partner at Level ${u.level}`,
+            `${newUser.name} (${newUser.vedId}) joined your team at Level ${u.level}, under ${sponsor.name}.`,
+            { newVedId: newUser.vedId, newName: newUser.name, level: u.level, sponsorName: sponsor.name },
+            manager,
+          );
+        }
+      }
 
       return {
         message: `Partner successfully registered into slot ${chosenSlot}.`,

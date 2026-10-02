@@ -61,6 +61,13 @@ erDiagram
         varchar bank_name
         varchar ifsc_code
         varchar verification_status
+        varchar verified_name
+        numeric name_match_score
+        varchar name_match_result
+        varchar utr
+        varchar verification_reference_id
+        text verification_failed_reason
+        timestamptz verified_at
         boolean is_primary
         timestamptz created_at
         timestamptz updated_at
@@ -217,15 +224,23 @@ Extended KYC and profile information for a user.
 - `profile_photo` (TEXT, NULLABLE)
 
 ### 2.3 `user_banks`
-Saved bank accounts for payouts.
+Saved bank accounts for partner payouts, verified via Penny Drop.
 - `id` (SERIAL, PK)
 - `user_id` (INT, FK -> `users.id` ON DELETE CASCADE)
-- `account_holder_name` (VARCHAR(150), NOT NULL)
-- `account_number` (VARCHAR(50), NOT NULL)
-- `bank_name` (VARCHAR(150), NOT NULL)
-- `ifsc_code` (VARCHAR(20), NOT NULL)
+- `account_holder_name` (VARCHAR(150), NOT NULL) — Name entered by user
+- `account_number` (VARCHAR(50), NOT NULL) — Destination bank account (9-18 digits)
+- `bank_name` (VARCHAR(150), NOT NULL) — Name of the bank (e.g. HDFC Bank)
+- `ifsc_code` (VARCHAR(20), NOT NULL) — 11-character RBI standard IFSC code
 - `verification_status` (VARCHAR(20), DEFAULT `'PENDING'`) — `'PENDING'`, `'VERIFIED'`, `'REJECTED'`
-- `is_primary` (BOOLEAN, DEFAULT FALSE)
+- `verified_name` (VARCHAR(150), NULLABLE) — Official name returned by destination bank during penny drop
+- `name_match_score` (NUMERIC(5,2), NULLABLE) — Fuzzy matching score (0.00 to 100.00)
+- `name_match_result` (VARCHAR(30), NULLABLE) — Categorization (`DIRECT`, `GOOD`, `MODERATE`, `POOR`, `NO_MATCH`)
+- `utr` (VARCHAR(100), NULLABLE) — Unique Transaction Reference of the ₹1 transfer from bank
+- `verification_reference_id` (VARCHAR(100), NULLABLE) — Cashfree verification transaction reference
+- `verification_failed_reason` (TEXT, NULLABLE) — Failure or mismatch reason if rejected
+- `verified_at` (TIMESTAMPTZ(3), NULLABLE) — Timestamp when verification was completed
+- `is_primary` (BOOLEAN, DEFAULT FALSE) — Whether this is the default payout bank account
+- `created_at`, `updated_at` (TIMESTAMPTZ(3))
 
 ### 2.4 `genealogy_nodes`
 Tracks user positions in the 20-slot width MLM tree.

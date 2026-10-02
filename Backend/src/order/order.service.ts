@@ -14,6 +14,8 @@ import { User, UserStatus } from '../user/entity/user.entity';
 import { CommissionUpline } from '../genealogy/entity/commission-upline.entity';
 import { WalletService } from '../wallet/wallet.service';
 import { TransactionCategory } from '../wallet/entity/wallet-transaction.entity';
+import { NotificationService } from '../notification/notification.service';
+import { NotificationKey } from '../notification/notification.constants';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { AdminCreateCashOrderDto } from './dto/admin-create-cash-order.dto';
 
@@ -44,6 +46,7 @@ export class OrderService {
     @InjectRepository(CommissionUpline)
     private readonly uplineRepo: Repository<CommissionUpline>,
     private readonly walletService: WalletService,
+    private readonly notificationService: NotificationService,
   ) {}
 
   // ─── Create Order (Partner) ─────────────────────────────────────────
@@ -74,6 +77,16 @@ export class OrderService {
     });
 
     await this.orderRepo.save(order);
+
+    // In-app Notification: ORDER_AWAITING_PAYMENT
+    const formattedAmount = `₹${(totalAmount / 100).toFixed(2)}`;
+    await this.notificationService.create(
+      userId,
+      NotificationKey.ORDER_AWAITING_PAYMENT,
+      `Complete payment for #${order.id}`,
+      `${product.name} × ${quantity} · ${formattedAmount}. Pay with PhonePe from My Orders.`,
+      { orderId: Number(order.id), amountPaise: totalAmount },
+    );
 
     // For CASH orders, mark as paid immediately and distribute commissions
     if (dto.paymentMethod === PaymentMethod.CASH) {
@@ -138,6 +151,17 @@ export class OrderService {
       // Distribute commissions immediately for cash orders
       await this.distributeCommissions(Number(order.id), manager);
 
+      // In-app Notification: CASH_ORDER_RECORDED
+      const cashFormattedAmount = `₹${(totalAmount / 100).toFixed(2)}`;
+      await this.notificationService.create(
+        dto.userId,
+        NotificationKey.CASH_ORDER_RECORDED,
+        `Cash order #${order.id} recorded`,
+        `VEDORA recorded your cash payment of ${cashFormattedAmount} for ${product.name}. Order confirmed.`,
+        { orderId: Number(order.id), amountPaise: totalAmount },
+        manager,
+      );
+
       return {
         message: 'Cash order created and commissions distributed.',
         order: {
@@ -195,6 +219,13 @@ export class OrderService {
       5: upline.level5UserId,
     };
 
+    // Get buyer info for notifications
+    const buyer = await manager.getRepository(User).findOne({ where: { id: order.userId } });
+    const buyerName = buyer?.name || 'Partner';
+
+    const earnedByBeneficiary = new Map<number, { items: string[]; totalPaise: number }>();
+    const missedByBeneficiary = new Map<number, { totalPaise: number; status: string }>();
+
     const bvTotalPaise = Number(order.bvTotal) * 100; // BV → paise (1 BV = ₹1 = 100 paise)
 
     for (const config of COMMISSION_CONFIG) {
@@ -214,13 +245,6 @@ export class OrderService {
         where: { id: beneficiaryUserId },
       });
 
-      if (!beneficiary || beneficiary.status !== UserStatus.ACTIVE) {
-        this.logger.log(
-          `Skipping level ${config.level} commission for user ${beneficiaryUserId} (status: ${beneficiary?.status || 'NOT_FOUND'})`,
-        );
-        continue;
-      }
-
       // Calculate commission amount
       let commissionAmount: number;
       if (config.flatPaise !== null) {
@@ -230,6 +254,18 @@ export class OrderService {
       }
 
       if (commissionAmount <= 0) continue;
+
+      if (!beneficiary || beneficiary.status !== UserStatus.ACTIVE) {
+        this.logger.log(
+          `Skipping level ${config.level} commission for user ${beneficiaryUserId} (status: ${beneficiary?.status || 'NOT_FOUND'})`,
+        );
+        if (beneficiary) {
+          const prev = missedByBeneficiary.get(beneficiaryUserId) || { totalPaise: 0, status: beneficiary.status };
+          prev.totalPaise += commissionAmount;
+          missedByBeneficiary.set(beneficiaryUserId, prev);
+        }
+        continue;
+      }
 
       // Credit the beneficiary's wallet
       const walletTxn = await this.walletService.credit(
@@ -252,11 +288,48 @@ export class OrderService {
         walletTransactionId: walletTxn ? Number(walletTxn.id) : null,
       });
       await commissionRepo.save(distribution);
+
+      // Accumulate for single notification per earner
+      const label = config.level === 0 ? 'Direct ₹200' : `Level ${config.level} ₹${(commissionAmount / 100).toFixed(0)}`;
+      const earned = earnedByBeneficiary.get(beneficiaryUserId) || { items: [], totalPaise: 0 };
+      earned.items.push(label);
+      earned.totalPaise += commissionAmount;
+      earnedByBeneficiary.set(beneficiaryUserId, earned);
     }
 
     // Mark order as commissions distributed
     order.commissionsDistributed = true;
     await orderRepo.save(order);
+
+    // In-app Notification: COMMISSION_CREDITED (single aggregated notification per earner)
+    for (const [beneficiaryUserId, earned] of earnedByBeneficiary.entries()) {
+      const totalFormatted = `₹${(earned.totalPaise / 100).toFixed(0)}`;
+      const breakdown = earned.items.join(' + ');
+      const walletSummary = await this.walletService.getWalletSummary(beneficiaryUserId);
+      const balanceFormatted = walletSummary.availableBalanceFormatted;
+
+      await this.notificationService.create(
+        beneficiaryUserId,
+        NotificationKey.COMMISSION_CREDITED,
+        `${totalFormatted} commission credited`,
+        `From ${buyerName}'s order #${orderId} · ${breakdown}. Wallet balance: ${balanceFormatted}.`,
+        { orderId, totalPaise: earned.totalPaise, breakdown },
+        manager,
+      );
+    }
+
+    // In-app Notification: COMMISSION_MISSED_INACTIVE (to skipped inactive uplines)
+    for (const [beneficiaryUserId, missed] of missedByBeneficiary.entries()) {
+      const missedFormatted = `₹${(missed.totalPaise / 100).toFixed(2)}`;
+      await this.notificationService.create(
+        beneficiaryUserId,
+        NotificationKey.COMMISSION_MISSED_INACTIVE,
+        `You missed ${missedFormatted} in commission`,
+        `${buyerName} placed order #${orderId}, but your ID is ${missed.status}, so ${missedFormatted} was not credited. Activate your ID to keep earning.`,
+        { orderId, missedPaise: missed.totalPaise, status: missed.status },
+        manager,
+      );
+    }
 
     this.logger.log(`Commissions distributed for order #${orderId}`);
   }
@@ -285,6 +358,19 @@ export class OrderService {
 
       // Distribute commissions
       await this.distributeCommissions(Number(order.id), manager);
+
+      // In-app Notification: PAYMENT_SUCCESS (to buyer)
+      const product = await manager.getRepository(Product).findOne({ where: { id: order.productId } });
+      const productName = product ? product.name : 'Product';
+      const formattedAmount = `₹${(Number(order.totalAmount) / 100).toFixed(2)}`;
+      await this.notificationService.create(
+        order.userId,
+        NotificationKey.PAYMENT_SUCCESS,
+        `Payment received — #${order.id} confirmed`,
+        `We received ${formattedAmount} for ${productName} × ${order.quantity} (${order.bvTotal} BV). Ships in 24–48 business hours.`,
+        { orderId: Number(order.id), phonepeTransactionId },
+        manager,
+      );
     });
   }
 
@@ -298,6 +384,16 @@ export class OrderService {
     order.paymentStatus = PaymentStatus.FAILED;
     order.orderStatus = OrderStatus.CANCELLED;
     await this.orderRepo.save(order);
+
+    // In-app Notification: PAYMENT_FAILED (to buyer)
+    const formattedAmount = `₹${(Number(order.totalAmount) / 100).toFixed(2)}`;
+    await this.notificationService.create(
+      order.userId,
+      NotificationKey.PAYMENT_FAILED,
+      `Payment failed for #${order.id}`,
+      `Your payment of ${formattedAmount} didn't go through. Nothing was charged. Retry from My Orders.`,
+      { orderId: Number(order.id) },
+    );
   }
 
   // ─── Get Orders ─────────────────────────────────────────────────────

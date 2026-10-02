@@ -7,11 +7,13 @@ import { UserProfile } from '../user/entity/user-profile.entity';
 import { GenealogyService } from './genealogy.service';
 import { GenealogyController } from './genealogy.controller';
 import { WalletModule } from '../wallet/wallet.module';
+import { NotificationModule } from '../notification/notification.module';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([GenealogyNode, CommissionUpline, User, UserProfile]),
     WalletModule,
+    NotificationModule,
   ],
   controllers: [GenealogyController],
   providers: [GenealogyService],

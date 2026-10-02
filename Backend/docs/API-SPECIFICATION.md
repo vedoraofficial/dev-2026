@@ -130,20 +130,51 @@ This document provides a comprehensive REST API specification for all endpoints 
   }
   ```
 
-### 2.5 Bank Accounts
+### 2.5 Bank Accounts & Penny Drop Verification
 - **List Banks:** `GET /api/user/bank` (Bearer JWT)
 - **Add Bank:** `POST /api/user/bank` (Bearer JWT)
+  - *Behavior:* Immediately triggers **Cashfree Penny Drop Verification Suite (Sync)** with ₹1 IMPS deposit. Pre-validates 11-char IFSC format and 9-18 digit account numbers. Computes fuzzy name matching score between user name and bank-registered account holder name. If score >= 60%, automatically marks account as `VERIFIED` with bank UTR and timestamp. If invalid or mismatched, marks account as `REJECTED` with detailed `verificationFailedReason`.
   ```json
   {
-    "accountHolderName": "string",
-    "accountNumber": "string",
-    "bankName": "string",
-    "ifscCode": "string",
-    "isPrimary": false
+    "accountHolderName": "Rahul Sharma",
+    "accountNumber": "11223344556677",
+    "bankName": "HDFC Bank",
+    "ifscCode": "HDFC0001234",
+    "isPrimary": true
   }
   ```
+  - **Response (201 Created):**
+  ```json
+  {
+    "id": 1,
+    "accountHolderName": "Rahul Sharma",
+    "accountNumber": "11223344556677",
+    "bankName": "HDFC Bank",
+    "ifscCode": "HDFC0001234",
+    "isPrimary": true,
+    "verificationStatus": "VERIFIED",
+    "verifiedName": "RAHUL SHARMA",
+    "nameMatchScore": 100,
+    "nameMatchResult": "DIRECT",
+    "utr": "CF_UTR_1234567890",
+    "verificationReferenceId": "CF_REF_987654",
+    "verificationFailedReason": null,
+    "verifiedAt": "2026-10-02T09:00:00.000Z",
+    "createdAt": "2026-10-02T09:00:00.000Z"
+  }
+  ```
+- **Re-verify Bank:** `POST /api/user/bank/:id/verify` (Bearer JWT)
+  - Triggers on-demand Penny Drop re-verification for accounts currently marked `PENDING` or `REJECTED`.
 - **Set Primary:** `PATCH /api/user/bank/:id/primary` (Bearer JWT)
 - **Delete Bank:** `DELETE /api/user/bank/:id` (Bearer JWT)
+- **[Admin] Manual Bank Verification Override:** `PATCH /api/user/admin/bank/:id/verify` (Bearer JWT + `@Roles('ADMIN')`)
+  - Enables administrators to manually approve or reject a user bank account (e.g. for offline cancelled cheque review).
+  ```json
+  {
+    "status": "VERIFIED",
+    "reason": "Verified manually via cancelled cheque copy"
+  }
+  ```
 
 ### 2.6 Admin User Management
 - **Direct User Creation:** `POST /api/user` (Bearer JWT + `@Roles('ADMIN')`)
@@ -375,3 +406,95 @@ This document provides a comprehensive REST API specification for all endpoints 
 ### 7.4 Server-to-Server Webhook
 - **Method / Route:** `POST /api/payment/webhook`
 - **Auth:** Public (PhonePe S2S)
+
+---
+
+## 8. In-App Notifications Module (`/api/notifications`)
+
+### 8.1 Get User Notifications
+- **Method / Route:** `GET /api/notifications`
+- **Auth:** Bearer JWT (All authenticated users)
+- **Query Parameters:**
+  - `page` (optional, default: 1)
+  - `limit` (optional, default: 20)
+  - `unreadOnly` (optional boolean, default: false)
+- **Response (200 OK):**
+  ```json
+  {
+    "items": [
+      {
+        "id": 105,
+        "key": "COMMISSION_CREDITED",
+        "title": "₹200 commission credited",
+        "message": "From Rohan's order #12 · Direct ₹200. Wallet balance: ₹1,450.00.",
+        "metadata": { "orderId": 12, "totalPaise": 20000, "breakdown": "Direct ₹200" },
+        "isRead": false,
+        "readAt": null,
+        "createdAt": "2026-10-02T04:12:00.000Z"
+      }
+    ],
+    "total": 1,
+    "unreadCount": 1,
+    "page": 1,
+    "limit": 20
+  }
+  ```
+
+### 8.2 Get Unread Notifications Count
+- **Method / Route:** `GET /api/notifications/unread-count`
+- **Auth:** Bearer JWT (All authenticated users)
+- **Purpose:** Fast polling or header bell-icon badge display.
+- **Response (200 OK):**
+  ```json
+  {
+    "unreadCount": 3
+  }
+  ```
+
+### 8.3 Mark Single Notification as Read
+- **Method / Route:** `PATCH /api/notifications/:id/read`
+- **Auth:** Bearer JWT
+- **Response (200 OK):**
+  ```json
+  {
+    "success": true,
+    "notification": {
+      "id": 105,
+      "isRead": true,
+      "readAt": "2026-10-02T04:15:30.000Z"
+    }
+  }
+  ```
+
+### 8.4 Mark All Notifications as Read
+- **Method / Route:** `PATCH /api/notifications/read-all`
+- **Auth:** Bearer JWT
+- **Response (200 OK):**
+  ```json
+  {
+    "success": true,
+    "count": 3
+  }
+  ```
+
+### 8.5 Admin: Broadcast System Announcement
+- **Method / Route:** `POST /api/notifications/announcement`
+- **Auth:** Bearer JWT (`ADMIN` only)
+- **Request Body:**
+  ```json
+  {
+    "title": "Important Platform Update",
+    "message": "Commission payouts for September have been processed.",
+    "target": "ALL_PARTNERS" // or "FOUNDER_TEAM"
+    // "founderVedId": "VED000001" (required if target is "FOUNDER_TEAM")
+  }
+  ```
+- **Response (201 Created):**
+  ```json
+  {
+    "success": true,
+    "message": "Announcement broadcasted successfully",
+    "recipientCount": 42
+  }
+  ```
+

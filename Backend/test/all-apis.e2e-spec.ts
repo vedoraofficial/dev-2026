@@ -30,6 +30,7 @@ describe('VEDORA - Full System End-to-End API Test Suite', () => {
   let createdProductId: number;
   let primaryBankId: number;
   let secondaryBankId: number;
+  let rejectedBankId: number;
   let pendingOrderId: number;
   let cashOrderId: number;
   let withdrawalId: number;
@@ -47,6 +48,11 @@ describe('VEDORA - Full System End-to-End API Test Suite', () => {
 
     await app.init();
     dataSource = app.get(DataSource);
+
+    // Clean up transient test partners from previous test runs to ensure free slots under Founder
+    await dataSource.query(
+      `DELETE FROM users WHERE email LIKE 'partner_%' OR email LIKE 'downline2_%' OR email LIKE 'alice_%' OR email LIKE 'bob_%'`
+    );
   }, 60000);
 
   afterAll(async () => {
@@ -288,8 +294,8 @@ describe('VEDORA - Full System End-to-End API Test Suite', () => {
       expect(getRes.body.addressLine1).toBe('MG Road 404');
     });
 
-    it('POST /api/user/bank - Partner adds primary and secondary bank accounts', async () => {
-      // 1. Add primary bank
+    it('POST /api/user/bank - Partner adds primary and secondary bank accounts (Penny Drop auto-verified)', async () => {
+      // 1. Add primary bank (matches partner name)
       const bank1 = await request(app.getHttpServer())
         .post('/api/user/bank')
         .set('Authorization', `Bearer ${partnerToken}`)
@@ -304,9 +310,13 @@ describe('VEDORA - Full System End-to-End API Test Suite', () => {
       expect(bank1.status).toBe(201);
       expect(bank1.body).toHaveProperty('id');
       expect(bank1.body.isPrimary).toBe(true);
+      expect(bank1.body.verificationStatus).toBe('VERIFIED');
+      expect(bank1.body.nameMatchScore).toBeGreaterThanOrEqual(60);
+      expect(bank1.body.utr).toBeDefined();
+      expect(bank1.body.verifiedAt).toBeDefined();
       primaryBankId = bank1.body.id;
 
-      // 2. Add secondary bank
+      // 2. Add secondary bank (matches partner name)
       const bank2 = await request(app.getHttpServer())
         .post('/api/user/bank')
         .set('Authorization', `Bearer ${partnerToken}`)
@@ -319,7 +329,92 @@ describe('VEDORA - Full System End-to-End API Test Suite', () => {
         });
 
       expect(bank2.status).toBe(201);
+      expect(bank2.body.verificationStatus).toBe('VERIFIED');
       secondaryBankId = bank2.body.id;
+    });
+
+    it('POST /api/user/bank - Rejects invalid IFSC format (400)', async () => {
+      const res = await request(app.getHttpServer())
+        .post('/api/user/bank')
+        .set('Authorization', `Bearer ${partnerToken}`)
+        .send({
+          accountHolderName: 'Updated Partner Name',
+          accountNumber: '123456789012',
+          bankName: 'Test Bank',
+          ifscCode: 'INVALID_IFSC',
+        });
+
+      expect(res.status).toBe(400);
+      expect(res.body.message).toContain('Invalid IFSC code format');
+    });
+
+    it('POST /api/user/bank - Rejects invalid account number length (400)', async () => {
+      const res = await request(app.getHttpServer())
+        .post('/api/user/bank')
+        .set('Authorization', `Bearer ${partnerToken}`)
+        .send({
+          accountHolderName: 'Updated Partner Name',
+          accountNumber: '1234',
+          bankName: 'Test Bank',
+          ifscCode: 'SBIN0001234',
+        });
+
+      expect(res.status).toBe(400);
+      expect(res.body.message).toContain('Invalid bank account number');
+    });
+
+    it('POST /api/user/bank - Marks bank as REJECTED when name does not match user profile', async () => {
+      const res = await request(app.getHttpServer())
+        .post('/api/user/bank')
+        .set('Authorization', `Bearer ${partnerToken}`)
+        .send({
+          accountHolderName: 'Completely Different Stranger',
+          accountNumber: '55667788990011',
+          bankName: 'Axis Bank',
+          ifscCode: 'UTIB0000001',
+          isPrimary: false,
+        });
+
+      expect(res.status).toBe(201);
+      expect(res.body.verificationStatus).toBe('REJECTED');
+      expect(res.body.verificationFailedReason).toContain('Name mismatch');
+      rejectedBankId = res.body.id;
+    });
+
+    it('POST /api/user/bank/:id/verify - Re-verification endpoint guards already verified bank', async () => {
+      const res = await request(app.getHttpServer())
+        .post(`/api/user/bank/${primaryBankId}/verify`)
+        .set('Authorization', `Bearer ${partnerToken}`);
+
+      expect(res.status).toBe(400);
+      expect(res.body.message).toContain('already verified');
+    });
+
+    it('PATCH /api/user/admin/bank/:id/verify - Admin can manually verify or reject bank (RBAC)', async () => {
+      // 1. Admin manually approves the rejected bank
+      const approveRes = await request(app.getHttpServer())
+        .patch(`/api/user/admin/bank/${rejectedBankId}/verify`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({
+          status: 'VERIFIED',
+          reason: 'Verified manually via cancelled cheque copy',
+        });
+
+      expect(approveRes.status).toBe(200);
+      expect(approveRes.body.verificationStatus).toBe('VERIFIED');
+      expect(approveRes.body.verifiedAt).toBeDefined();
+
+      // 2. Admin reverts status back to REJECTED
+      const rejectRes = await request(app.getHttpServer())
+        .patch(`/api/user/admin/bank/${rejectedBankId}/verify`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({
+          status: 'REJECTED',
+          reason: 'Cheque invalid or name mismatch confirmed',
+        });
+
+      expect(rejectRes.status).toBe(200);
+      expect(rejectRes.body.verificationStatus).toBe('REJECTED');
     });
 
     it('GET /api/user/bank - Lists all bank accounts', async () => {
@@ -563,28 +658,25 @@ describe('VEDORA - Full System End-to-End API Test Suite', () => {
     });
 
     it('POST /api/wallet/withdraw - Fails when bank account is not verified (400)', async () => {
+      // 1. Fund partner wallet with ₹500 (50,000 paise) so balance check passes
+      const walletRepo = dataSource.getRepository(Wallet);
+      await walletRepo.update({ userId: partnerUserId }, { availableBalance: 50000 });
+
+      // 2. Attempt withdrawal using the REJECTED bank account
       const res = await request(app.getHttpServer())
         .post('/api/wallet/withdraw')
         .set('Authorization', `Bearer ${partnerToken}`)
         .send({
           amount: 100,
-          bankId: primaryBankId,
+          bankId: rejectedBankId,
         });
 
       expect(res.status).toBe(400);
       expect(res.body.message).toContain('verified bank');
     });
 
-    it('POST /api/wallet/withdraw - Successfully requests withdrawal after bank verification & wallet credit', async () => {
-      // 1. Mark partner's bank as VERIFIED directly in database
-      const bankRepo = dataSource.getRepository(UserBank);
-      await bankRepo.update(primaryBankId, { verificationStatus: BankVerificationStatus.VERIFIED });
-
-      // 2. Fund partner wallet with ₹500 (50,000 paise) to allow withdrawal
-      const walletRepo = dataSource.getRepository(Wallet);
-      await walletRepo.update({ userId: partnerUserId }, { availableBalance: 50000 });
-
-      // 3. Request withdrawal of ₹100
+    it('POST /api/wallet/withdraw - Successfully requests withdrawal to verified bank account', async () => {
+      // Primary bank account is already verified via Penny Drop auto-verification
       const res = await request(app.getHttpServer())
         .post('/api/wallet/withdraw')
         .set('Authorization', `Bearer ${partnerToken}`)
@@ -731,6 +823,109 @@ describe('VEDORA - Full System End-to-End API Test Suite', () => {
 
       expect(deleteRes.status).toBe(200);
       expect(deleteRes.body.message).toContain('deleted successfully');
+    });
+  });
+
+  // ═════════════════════════════════════════════════════════════════════
+  // 10. In-App Notifications Module (/api/notifications)
+  // ═════════════════════════════════════════════════════════════════════
+  describe('10. In-App Notifications Module (/api/notifications)', () => {
+    let testNotificationId: number;
+
+    it('GET /api/notifications/unread-count - Partner gets unread notification count', async () => {
+      const res = await request(app.getHttpServer())
+        .get('/api/notifications/unread-count')
+        .set('Authorization', `Bearer ${partnerToken}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body).toHaveProperty('unreadCount');
+      expect(typeof res.body.unreadCount).toBe('number');
+      expect(res.body.unreadCount).toBeGreaterThan(0);
+    });
+
+    it('GET /api/notifications - Partner retrieves paginated notifications', async () => {
+      const res = await request(app.getHttpServer())
+        .get('/api/notifications?page=1&limit=10')
+        .set('Authorization', `Bearer ${partnerToken}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body).toHaveProperty('items');
+      expect(res.body).toHaveProperty('total');
+      expect(res.body).toHaveProperty('unreadCount');
+      expect(Array.isArray(res.body.items)).toBe(true);
+      expect(res.body.items.length).toBeGreaterThan(0);
+
+      const first = res.body.items[0];
+      expect(first).toHaveProperty('id');
+      expect(first).toHaveProperty('key');
+      expect(first).toHaveProperty('title');
+      expect(first).toHaveProperty('message');
+      expect(first).toHaveProperty('isRead');
+      testNotificationId = first.id;
+    });
+
+    it('PATCH /api/notifications/:id/read - Partner marks single notification as read', async () => {
+      const res = await request(app.getHttpServer())
+        .patch(`/api/notifications/${testNotificationId}/read`)
+        .set('Authorization', `Bearer ${partnerToken}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.success).toBe(true);
+      expect(res.body.notification.isRead).toBe(true);
+    });
+
+    it('PATCH /api/notifications/read-all - Partner marks all notifications as read', async () => {
+      const res = await request(app.getHttpServer())
+        .patch('/api/notifications/read-all')
+        .set('Authorization', `Bearer ${partnerToken}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.success).toBe(true);
+
+      // Verify unread count is now 0
+      const countRes = await request(app.getHttpServer())
+        .get('/api/notifications/unread-count')
+        .set('Authorization', `Bearer ${partnerToken}`);
+
+      expect(countRes.status).toBe(200);
+      expect(countRes.body.unreadCount).toBe(0);
+    });
+
+    it('POST /api/notifications/announcement - Partner is FORBIDDEN from posting announcements (403 RBAC)', async () => {
+      const res = await request(app.getHttpServer())
+        .post('/api/notifications/announcement')
+        .set('Authorization', `Bearer ${partnerToken}`)
+        .send({
+          title: 'Unauthorized announcement',
+          message: 'This should fail',
+          target: 'ALL_PARTNERS',
+        });
+
+      expect(res.status).toBe(403);
+    });
+
+    it('POST /api/notifications/announcement - Admin broadcasts announcement to all partners', async () => {
+      const res = await request(app.getHttpServer())
+        .post('/api/notifications/announcement')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({
+          title: 'Important System Announcement',
+          message: 'VEDORA national conference is scheduled next month!',
+          target: 'ALL_PARTNERS',
+        });
+
+      expect(res.status).toBe(201);
+      expect(res.body.success).toBe(true);
+      expect(res.body).toHaveProperty('recipientCount');
+      expect(res.body.recipientCount).toBeGreaterThan(0);
+
+      // Partner should now have at least 1 new unread notification
+      const partnerNotifs = await request(app.getHttpServer())
+        .get('/api/notifications/unread-count')
+        .set('Authorization', `Bearer ${partnerToken}`);
+
+      expect(partnerNotifs.status).toBe(200);
+      expect(partnerNotifs.body.unreadCount).toBeGreaterThanOrEqual(1);
     });
   });
 });

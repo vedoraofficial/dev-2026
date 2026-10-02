@@ -6,6 +6,7 @@ import { Product } from '../product/entity/product.entity';
 import { User } from '../user/entity/user.entity';
 import { CommissionUpline } from '../genealogy/entity/commission-upline.entity';
 import { WalletModule } from '../wallet/wallet.module';
+import { NotificationModule } from '../notification/notification.module';
 import { OrderService } from './order.service';
 import { OrderController } from './order.controller';
 
@@ -13,6 +14,7 @@ import { OrderController } from './order.controller';
   imports: [
     TypeOrmModule.forFeature([Order, CommissionDistribution, Product, User, CommissionUpline]),
     WalletModule,
+    NotificationModule,
   ],
   controllers: [OrderController],
   providers: [OrderService],

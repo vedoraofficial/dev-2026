@@ -11,6 +11,8 @@ import { WalletTransaction, TransactionType, TransactionCategory } from './entit
 import { Withdrawal, WithdrawalStatus } from './entity/withdrawal.entity';
 import { UserBank, BankVerificationStatus } from '../user/entity/user-bank.entity';
 import { WalletTransactionsQueryDto } from './dto/wallet-transactions-query.dto';
+import { NotificationService } from '../notification/notification.service';
+import { NotificationKey } from '../notification/notification.constants';
 
 @Injectable()
 export class WalletService {
@@ -24,6 +26,7 @@ export class WalletService {
     private readonly withdrawalRepo: Repository<Withdrawal>,
     @InjectRepository(UserBank)
     private readonly bankRepo: Repository<UserBank>,
+    private readonly notificationService: NotificationService,
   ) {}
 
   // ─── Helper: Convert paise to formatted rupee string ────────────────
@@ -366,6 +369,33 @@ export class WalletService {
       });
       await txnRepo.save(txn);
 
+      // In-app Notification: WITHDRAWAL_REQUESTED (to partner)
+      const bankMasked = `${bank.bankName} (****${bank.accountNumber.slice(-4)})`;
+      const formattedAmount = this.formatPaise(amountInPaise);
+      await this.notificationService.create(
+        userId,
+        NotificationKey.WITHDRAWAL_REQUESTED,
+        `Withdrawal of ${formattedAmount} requested`,
+        `Request #${withdrawal.id} to ${bankMasked} received. Held as pending payout until Admin reviews it.`,
+        { withdrawalId: Number(withdrawal.id), amountPaise: amountInPaise },
+        manager,
+      );
+
+      // In-app Notification: ADMIN_WITHDRAWAL_PENDING (to all Admins)
+      const pendingWithdrawals = await manager.getRepository(Withdrawal).find({
+        where: { status: WithdrawalStatus.PENDING },
+      });
+      const pendingCount = pendingWithdrawals.length;
+      const pendingTotalPaise = pendingWithdrawals.reduce((sum, w) => sum + Number(w.amount), 0);
+      const partner = bank.user;
+      await this.notificationService.notifyAllAdmins(
+        NotificationKey.ADMIN_WITHDRAWAL_PENDING,
+        `${pendingCount} withdrawal request${pendingCount === 1 ? '' : 's'} pending`,
+        `${partner?.name || 'Partner'} (${partner?.vedId || 'VED'}) requested ${formattedAmount}. Total pending: ${this.formatPaise(pendingTotalPaise)}.`,
+        { pendingCount, pendingTotalPaise, latestWithdrawalId: Number(withdrawal.id) },
+        manager,
+      );
+
       return {
         message: 'Withdrawal request submitted successfully.',
         withdrawal: {
@@ -392,6 +422,7 @@ export class WalletService {
 
       const withdrawal = await withdrawalRepo.findOne({
         where: { id: withdrawalId },
+        relations: { bank: true },
       });
 
       if (!withdrawal) throw new NotFoundException('Withdrawal not found.');
@@ -407,6 +438,20 @@ export class WalletService {
 
       // Confirm: deduct from locked, add to total_withdrawn
       await this.confirmWithdrawal(withdrawal.userId, Number(withdrawal.amount), manager);
+
+      // In-app Notification: WITHDRAWAL_APPROVED (to partner)
+      const bankMasked = withdrawal.bank
+        ? `${withdrawal.bank.bankName} (****${withdrawal.bank.accountNumber.slice(-4)})`
+        : 'bank account';
+      const formattedAmount = this.formatPaise(withdrawal.amount);
+      await this.notificationService.create(
+        withdrawal.userId,
+        NotificationKey.WITHDRAWAL_APPROVED,
+        `Withdrawal #${withdrawal.id} approved`,
+        `${formattedAmount} is approved and will be credited to ${bankMasked}.`,
+        { withdrawalId: Number(withdrawal.id), amountPaise: Number(withdrawal.amount) },
+        manager,
+      );
 
       return {
         message: 'Withdrawal approved successfully.',
@@ -459,6 +504,17 @@ export class WalletService {
         description: `Withdrawal #${withdrawal.id} rejected${remarks ? ': ' + remarks : ''}`,
       });
       await txnRepo.save(txn);
+
+      // In-app Notification: WITHDRAWAL_REJECTED (to partner)
+      const formattedAmount = this.formatPaise(withdrawal.amount);
+      await this.notificationService.create(
+        withdrawal.userId,
+        NotificationKey.WITHDRAWAL_REJECTED,
+        `Withdrawal #${withdrawal.id} rejected`,
+        `Your request for ${formattedAmount} was rejected. Reason: ${remarks || 'Administrative review'}. The amount is back in your balance.`,
+        { withdrawalId: Number(withdrawal.id), amountPaise: Number(withdrawal.amount), remarks: remarks || null },
+        manager,
+      );
 
       return {
         message: 'Withdrawal rejected. Balance has been restored.',

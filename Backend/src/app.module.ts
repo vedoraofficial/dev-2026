@@ -10,6 +10,7 @@ import { GenealogyModule } from './genealogy/genealogy.module';
 import { WalletModule } from './wallet/wallet.module';
 import { OrderModule } from './order/order.module';
 import { PaymentModule } from './payment/payment.module';
+import { NotificationModule } from './notification/notification.module';
 
 @Module({
   imports: [
@@ -32,6 +33,7 @@ import { PaymentModule } from './payment/payment.module';
     WalletModule,
     OrderModule,
     PaymentModule,
+    NotificationModule,
   ],
   controllers: [AppController],
   providers: [AppService],

@@ -9,6 +9,8 @@ import { UserStatus } from '../user/entity/user.entity';
 import { Otp } from './entity/otp.entity';
 import { Repository } from 'typeorm';
 import { InjectRepository } from '@nestjs/typeorm';
+import { NotificationService } from '../notification/notification.service';
+import { NotificationKey } from '../notification/notification.constants';
 
 @Injectable()
 export class AuthService {
@@ -17,6 +19,7 @@ export class AuthService {
     private readonly jwtService: JwtService,
     @InjectRepository(Otp)
     private readonly otpRepo: Repository<Otp>,
+    private readonly notificationService: NotificationService,
   ) {}
 
   async login(dto: LoginDto) {
@@ -97,6 +100,16 @@ export class AuthService {
     // Mark OTP as used
     otp.isUsed = true;
     await this.otpRepo.save(otp);
+
+    // In-app Notification: AUTH_PASSWORD_RESET_DONE
+    const nowStr = new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
+    await this.notificationService.create(
+      user.id,
+      NotificationKey.AUTH_PASSWORD_RESET_DONE,
+      'Your password was reset',
+      `The password for ${user.vedId} was reset on ${nowStr}. If this wasn't you, contact support.`,
+      { vedId: user.vedId, dateTime: nowStr },
+    );
 
     return { success: true, message: 'Password reset successfully' };
   }

@@ -8,11 +8,13 @@ import { UserModule } from '../user/user.module';
 import { JwtStrategy } from './jwt.strategy';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { Otp } from './entity/otp.entity';
+import { NotificationModule } from '../notification/notification.module';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([Otp]),
     UserModule,
+    NotificationModule,
     PassportModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],

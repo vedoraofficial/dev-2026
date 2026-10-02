@@ -1,4 +1,4 @@
-import { Controller, Post, Body, Get, Patch, Delete, UseGuards, Request, Param } from '@nestjs/common';
+import { Controller, Post, Body, Get, Patch, Delete, UseGuards, Request, Param, ParseIntPipe } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags, ApiResponse } from '@nestjs/swagger';
 import { UserService } from './user.service';
 import { CreateUserDto, UpdateUserDto } from './dto/create-user.dto';
@@ -6,6 +6,7 @@ import { UpdateUserStatusDto } from './dto/update-user-status.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { AddBankDetailsDto } from './dto/bank-details.dto';
 import { UpdateProfileDetailsDto } from './dto/profile-details.dto';
+import { AdminVerifyBankDto } from './dto/admin-verify-bank.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
@@ -44,6 +45,18 @@ export class UserController {
   @ApiOperation({ summary: '[Admin] Delete a user account' })
   async deleteAccount(@Request() req: any) {
     return this.userService.delete(req.user.sub);
+  }
+
+  @Patch('admin/bank/:id/verify')
+  @Roles('ADMIN')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: '[Admin] Manually verify or reject a user bank account' })
+  async adminVerifyBank(
+    @Param('id', ParseIntPipe) bankId: number,
+    @Body() dto: AdminVerifyBankDto,
+  ) {
+    return this.userService.adminVerifyBankAccount(bankId, dto.status, dto.reason);
   }
 
   // ─── Self-Service Endpoints (Any Authenticated User) ────────────────
@@ -90,11 +103,19 @@ export class UserController {
     return this.userService.addBankAccount(req.user.sub, dto);
   }
 
+  @Post('bank/:id/verify')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Trigger Penny Drop verification for an existing bank account' })
+  async verifyBank(@Request() req: any, @Param('id', ParseIntPipe) bankId: number) {
+    return this.userService.verifyExistingBankAccount(req.user.sub, bankId);
+  }
+
   @Patch('bank/:id/primary')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Set a specific bank account as primary' })
-  async setPrimaryBank(@Request() req: any, @Param('id') bankId: number) {
+  async setPrimaryBank(@Request() req: any, @Param('id', ParseIntPipe) bankId: number) {
     return this.userService.setPrimaryBankAccount(req.user.sub, bankId);
   }
 
@@ -102,7 +123,7 @@ export class UserController {
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Delete a specific bank account' })
-  async deleteBank(@Request() req: any, @Param('id') bankId: number) {
+  async deleteBank(@Request() req: any, @Param('id', ParseIntPipe) bankId: number) {
     return this.userService.deleteBankAccount(req.user.sub, bankId);
   }
 

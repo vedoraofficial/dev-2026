@@ -1,15 +1,18 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { Product } from './entity/product.entity';
+import { Product, ProductStatus } from './entity/product.entity';
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
+import { NotificationService } from '../notification/notification.service';
+import { NotificationKey } from '../notification/notification.constants';
 
 @Injectable()
 export class ProductService {
   constructor(
     @InjectRepository(Product)
     private readonly productRepo: Repository<Product>,
+    private readonly notificationService: NotificationService,
   ) {}
 
   async create(dto: CreateProductDto, userId: number): Promise<Product> {
@@ -18,7 +21,19 @@ export class ProductService {
       createdBy: userId,
       updatedBy: userId,
     });
-    return this.productRepo.save(product);
+    const saved = await this.productRepo.save(product);
+
+    if (saved.status === ProductStatus.ACTIVE) {
+      const priceFormatted = `₹${(Number(saved.salePrice) / 100).toFixed(2)}`;
+      await this.notificationService.notifyAllPartners(
+        NotificationKey.PRODUCT_LAUNCHED,
+        `New in the catalogue: ${saved.name}`,
+        `Now available at ${priceFormatted} · ${saved.bvAmount} BV per unit.`,
+        { productId: Number(saved.id), pricePaise: Number(saved.salePrice), bv: Number(saved.bvAmount) },
+      );
+    }
+
+    return saved;
   }
 
   async findAll(): Promise<Product[]> {
@@ -33,11 +48,24 @@ export class ProductService {
 
   async update(id: number, dto: UpdateProductDto, userId: number): Promise<Product> {
     const product = await this.findById(id);
+    const wasActive = product.status === ProductStatus.ACTIVE;
     
     Object.assign(product, dto);
     product.updatedBy = userId;
 
-    return this.productRepo.save(product);
+    const saved = await this.productRepo.save(product);
+
+    if (!wasActive && saved.status === ProductStatus.ACTIVE) {
+      const priceFormatted = `₹${(Number(saved.salePrice) / 100).toFixed(2)}`;
+      await this.notificationService.notifyAllPartners(
+        NotificationKey.PRODUCT_LAUNCHED,
+        `New in the catalogue: ${saved.name}`,
+        `Now available at ${priceFormatted} · ${saved.bvAmount} BV per unit.`,
+        { productId: Number(saved.id), pricePaise: Number(saved.salePrice), bv: Number(saved.bvAmount) },
+      );
+    }
+
+    return saved;
   }
 
   async remove(id: number): Promise<{ message: string }> {

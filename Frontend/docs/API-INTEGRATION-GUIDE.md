@@ -211,7 +211,14 @@ export interface UserBank {
   accountNumber: string;
   bankName: string;
   ifscCode: string;
-  verificationStatus: BankVerificationStatus;
+  verificationStatus: BankVerificationStatus; // 'PENDING' | 'VERIFIED' | 'REJECTED'
+  verifiedName?: string | null;               // Official registered name returned by destination bank
+  nameMatchScore?: number | null;            // 0 - 100 fuzzy match score
+  nameMatchResult?: string | null;           // 'DIRECT' | 'GOOD' | 'MODERATE' | 'POOR' | 'NO_MATCH'
+  utr?: string | null;                        // Bank UTR for ₹1 Penny Drop deposit
+  verificationReferenceId?: string | null;    // Cashfree verification transaction reference
+  verificationFailedReason?: string | null;   // Failure explanation if rejected
+  verifiedAt?: string | null;                 // Verification completion timestamp
   isPrimary: boolean;
   createdAt: string;
 }
@@ -474,9 +481,11 @@ export interface WithdrawalRecord {
   }
   ```
 
-#### 5. Bank Accounts Management
+#### 5. Bank Accounts & Penny Drop Verification
 - **List Banks:** `GET /api/user/bank`
 - **Add Bank Account:** `POST /api/user/bank`
+  - *Automated Penny Drop:* The backend immediately triggers Cashfree Penny Drop Verification Suite (Sync), transferring ₹1 to the destination bank. It fetches the official registered name from NPCI/Bank, runs fuzzy name matching against the user's name, and returns the result in real-time.
+  - *Validation Rules:* IFSC must be 11 characters (e.g. `HDFC0001234`), Account Number must be 9 to 18 digits.
   ```json
   {
     "accountHolderName": "Rahul Sharma",
@@ -486,9 +495,56 @@ export interface WithdrawalRecord {
     "isPrimary": true
   }
   ```
-  *(Note: Newly added bank accounts start with `verificationStatus: "PENDING"`).*
+  - **Success Response (201 Created):**
+  ```json
+  {
+    "id": 1,
+    "accountHolderName": "Rahul Sharma",
+    "accountNumber": "12345678901234",
+    "bankName": "HDFC Bank",
+    "ifscCode": "HDFC0001234",
+    "isPrimary": true,
+    "verificationStatus": "VERIFIED",
+    "verifiedName": "RAHUL SHARMA",
+    "nameMatchScore": 100,
+    "nameMatchResult": "DIRECT",
+    "utr": "CF_UTR_9876543210",
+    "verificationReferenceId": "CF_REF_123456",
+    "verificationFailedReason": null,
+    "verifiedAt": "2026-10-02T09:00:00.000Z",
+    "createdAt": "2026-10-02T09:00:00.000Z"
+  }
+  ```
+  - **Failure/Mismatch Response (201 Created with REJECTED status):**
+  ```json
+  {
+    "id": 2,
+    "accountHolderName": "Different Stranger",
+    "accountNumber": "98765432109876",
+    "bankName": "ICICI Bank",
+    "ifscCode": "ICIC0001234",
+    "isPrimary": false,
+    "verificationStatus": "REJECTED",
+    "verifiedName": "DIFFERENT STRANGER",
+    "nameMatchScore": 15,
+    "nameMatchResult": "POOR",
+    "verificationFailedReason": "Name mismatch: Bank account belongs to 'DIFFERENT STRANGER'. Expected name matching 'Rahul Sharma' (Score: 15% < Threshold: 60%).",
+    "verifiedAt": null
+  }
+  ```
+- **Retry / Re-verify Bank:** `POST /api/user/bank/:id/verify`
+  - Re-triggers the Penny Drop check for accounts that are `PENDING` or `REJECTED`.
 - **Set as Primary:** `PATCH /api/user/bank/:id/primary`
 - **Delete Bank:** `DELETE /api/user/bank/:id`
+- **[Admin] Manual Bank Verification Override:** `PATCH /api/user/admin/bank/:id/verify` *(Admin only)*
+  - Body: `{ "status": "VERIFIED" | "REJECTED", "reason": "Verified via offline cheque" }`
+  - Use case: If automatic penny drop fails due to minor spelling discrepancies, admin can review uploaded documents and manually verify the account.
+
+**UI Implementation Checklist for Bank Management:**
+1. Show **"Verified" badge (green)** when `verificationStatus === 'VERIFIED'`, displaying Bank UTR as proof of deposit.
+2. Show **"Verification Failed / Rejected" badge (red)** with `verificationFailedReason` alert when `verificationStatus === 'REJECTED'`.
+3. Provide a **"Verify Again" button** calling `POST /api/user/bank/:id/verify`.
+4. Only allow wallet withdrawal selection for accounts with `verificationStatus === 'VERIFIED'`.
 
 #### 6. [Admin] Direct User Management
 - **Create User directly:** `POST /api/user` *(Admin only)*
@@ -822,6 +878,99 @@ Creates an offline order and automatically triggers instant 5-level commission d
 #### 3. PhonePe Redirect Callback
 - **Endpoint:** `GET /api/payment/callback?merchantOrderId=...`
 - **Access:** Public (Invoked when PhonePe redirects back to frontend).
+
+---
+
+### 5.8 In-App Notifications Module (`/api/notifications`)
+
+Used for real-time notification bells, popups, notification dropdowns, and announcements.
+
+#### 1. Get Unread Notifications Count (Header Bell Badge)
+Fast lightweight endpoint designed for interval polling (e.g. every 30-60s) to update the red unread count badge on the header bell icon.
+- **Endpoint:** `GET /api/notifications/unread-count`
+- **Access:** Authenticated
+- **Response (200 OK):**
+  ```json
+  {
+    "unreadCount": 3
+  }
+  ```
+
+#### 2. Get Paginated Notifications List
+- **Endpoint:** `GET /api/notifications`
+- **Access:** Authenticated
+- **Query Params:**
+  - `page`: Page number (default: 1)
+  - `limit`: Number of items per page (default: 20)
+  - `unreadOnly`: Boolean (`true` to only fetch unread)
+- **Response (200 OK):**
+  ```json
+  {
+    "items": [
+      {
+        "id": 102,
+        "key": "COMMISSION_CREDITED",
+        "title": "₹300 commission credited",
+        "message": "From Rahul's order #15 · Direct ₹200 + Level 1 ₹100. Wallet balance: ₹1,500.00.",
+        "metadata": { "orderId": 15, "totalPaise": 30000, "breakdown": "Direct ₹200 + Level 1 ₹100" },
+        "isRead": false,
+        "readAt": null,
+        "createdAt": "2026-10-02T04:12:00.000Z"
+      }
+    ],
+    "total": 12,
+    "unreadCount": 3,
+    "page": 1,
+    "limit": 20
+  }
+  ```
+
+#### 3. Mark Single Notification as Read
+- **Endpoint:** `PATCH /api/notifications/:id/read`
+- **Access:** Authenticated
+- **Response (200 OK):**
+  ```json
+  {
+    "success": true,
+    "notification": {
+      "id": 102,
+      "isRead": true,
+      "readAt": "2026-10-02T04:15:00.000Z"
+    }
+  }
+  ```
+
+#### 4. Mark All Notifications as Read ("Mark all as read" button)
+- **Endpoint:** `PATCH /api/notifications/read-all`
+- **Access:** Authenticated
+- **Response (200 OK):**
+  ```json
+  {
+    "success": true,
+    "count": 3
+  }
+  ```
+
+#### 5. [Admin] Broadcast System Announcement
+- **Endpoint:** `POST /api/notifications/announcement`
+- **Access:** Admin only (`ADMIN` role)
+- **Request Body:**
+  ```json
+  {
+    "title": "New Product Launch",
+    "message": "Check out our new healthcare package in the catalog!",
+    "target": "ALL_PARTNERS" // or "FOUNDER_TEAM"
+    // "founderVedId": "VED000001" (if target === "FOUNDER_TEAM")
+  }
+  ```
+- **Response (201 Created):**
+  ```json
+  {
+    "success": true,
+    "message": "Announcement broadcasted successfully",
+    "recipientCount": 42
+  }
+  ```
 
 ---
 
