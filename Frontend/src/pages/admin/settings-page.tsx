@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react"
+import { useState } from "react"
 import { toast } from "sonner"
 
 import { PageBody, PageHeader } from "@/components/common/page-header"
@@ -7,21 +7,15 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
+import { useMe } from "@/features/account/queries"
+import { FOUNDER_IDS } from "@/features/genealogy/use-genealogy-tree"
 
-const constants = [
-  ["Root admin ID", "VED108"],
-  ["Founder IDs", "…001 / 002 / 003"],
+/** Compensation-plan rules — fixed in the commission engine, not editable from the UI. */
+const planConstants = [
   ["Max direct partners", "20"],
   ["Tree depth", "Unlimited"],
   ["Direct commission", "₹200"],
   ["BV split L1–L5", "10/10/10/5/5 %"],
-]
-
-const roles = [
-  { name: "Root Admin", detail: "VED108 · full access", locked: true },
-  { name: "Finance Operator", detail: "Withdrawals, transactions, reports" },
-  { name: "Support Executive", detail: "Partners, PAN checks, placement queue" },
-  { name: "Content Manager", detail: "Products, news, notifications" },
 ]
 
 type Settings = {
@@ -64,18 +58,6 @@ function ToggleRow({
   )
 }
 
-function InfoRow({ title, detail, value }: { title: string; detail: string; value: ReactNode }) {
-  return (
-    <div className="flex items-center justify-between gap-4 border-b border-border/70 py-3.5 first:pt-0 last:border-b-0 last:pb-0">
-      <div className="min-w-0">
-        <p className="text-[0.875rem] font-medium">{title}</p>
-        <p className="text-[0.6875rem] text-muted-foreground">{detail}</p>
-      </div>
-      <span className="shrink-0 text-xs">{value}</span>
-    </div>
-  )
-}
-
 function SettingField({
   id,
   label,
@@ -98,9 +80,17 @@ function SettingField({
 }
 
 export function AdminSettingsPage() {
+  const me = useMe()
+  const admin = me.data
   const [saved, setSaved] = useState(initialSettings)
   const [draft, setDraft] = useState(initialSettings)
   const isDirty = JSON.stringify(draft) !== JSON.stringify(saved)
+
+  const constants = [
+    ["Root admin ID", admin?.vedId ?? "—"],
+    ["Founder IDs", FOUNDER_IDS.join(" / ")],
+    ...planConstants,
+  ]
 
   const setField = (key: keyof Settings) => (value: string) =>
     setDraft((d) => ({ ...d, [key]: value }))
@@ -148,21 +138,22 @@ export function AdminSettingsPage() {
             <Panel>
               <PanelHeader title="Admin roles & access" />
               <ul>
-                {roles.map((role) => (
-                  <li
-                    key={role.name}
-                    className="flex items-center justify-between gap-4 border-b border-border/70 py-3.5 first:pt-0 last:border-b-0"
-                  >
-                    <div className="min-w-0">
-                      <p className="text-[0.875rem] font-medium">{role.name}</p>
-                      <p className="text-[0.6875rem] text-muted-foreground">{role.detail}</p>
-                    </div>
-                    {role.locked ? (
-                      <span className="text-[0.6875rem] text-muted-foreground">Permanent</span>
-                    ) : null}
-                  </li>
-                ))}
+                <li className="flex items-center justify-between gap-4 border-b border-border/70 py-3.5 first:pt-0 last:border-b-0">
+                  <div className="min-w-0">
+                    <p className="text-[0.875rem] font-medium">
+                      {admin ? `${admin.name} · Root Admin` : "Loading…"}
+                    </p>
+                    <p className="text-[0.6875rem] text-muted-foreground">
+                      {admin ? `${admin.vedId} · full access` : ""}
+                    </p>
+                  </div>
+                  <span className="text-[0.6875rem] text-muted-foreground">Permanent</span>
+                </li>
               </ul>
+              <p className="mt-3 text-[0.6875rem] text-muted-foreground">
+                VEDORA currently has a single Admin role — sub-roles with limited access aren't
+                supported by the backend yet.
+              </p>
             </Panel>
           </div>
 
@@ -214,16 +205,6 @@ export function AdminSettingsPage() {
                 detail="Blocks partner logins during releases"
                 checked={draft.maintenanceMode}
                 onCheckedChange={setToggle("maintenanceMode")}
-              />
-              <InfoRow
-                title="Database backup"
-                detail="MySQL · daily 02:00 IST"
-                value={<span className="text-success">Healthy</span>}
-              />
-              <InfoRow
-                title="Audit log retention"
-                detail="All commission entries kept permanently"
-                value={<span className="text-muted-foreground">Permanent</span>}
               />
             </Panel>
           </div>

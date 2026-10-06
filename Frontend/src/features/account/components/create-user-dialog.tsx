@@ -17,6 +17,7 @@ import {
 import { Input } from "@/components/ui/input"
 import { useAdminCreateUser } from "@/features/account/queries"
 import { createUserSchema, type CreateUserValues } from "@/features/account/schemas"
+import { useEmailInputLock } from "@/hooks/use-email-input-lock"
 
 const blank: CreateUserValues = { name: "", email: "", mobile: "", password: "" }
 
@@ -25,6 +26,7 @@ export function CreateUserDialog() {
   const [open, setOpen] = useState(false)
   const [created, setCreated] = useState<{ vedId: string; name: string } | null>(null)
   const createUser = useAdminCreateUser()
+  const emailLock = useEmailInputLock()
   const {
     register,
     handleSubmit,
@@ -46,7 +48,13 @@ export function CreateUserDialog() {
     props: React.ComponentProps<typeof Input> = {},
   ) => (
     <FormField label={label} htmlFor={`cu-${name}`} error={errors[name]?.message}>
-      <Input id={`cu-${name}`} aria-invalid={!!errors[name]} {...props} {...register(name)} />
+      <Input
+        id={`cu-${name}`}
+        aria-invalid={!!errors[name]}
+        onFocus={name === "email" ? emailLock.onFocus : undefined}
+        {...props}
+        {...register(name, name === "email" ? { onChange: emailLock.onChange } : undefined)}
+      />
     </FormField>
   )
 
@@ -61,7 +69,7 @@ export function CreateUserDialog() {
           <DialogDescription>
             {created
               ? "They can sign in with this ID and the password you set."
-              : "Creates a Partner login with status Pending. It is not placed in the genealogy tree — use Manual Placement for that."}
+              : "Creates a Partner login with status Pending. It is not placed in the genealogy tree — use Add Partner for that."}
           </DialogDescription>
         </DialogHeader>
         {created ? (

@@ -12,9 +12,9 @@ export const FOUNDER_IDS = ["VED000001", "VED000002", "VED000003"] as const
 
 /** Names the backend seeds for them (there is no "get user by ID" API for Admin). */
 export const FOUNDER_NAMES: Record<string, string> = {
-  VED000001: "Founder One",
-  VED000002: "Founder Two",
-  VED000003: "Founder Three",
+  VED000001: "Poonam Amit Medhavi",
+  VED000002: "Neelam Prashant Dongare",
+  VED000003: "Shital Pravin Bhor",
 }
 
 const firstName = (name: string) => name.trim().split(/\s+/)[0] ?? name

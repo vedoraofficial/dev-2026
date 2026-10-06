@@ -1,12 +1,15 @@
 import { zodResolver } from "@hookform/resolvers/zod"
-import { useEffect, useState, type FormEvent, type ReactNode } from "react"
+import { useEffect, useState, type ChangeEvent, type FormEvent, type ReactNode } from "react"
 import { Controller, useForm, useWatch, type DefaultValues } from "react-hook-form"
+import { Link } from "react-router-dom"
 import { toast } from "sonner"
 
+import { ROUTES } from "@/app/routes"
 import { FieldError, FormField as Field } from "@/components/common/form-field"
 import { MonoId } from "@/components/common/mono-id"
 import { PageBody, PageHeader } from "@/components/common/page-header"
 import { Panel } from "@/components/common/panel"
+import { PasswordInput } from "@/components/common/password-input"
 import { ProgressBar } from "@/components/common/progress-bar"
 import { QueryState } from "@/components/common/query-state"
 import { Button } from "@/components/ui/button"
@@ -21,6 +24,7 @@ import {
 } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
 import { useMySlots, useRegisterDownline } from "@/features/genealogy/queries"
+import { useEmailInputLock } from "@/hooks/use-email-input-lock"
 import { AreaSelect, PincodeHint } from "@/features/placement/components/pincode-lookup"
 import {
   PlacementSuccess,
@@ -35,7 +39,8 @@ import {
   type PlacementValues,
 } from "@/features/placement/schemas"
 import { isPincode, usePincodeLookup } from "@/features/placement/queries"
-import { products } from "@/features/products/mock-data"
+import { toCatalogProduct } from "@/features/products/catalog"
+import { useProducts } from "@/features/products/queries"
 import { formatBV, formatINR } from "@/lib/format"
 import { useSession } from "@/lib/session"
 import { cn } from "@/lib/utils"
@@ -48,6 +53,17 @@ const GENDER_API: Record<(typeof GENDERS)[number], Gender> = {
   Male: "MALE",
   Female: "FEMALE",
   Other: "OTHER",
+}
+
+/** "123456789012" -> "1234 5678 9012" — digits only, capped at 12, grouped in 4s as you type. */
+function formatAadhaar(value: string): string {
+  const digitsOnly = value.replace(/\D/g, "").slice(0, 12)
+  return digitsOnly.replace(/(\d{4})(?=\d)/g, "$1 ")
+}
+
+/** Strips anything that isn't a digit and caps the length — e.g. for Age and Mobile. */
+function limitDigits(value: string, max: number): string {
+  return value.replace(/\D/g, "").slice(0, max)
 }
 
 function Step({ n, title, children }: { n: number; title: string; children: ReactNode }) {
@@ -105,6 +121,11 @@ export function PartnerManualPlacementPage() {
   const me = useSession((s) => s.user)
   const slotsQuery = useMySlots()
   const registerDownline = useRegisterDownline()
+  const emailLock = useEmailInputLock()
+  const productsQuery = useProducts()
+  const products = (productsQuery.data ?? [])
+    .filter((p) => p.status === "ACTIVE")
+    .map((p) => toCatalogProduct(p))
 
   const takenBySlot = new Map<number, string>(
     (slotsQuery.data?.filledSlots ?? []).map((f) => [f.slotNumber, f.partner.vedId]),
@@ -227,10 +248,7 @@ export function PartnerManualPlacementPage() {
     const done = products.find((p) => p.sku === completed.values.productSku) ?? products[0]
     return (
       <>
-        <PageHeader
-          title="Manual Placement"
-          subtitle="Partner registered and placed in your tree"
-        />
+        <PageHeader title="Add Partner" subtitle="Partner registered and placed in your tree" />
         <PageBody>
           <PlacementSuccess
             partner={completed.partner}
@@ -246,7 +264,7 @@ export function PartnerManualPlacementPage() {
   return (
     <>
       <PageHeader
-        title="Manual Placement"
+        title="Add Partner"
         subtitle="Register a new partner, pick their bracelet and slot, and ship the joining order"
       />
       <PageBody>
@@ -275,9 +293,13 @@ export function PartnerManualPlacementPage() {
                   <Input
                     id="age"
                     inputMode="numeric"
-                    maxLength={3}
+                    maxLength={2}
                     aria-invalid={!!errors.age}
-                    {...register("age")}
+                    {...register("age", {
+                      onChange: (e: ChangeEvent<HTMLInputElement>) => {
+                        e.target.value = limitDigits(e.target.value, 2)
+                      },
+                    })}
                   />
                 </Field>
                 <Field label="Gender" htmlFor="gender" error={errors.gender?.message}>
@@ -312,9 +334,14 @@ export function PartnerManualPlacementPage() {
                     id="mobile"
                     type="tel"
                     inputMode="tel"
+                    maxLength={10}
                     placeholder="+91"
                     aria-invalid={!!errors.mobile}
-                    {...register("mobile")}
+                    {...register("mobile", {
+                      onChange: (e: ChangeEvent<HTMLInputElement>) => {
+                        e.target.value = limitDigits(e.target.value, 10)
+                      },
+                    })}
                   />
                 </Field>
                 <Field label="Email" htmlFor="email" error={errors.email?.message}>
@@ -323,7 +350,8 @@ export function PartnerManualPlacementPage() {
                     type="email"
                     autoComplete="off"
                     aria-invalid={!!errors.email}
-                    {...register("email")}
+                    onFocus={emailLock.onFocus}
+                    {...register("email", { onChange: emailLock.onChange })}
                   />
                 </Field>
                 <Field label="New ID" htmlFor="newId">
@@ -345,7 +373,11 @@ export function PartnerManualPlacementPage() {
                     placeholder="1234 5678 9012"
                     className="font-mono"
                     aria-invalid={!!errors.aadhaar}
-                    {...register("aadhaar")}
+                    {...register("aadhaar", {
+                      onChange: (e: ChangeEvent<HTMLInputElement>) => {
+                        e.target.value = formatAadhaar(e.target.value)
+                      },
+                    })}
                   />
                 </Field>
                 <Field label="PAN card" htmlFor="pan" error={errors.pan?.message}>
@@ -418,9 +450,8 @@ export function PartnerManualPlacementPage() {
 
               <div className="grid gap-3 sm:grid-cols-2">
                 <Field label="Password" htmlFor="password" error={errors.password?.message}>
-                  <Input
+                  <PasswordInput
                     id="password"
-                    type="password"
                     autoComplete="new-password"
                     aria-invalid={!!errors.password}
                     {...register("password")}
@@ -431,9 +462,8 @@ export function PartnerManualPlacementPage() {
                   htmlFor="confirmPassword"
                   error={errors.confirmPassword?.message}
                 >
-                  <Input
+                  <PasswordInput
                     id="confirmPassword"
-                    type="password"
                     autoComplete="new-password"
                     aria-invalid={!!errors.confirmPassword}
                     {...register("confirmPassword")}
@@ -545,19 +575,26 @@ export function PartnerManualPlacementPage() {
             </Step>
 
             <Step n={3} title="Choose the joining product">
-              <Controller
-                control={control}
-                name="productSku"
-                render={({ field }) => (
-                  <ProductPicker
-                    products={products}
-                    value={field.value}
-                    onChange={field.onChange}
-                    invalid={!!errors.productSku}
-                    className="lg:grid-cols-4"
-                  />
-                )}
-              />
+              <QueryState
+                query={productsQuery}
+                rows={1}
+                empty={products.length === 0}
+                emptyMessage="No products are on sale yet."
+              >
+                <Controller
+                  control={control}
+                  name="productSku"
+                  render={({ field }) => (
+                    <ProductPicker
+                      products={products}
+                      value={field.value}
+                      onChange={field.onChange}
+                      invalid={!!errors.productSku}
+                      className="lg:grid-cols-4"
+                    />
+                  )}
+                />
+              </QueryState>
               <FieldError message={errors.productSku?.message} />
               <p className="text-[0.6875rem] text-muted-foreground">
                 One bracelet per joining · {formatINR(1999)} MRP incl. GST · 1,000 BV.
@@ -613,8 +650,13 @@ export function PartnerManualPlacementPage() {
                         id="shipMobile"
                         type="tel"
                         inputMode="tel"
+                        maxLength={10}
                         aria-invalid={!!errors.shipMobile}
-                        {...register("shipMobile")}
+                        {...register("shipMobile", {
+                          onChange: (e: ChangeEvent<HTMLInputElement>) => {
+                            e.target.value = limitDigits(e.target.value, 10)
+                          },
+                        })}
                       />
                     </Field>
                   </div>
@@ -741,7 +783,17 @@ export function PartnerManualPlacementPage() {
                     />
                     <span>
                       The details are correct, and the new partner accepts the VEDORA Partner
-                      Agreement, Terms &amp; Conditions and Privacy Policy.
+                      Agreement, Terms &amp; Conditions and{" "}
+                      <Link
+                        to={ROUTES.partner.policies}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={(e) => e.stopPropagation()}
+                        className="font-medium text-gold hover:underline"
+                      >
+                        Privacy Policy
+                      </Link>
+                      .
                     </span>
                   </label>
                 )}

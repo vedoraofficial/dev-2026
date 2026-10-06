@@ -17,6 +17,7 @@ import {
 import { useMe, useProfileDetails, useSaveAccountDetails } from "@/features/account/queries"
 import { personalSchema, type PersonalValues } from "@/features/account/schemas"
 import type { Me, ProfileDetails } from "@/features/account/types"
+import { useEmailInputLock } from "@/hooks/use-email-input-lock"
 import { combineQueries } from "@/lib/combine-queries"
 
 const GENDER_OPTIONS = [
@@ -37,7 +38,6 @@ function toForm(me: Me | undefined, details: ProfileDetails | null | undefined):
     city: details?.city ?? "",
     state: details?.state ?? "",
     pincode: details?.pincode ?? "",
-    profilePhoto: details?.profilePhoto ?? "",
   }
 }
 
@@ -45,13 +45,15 @@ function toForm(me: Me | undefined, details: ProfileDetails | null | undefined):
 const orUndefined = (v: string) => (v === "" ? undefined : v)
 
 /**
- * Name, email, mobile, birth date, gender, address and photo link of the signed-in user.
- * Used by both the Partner and the Admin profile pages.
+ * Name, email, mobile, birth date, gender and address of the signed-in user.
+ * Used by both the Partner and the Admin profile pages. Photo is changed from the
+ * avatar on {@link ProfileCard}, not here.
  */
 export function PersonalDetailsForm() {
   const me = useMe()
   const details = useProfileDetails()
   const save = useSaveAccountDetails()
+  const emailLock = useEmailInputLock()
 
   const {
     register,
@@ -79,7 +81,6 @@ export function PersonalDetailsForm() {
         city: orUndefined(v.city),
         state: orUndefined(v.state),
         pincode: orUndefined(v.pincode),
-        profilePhoto: orUndefined(v.profilePhoto),
       },
     })
 
@@ -114,7 +115,8 @@ export function PersonalDetailsForm() {
                 type="email"
                 autoComplete="email"
                 aria-invalid={!!errors.email}
-                {...register("email")}
+                onFocus={emailLock.onFocus}
+                {...register("email", { onChange: emailLock.onChange })}
               />
             </FormField>
             <div className="grid grid-cols-2 gap-3">
@@ -166,20 +168,6 @@ export function PersonalDetailsForm() {
                 />
               </FormField>
             </div>
-            <FormField
-              label="Photo link"
-              htmlFor="profilePhoto"
-              error={errors.profilePhoto?.message}
-              className="sm:col-span-2"
-            >
-              <Input
-                id="profilePhoto"
-                type="url"
-                placeholder="https://…"
-                aria-invalid={!!errors.profilePhoto}
-                {...register("profilePhoto")}
-              />
-            </FormField>
           </div>
           <div className="flex flex-wrap justify-end gap-2">
             <Button

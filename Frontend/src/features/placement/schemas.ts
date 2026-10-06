@@ -1,5 +1,7 @@
 import { z } from "zod"
 
+import { emailSchema } from "@/lib/validators"
+
 const digits = (value: string) => value.replace(/\D/g, "")
 
 /** Indian mobile: 10 digits starting 6–9. "+91 98220 41288" and "9822041288" both pass. */
@@ -31,11 +33,11 @@ export const placementSchema = z
     age: z
       .string()
       .trim()
-      .regex(/^\d{1,3}$/, "Enter age in years")
-      .refine((v) => Number(v) >= 18 && Number(v) <= 100, "Partner must be 18 or older"),
+      .regex(/^\d{1,2}$/, "Enter age in years")
+      .refine((v) => Number(v) >= 18 && Number(v) <= 99, "Partner must be 18 or older"),
     gender: z.enum(GENDERS, { message: "Choose a gender" }),
     mobile,
-    email: z.string().trim().email("Enter a valid email"),
+    email: emailSchema,
     aadhaar: z
       .string()
       .trim()

@@ -10,7 +10,6 @@ import { Panel, PanelHeader } from "@/components/common/panel"
 import { ProgressBar } from "@/components/common/progress-bar"
 import { QueryState } from "@/components/common/query-state"
 import { StatCard, StatGrid } from "@/components/common/stat-card"
-import { StatusPill, type PillVariant } from "@/components/common/status-pill"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { useMe } from "@/features/account/queries"
@@ -25,32 +24,8 @@ import { paiseToRupees } from "@/lib/money"
 import { useSession } from "@/lib/session"
 import { cn } from "@/lib/utils"
 import { normalizeVedId } from "@/lib/ved-id"
-import type { UserStatus } from "@/types/user"
 
 const levelShade = ["bg-chart-1", "bg-chart-2", "bg-chart-3", "bg-chart-4", "bg-chart-5"]
-
-const accountPill: Record<UserStatus, { label: string; variant: PillVariant; note: string }> = {
-  ACTIVE: {
-    label: "Active",
-    variant: "success",
-    note: "Your ID is active — commissions from your team are credited to your wallet.",
-  },
-  PENDING: {
-    label: "Pending",
-    variant: "pending",
-    note: "Your ID is not active yet. Commissions are credited only to active IDs.",
-  },
-  INACTIVE: {
-    label: "Inactive",
-    variant: "neutral",
-    note: "Your ID is inactive. No BV or level income is credited while inactive.",
-  },
-  BLOCKED: {
-    label: "Blocked",
-    variant: "danger",
-    note: "Your ID is blocked. Contact Admin.",
-  },
-}
 
 export function PartnerDashboardPage() {
   const navigate = useNavigate()
@@ -77,7 +52,6 @@ export function PartnerDashboardPage() {
   const maxLevel = Math.max(1, ...levels)
 
   const featured = (products.data ?? []).find((p) => p.status === "ACTIVE")
-  const status = me.data ? accountPill[me.data.status] : null
 
   const searchTeam = () => {
     if (!query.trim()) return
@@ -224,21 +198,6 @@ export function PartnerDashboardPage() {
           </div>
 
           <div className="space-y-4 md:space-y-5">
-            <Panel>
-              <PanelHeader
-                title="ID activation"
-                aside={
-                  status ? <StatusPill variant={status.variant}>{status.label}</StatusPill> : null
-                }
-              />
-              <p className="text-xs leading-relaxed text-muted-foreground">
-                {status?.note ?? "Loading your account status…"}
-              </p>
-              <p className="mt-4 border-t border-border/70 pt-3 text-[0.6875rem] text-muted-foreground">
-                No BV or level income is credited on days your ID is inactive.
-              </p>
-            </Panel>
-
             <Panel>
               <PanelHeader title="SRP wallet" aside="2 SRP per confirmed sale" />
               <div className="flex flex-wrap items-baseline justify-between gap-2">

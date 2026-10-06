@@ -19,6 +19,7 @@ import { Input } from "@/components/ui/input"
 import { useJoinPartner } from "@/features/genealogy/queries"
 import { joinSchema, type JoinValues } from "@/features/genealogy/schemas"
 import type { JoinedPartner } from "@/features/genealogy/types"
+import { useEmailInputLock } from "@/hooks/use-email-input-lock"
 
 const blank: JoinValues = {
   referralId: "",
@@ -37,6 +38,7 @@ export function JoinPartnerDialog({ onJoined }: { onJoined?: (vedId: string) => 
   const [open, setOpen] = useState(false)
   const [joined, setJoined] = useState<JoinedPartner["partner"] | null>(null)
   const join = useJoinPartner()
+  const emailLock = useEmailInputLock()
   const {
     register,
     handleSubmit,
@@ -62,7 +64,13 @@ export function JoinPartnerDialog({ onJoined }: { onJoined?: (vedId: string) => 
     props: React.ComponentProps<typeof Input> = {},
   ) => (
     <FormField label={label} htmlFor={`join-${name}`} error={errors[name]?.message}>
-      <Input id={`join-${name}`} aria-invalid={!!errors[name]} {...props} {...register(name)} />
+      <Input
+        id={`join-${name}`}
+        aria-invalid={!!errors[name]}
+        onFocus={name === "email" ? emailLock.onFocus : undefined}
+        {...props}
+        {...register(name, name === "email" ? { onChange: emailLock.onChange } : undefined)}
+      />
     </FormField>
   )
 

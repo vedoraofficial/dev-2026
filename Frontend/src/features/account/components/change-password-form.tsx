@@ -2,8 +2,8 @@ import { zodResolver } from "@hookform/resolvers/zod"
 import { useForm, useWatch } from "react-hook-form"
 
 import { FormField } from "@/components/common/form-field"
+import { PasswordInput } from "@/components/common/password-input"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
 import { useChangePassword } from "@/features/account/queries"
 import { changePasswordSchema, type ChangePasswordValues } from "@/features/account/schemas"
 import { cn } from "@/lib/utils"
@@ -49,18 +49,16 @@ export function ChangePasswordForm({ className }: { className?: string }) {
   return (
     <form className={cn("space-y-4", className)} onSubmit={handleSubmit(onSubmit)} noValidate>
       <FormField label="Current password" htmlFor="oldPassword" error={errors.oldPassword?.message}>
-        <Input
+        <PasswordInput
           id="oldPassword"
-          type="password"
           autoComplete="current-password"
           aria-invalid={!!errors.oldPassword}
           {...register("oldPassword")}
         />
       </FormField>
       <FormField label="New password" htmlFor="newPassword" error={errors.newPassword?.message}>
-        <Input
+        <PasswordInput
           id="newPassword"
-          type="password"
           autoComplete="new-password"
           aria-invalid={!!errors.newPassword}
           {...register("newPassword")}
@@ -82,9 +80,8 @@ export function ChangePasswordForm({ className }: { className?: string }) {
         htmlFor="confirmPassword"
         error={errors.confirmPassword?.message}
       >
-        <Input
+        <PasswordInput
           id="confirmPassword"
-          type="password"
           autoComplete="new-password"
           aria-invalid={!!errors.confirmPassword}
           {...register("confirmPassword")}

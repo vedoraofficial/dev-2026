@@ -1,11 +1,13 @@
 import { z } from "zod"
 
+import { emailSchema } from "@/lib/validators"
+
 const optionalText = z.string().trim()
 
 /** PATCH /api/user (name, email, mobile) + PATCH /api/user/profile-details (the rest). */
 export const personalSchema = z.object({
   name: z.string().trim().min(3, "Enter the full name"),
-  email: z.string().trim().email("Enter a valid email"),
+  email: emailSchema,
   mobile: z
     .string()
     .trim()
@@ -17,10 +19,6 @@ export const personalSchema = z.object({
   city: optionalText,
   state: optionalText,
   pincode: optionalText.refine((v) => v === "" || /^[1-9]\d{5}$/.test(v), "Pincode is 6 digits"),
-  profilePhoto: optionalText.refine(
-    (v) => v === "" || /^https?:\/\/\S+$/.test(v),
-    "Enter an image link starting with http(s)://",
-  ),
 })
 export type PersonalValues = z.infer<typeof personalSchema>
 
@@ -62,7 +60,7 @@ export type BankValues = z.output<typeof bankSchema>
 /** POST /api/user — [Admin] creates a login (Partner, Pending, not placed in the tree). */
 export const createUserSchema = z.object({
   name: z.string().trim().min(3, "Enter the full name"),
-  email: z.string().trim().email("Enter a valid email"),
+  email: emailSchema,
   mobile: z
     .string()
     .trim()

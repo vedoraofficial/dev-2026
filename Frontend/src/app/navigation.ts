@@ -20,7 +20,7 @@ export const ADMIN_NAV: NavItem[] = [
 export const PARTNER_NAV: NavItem[] = [
   { label: "Dashboard", to: ROUTES.partner.dashboard },
   { label: "Genealogy Tree", to: ROUTES.partner.genealogy },
-  { label: "Manual Placement", to: ROUTES.partner.manualPlacement },
+  { label: "Add Partner", to: ROUTES.partner.manualPlacement },
   { label: "My Team", to: ROUTES.partner.team },
   { label: "Wallet", to: ROUTES.partner.wallet },
   { label: "SRP Wallet", to: ROUTES.partner.srpWallet },

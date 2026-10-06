@@ -1,5 +1,7 @@
 import { z } from "zod"
 
+import { emailSchema } from "@/lib/validators"
+
 /** POST /api/partner/join — public sign-up under a sponsor's VEDORA ID. */
 export const joinSchema = z
   .object({
@@ -8,7 +10,7 @@ export const joinSchema = z
       .trim()
       .regex(/^VED\d{3,6}$/i, "Sponsor IDs look like VED000418"),
     name: z.string().trim().min(3, "Enter your full name"),
-    email: z.string().trim().email("Enter a valid email"),
+    email: emailSchema,
     mobile: z
       .string()
       .trim()

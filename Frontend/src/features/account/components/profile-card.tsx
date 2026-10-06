@@ -1,3 +1,7 @@
+import { Camera } from "lucide-react"
+import { useEffect, useRef, useState, type ChangeEvent } from "react"
+import { toast } from "sonner"
+
 import { MonoId } from "@/components/common/mono-id"
 import { Panel } from "@/components/common/panel"
 import { PersonAvatar } from "@/components/common/person-avatar"
@@ -20,15 +24,49 @@ export function ProfileCard({ tone = "striped" }: { tone?: "striped" | "gold" })
   const me = useMe()
   const details = useProfileDetails()
   const user = me.data
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const [photoPreview, setPhotoPreview] = useState<string | null>(null)
+
+  // Revoke the object URL when it's replaced or the card unmounts.
+  useEffect(() => () => void (photoPreview && URL.revokeObjectURL(photoPreview)), [photoPreview])
+
+  const onPickPhoto = (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    e.target.value = ""
+    if (!file) return
+    if (photoPreview) URL.revokeObjectURL(photoPreview)
+    setPhotoPreview(URL.createObjectURL(file))
+    toast("Photo preview updated", {
+      description:
+        "This isn't saved to your account yet — photo upload isn't connected to the backend.",
+    })
+  }
 
   return (
     <Panel className="flex flex-col items-center text-center">
-      <PersonAvatar
-        tone={tone}
-        size="xl"
-        src={details.data?.profilePhoto ?? undefined}
-        alt={user?.name ?? ""}
-      />
+      <div className="relative">
+        <PersonAvatar
+          tone={tone}
+          size="xl"
+          src={photoPreview ?? details.data?.profilePhoto ?? undefined}
+          alt={user?.name ?? ""}
+        />
+        <button
+          type="button"
+          onClick={() => fileInputRef.current?.click()}
+          aria-label="Change photo"
+          className="absolute right-0 bottom-0 grid size-7 place-items-center rounded-full border border-border bg-card text-gold shadow-sm hover:bg-muted"
+        >
+          <Camera className="size-3.5" />
+        </button>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={onPickPhoto}
+        />
+      </div>
       {user ? (
         <>
           <h2 className="mt-4 text-lg font-medium">{user.name}</h2>
