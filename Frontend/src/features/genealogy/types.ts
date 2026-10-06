@@ -125,6 +125,8 @@ export type TreeMember = {
   children: TreeMember[]
   /** The member's team hasn't been fetched yet — opening the card loads it. */
   pending?: boolean
+  /** The server didn't allow opening this member's team (403) */
+  teamHidden?: boolean
   /** Placement status from the backend (ACTIVE, …) */
   status?: string
 }

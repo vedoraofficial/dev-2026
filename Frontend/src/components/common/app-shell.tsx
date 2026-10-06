@@ -64,7 +64,12 @@ function SidebarBody({ sectionLabel, nav, user, onNavigate }: Props & { onNaviga
           onClick={onNavigate}
           className="flex items-center gap-3 rounded-xl border border-border bg-accent/60 px-3 py-2.5 transition-colors hover:border-gold/30"
         >
-          <PersonAvatar tone={user.role === "Root Admin" ? "gold" : "striped"} size="sm" />
+          <PersonAvatar
+            tone={user.role === "Root Admin" ? "gold" : "striped"}
+            size="sm"
+            src={user.photo}
+            alt={user.name}
+          />
           <div className="min-w-0">
             <p className="truncate text-[0.8125rem] font-medium">{user.name}</p>
             <MonoId tone="gold" className="text-[0.6875rem]">

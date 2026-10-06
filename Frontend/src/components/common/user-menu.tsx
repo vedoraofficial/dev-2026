@@ -39,12 +39,22 @@ export function UserMenu() {
           aria-label={`Account menu for ${user.name}`}
           className="hidden rounded-full p-0 sm:inline-flex"
         >
-          <PersonAvatar tone={user.role === "Root Admin" ? "gold" : "striped"} size="md" />
+          <PersonAvatar
+            tone={user.role === "Root Admin" ? "gold" : "striped"}
+            size="md"
+            src={user.photo}
+            alt={user.name}
+          />
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-56">
         <DropdownMenuLabel className="flex items-center gap-3 py-2 font-normal">
-          <PersonAvatar tone={user.role === "Root Admin" ? "gold" : "striped"} size="sm" />
+          <PersonAvatar
+            tone={user.role === "Root Admin" ? "gold" : "striped"}
+            size="sm"
+            src={user.photo}
+            alt={user.name}
+          />
           <div className="min-w-0">
             <p className="truncate text-[0.8125rem] font-medium">{user.name}</p>
             <p className="text-[0.6875rem]">

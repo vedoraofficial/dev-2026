@@ -11,7 +11,13 @@ import { StatusPill, type PillVariant } from "@/components/common/status-pill"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
-import { useAddBank, useBanks, useDeleteBank, useSetPrimaryBank } from "@/features/account/queries"
+import {
+  useAddBank,
+  useBanks,
+  useDeleteBank,
+  useSetPrimaryBank,
+  useVerifyBank,
+} from "@/features/account/queries"
 import { bankSchema, type BankInput, type BankValues } from "@/features/account/schemas"
 import type { BankVerificationStatus } from "@/features/account/types"
 
@@ -120,6 +126,7 @@ function AddBankForm({ first, onDone }: { first: boolean; onDone: () => void }) 
 export function BankAccountsPanel() {
   const banks = useBanks()
   const setPrimary = useSetPrimaryBank()
+  const verify = useVerifyBank()
   const deleteBank = useDeleteBank()
   const [adding, setAdding] = useState(false)
   const list = banks.data ?? []
@@ -161,12 +168,33 @@ export function BankAccountsPanel() {
                 <p className="text-[0.6875rem] text-muted-foreground">
                   {b.accountHolderName} · <span className="font-mono">{b.ifscCode}</span>
                 </p>
+                {b.verifiedName ? (
+                  <p className="text-[0.6875rem] text-muted-foreground">
+                    Name at bank: <span className="text-foreground/85">{b.verifiedName}</span>
+                    {b.nameMatchScore != null ? ` · ${b.nameMatchScore}% match` : ""}
+                  </p>
+                ) : null}
+                {b.verificationStatus === "REJECTED" && b.verificationFailedReason ? (
+                  <p className="mt-0.5 text-[0.6875rem] text-danger">
+                    {b.verificationFailedReason}
+                  </p>
+                ) : null}
               </div>
               <div className="flex flex-wrap items-center gap-2">
                 {b.isPrimary ? <StatusPill variant="gold">Primary</StatusPill> : null}
                 <StatusPill variant={verificationPill[b.verificationStatus].variant}>
                   {verificationPill[b.verificationStatus].label}
                 </StatusPill>
+                {b.verificationStatus !== "VERIFIED" ? (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={verify.isPending}
+                    onClick={() => verify.mutate(b.id)}
+                  >
+                    {verify.isPending && verify.variables === b.id ? "Verifying…" : "Verify now"}
+                  </Button>
+                ) : null}
                 {!b.isPrimary ? (
                   <Button
                     size="sm"
@@ -194,7 +222,8 @@ export function BankAccountsPanel() {
           ))}
           {list.length > 0 ? (
             <p className="text-[0.6875rem] leading-relaxed text-muted-foreground">
-              Withdrawals go only to a verified account. New accounts are verified by Admin.
+              Withdrawals go only to a verified account. We check each account by sending ₹1 to it
+              and matching the name at the bank; Admin can also verify it by hand.
             </p>
           ) : null}
         </div>

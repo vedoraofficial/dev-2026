@@ -4,6 +4,8 @@ export type PortalUser = {
   name: string
   id: string
   role: string
+  /** Profile photo (data URL or link); the avatar shows the role colour without it */
+  photo?: string
   /** Route the "Profile" menu item opens */
   profileHref: string
   settingsHref: string

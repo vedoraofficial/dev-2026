@@ -45,8 +45,22 @@ export type Bank = {
   bankName: string
   ifscCode: string
   verificationStatus: BankVerificationStatus
+  /** Penny Drop result: the name registered at the bank */
+  verifiedName?: string | null
+  /** 0–100, how closely verifiedName matches the account holder */
+  nameMatchScore?: number | null
+  nameMatchResult?: string | null
+  verificationFailedReason?: string | null
+  verifiedAt?: string | null
   isPrimary: boolean
   createdAt: string
+}
+
+/** PATCH /api/user/admin/bank/:id/verify — [Admin] */
+export type AdminVerifyBankInput = {
+  id: number
+  status: BankVerificationStatus
+  reason?: string
 }
 
 export type AddBankInput = {

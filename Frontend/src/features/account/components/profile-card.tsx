@@ -1,13 +1,13 @@
-import { Camera } from "lucide-react"
-import { useEffect, useRef, useState, type ChangeEvent } from "react"
-import { toast } from "sonner"
+import { Camera, Loader2 } from "lucide-react"
+import { useRef, type ChangeEvent } from "react"
 
 import { MonoId } from "@/components/common/mono-id"
 import { Panel } from "@/components/common/panel"
 import { PersonAvatar } from "@/components/common/person-avatar"
 import { StatusPill, type PillVariant } from "@/components/common/status-pill"
 import { Skeleton } from "@/components/ui/skeleton"
-import { useMe, useProfileDetails } from "@/features/account/queries"
+import { useMe } from "@/features/account/queries"
+import { useProfilePhoto } from "@/features/account/use-profile-photo"
 import { formatDate } from "@/lib/date"
 import { roleLabel } from "@/types/session"
 import type { UserStatus } from "@/types/user"
@@ -22,24 +22,15 @@ const statusPill: Record<UserStatus, { label: string; variant: PillVariant }> = 
 /** Photo, name, VEDORA ID, role and account status of the signed-in user. */
 export function ProfileCard({ tone = "striped" }: { tone?: "striped" | "gold" }) {
   const me = useMe()
-  const details = useProfileDetails()
+  const photo = useProfilePhoto()
   const user = me.data
   const fileInputRef = useRef<HTMLInputElement>(null)
-  const [photoPreview, setPhotoPreview] = useState<string | null>(null)
-
-  // Revoke the object URL when it's replaced or the card unmounts.
-  useEffect(() => () => void (photoPreview && URL.revokeObjectURL(photoPreview)), [photoPreview])
+  const busy = photo.upload.isPending || photo.remove.isPending
 
   const onPickPhoto = (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     e.target.value = ""
-    if (!file) return
-    if (photoPreview) URL.revokeObjectURL(photoPreview)
-    setPhotoPreview(URL.createObjectURL(file))
-    toast("Photo preview updated", {
-      description:
-        "This isn't saved to your account yet — photo upload isn't connected to the backend.",
-    })
+    if (file) photo.upload.mutate(file)
   }
 
   return (
@@ -48,11 +39,17 @@ export function ProfileCard({ tone = "striped" }: { tone?: "striped" | "gold" })
         <PersonAvatar
           tone={tone}
           size="xl"
-          src={photoPreview ?? details.data?.profilePhoto ?? undefined}
+          src={photo.src}
           alt={user?.name ?? ""}
         />
+        {busy ? (
+          <span className="absolute inset-0 grid place-items-center rounded-full bg-background/60">
+            <Loader2 className="size-6 animate-spin text-gold" aria-label="Saving photo" />
+          </span>
+        ) : null}
         <button
           type="button"
+          disabled={busy}
           onClick={() => fileInputRef.current?.click()}
           aria-label="Change photo"
           className="absolute right-0 bottom-0 grid size-7 place-items-center rounded-full border border-border bg-card text-gold shadow-sm hover:bg-muted"
@@ -67,6 +64,16 @@ export function ProfileCard({ tone = "striped" }: { tone?: "striped" | "gold" })
           onChange={onPickPhoto}
         />
       </div>
+      {photo.hasPhoto ? (
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => photo.remove.mutate()}
+          className="mt-2 text-[0.6875rem] text-muted-foreground hover:text-danger hover:underline disabled:opacity-50"
+        >
+          Remove photo
+        </button>
+      ) : null}
       {user ? (
         <>
           <h2 className="mt-4 text-lg font-medium">{user.name}</h2>

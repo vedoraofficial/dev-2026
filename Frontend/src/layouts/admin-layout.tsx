@@ -3,12 +3,14 @@ import { Navigate } from "react-router-dom"
 import { ADMIN_NAV } from "@/app/navigation"
 import { ROUTES } from "@/app/routes"
 import { AppShell } from "@/components/common/app-shell"
+import { useProfilePhoto } from "@/features/account/use-profile-photo"
 import { useSession } from "@/lib/session"
 import { roleLabel } from "@/types/session"
 
 /** Shell for the Admin Control Panel — only for a signed-in ADMIN. */
 export function AdminLayout() {
   const user = useSession((s) => s.user)
+  const photo = useProfilePhoto(user?.role === "ADMIN")
 
   if (!user) return <Navigate to={ROUTES.login} replace />
   if (user.role !== "ADMIN") return <Navigate to={ROUTES.partner.dashboard} replace />
@@ -21,6 +23,7 @@ export function AdminLayout() {
         name: user.name,
         id: user.vedId,
         role: roleLabel[user.role],
+        photo: photo.src,
         profileHref: ROUTES.admin.profile,
         settingsHref: ROUTES.admin.settings,
       }}

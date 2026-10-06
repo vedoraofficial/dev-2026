@@ -49,18 +49,26 @@ export function nextOpenSlot(occupied: number[]): number | null {
   return null
 }
 
+/** HTTP status of a failed API call, if there was a response. */
+const statusOf = (error: unknown) =>
+  (error as { response?: { status?: number } } | null)?.response?.status
+
 /**
  * Grows a genealogy tree from the backend one team at a time. `root` is the starting tree;
- * `loadTeam(member)` fetches a member's direct partners (GET /api/partner/:vedId/genealogy —
- * Admin only) the first time their card is opened. Partners can't read other IDs' teams, so the
- * Partner screen passes a root whose members are not `pending` and nothing is loaded.
+ * `loadTeam(member)` fetches a member's direct partners (GET /api/partner/:vedId/genealogy) the
+ * first time their card is opened. Admin may open anyone. For Founders and Partners the backend
+ * currently answers 403 — the member is then marked `teamHidden` instead of showing an error,
+ * and the same code starts working as soon as the backend allows it.
  */
 export function useGenealogyTree(root: TreeMember | null) {
   const queryClient = useQueryClient()
   /** vedId → its loaded team */
   const [teams, setTeams] = useState<Record<string, TreeMember[]>>({})
+  /** Members whose team the server refused to show */
+  const [hidden, setHidden] = useState<Set<string>>(() => new Set())
 
   const attach = (m: TreeMember): TreeMember => {
+    if (hidden.has(m.id)) return { ...m, pending: false, teamHidden: true, children: [] }
     const team = teams[m.id]
     if (!team) return { ...m, children: m.children.map(attach) }
     return {
@@ -75,7 +83,7 @@ export function useGenealogyTree(root: TreeMember | null) {
   const tree = root ? attach(root) : null
 
   const loadTeam = async (member: TreeMember) => {
-    if (!member.pending || teams[member.id]) return
+    if (!member.pending || teams[member.id] || hidden.has(member.id)) return
     try {
       const partners = await queryClient.fetchQuery({
         queryKey: genealogyKeys.of(member.id),
@@ -88,6 +96,10 @@ export function useGenealogyTree(root: TreeMember | null) {
         ),
       }))
     } catch (error) {
+      if (statusOf(error) === 403) {
+        setHidden((h) => new Set(h).add(member.id))
+        return
+      }
       toast.error(apiErrorMessage(error, `Couldn't load ${member.fullName}'s team`))
       setTeams((t) => ({ ...t, [member.id]: [] }))
     }

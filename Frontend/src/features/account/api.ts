@@ -2,6 +2,7 @@ import axios from "axios"
 
 import type {
   AddBankInput,
+  AdminVerifyBankInput,
   Bank,
   ChangePasswordInput,
   ChangePasswordResponse,
@@ -75,6 +76,18 @@ export async function setPrimaryBank(id: number): Promise<{ message: string }> {
 }
 
 /** DELETE /api/user/bank/:id */
+/** POST /api/user/bank/:id/verify — run the Penny Drop check again (₹1 sent to the account). */
+export async function verifyBank(id: number): Promise<Bank> {
+  const { data } = await api.post<Bank>(`/user/bank/${id}/verify`)
+  return data
+}
+
+/** PATCH /api/user/admin/bank/:id/verify — [Admin] mark a bank VERIFIED or REJECTED by hand. */
+export async function adminVerifyBank({ id, status, reason }: AdminVerifyBankInput): Promise<Bank> {
+  const { data } = await api.patch<Bank>(`/user/admin/bank/${id}/verify`, { status, reason })
+  return data
+}
+
 export async function deleteBank(id: number): Promise<{ message: string }> {
   const { data } = await api.delete<{ message: string }>(`/user/bank/${id}`)
   return data

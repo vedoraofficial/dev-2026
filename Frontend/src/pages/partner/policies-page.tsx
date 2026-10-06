@@ -1,52 +1,7 @@
 import { PageBody, PageHeader } from "@/components/common/page-header"
-import { Button } from "@/components/ui/button"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog"
-import { policies, type Policy } from "@/features/policies/mock-data"
-import { downloadPolicyPdf } from "@/lib/pdf"
-
-function slug(title: string): string {
-  return title
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/(^-|-$)/g, "")
-}
-
-function downloadPolicy(policy: Policy): void {
-  downloadPolicyPdf(`vedora-${slug(policy.title)}.pdf`, policy.title, policy.body)
-}
-
-function PolicyDialog({ policy }: { policy: Policy }) {
-  return (
-    <Dialog>
-      <DialogTrigger asChild>
-        <button type="button" className="py-1 font-medium text-gold hover:underline">
-          Read
-        </button>
-      </DialogTrigger>
-      <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-xl">
-        <DialogHeader>
-          <DialogTitle>{policy.title}</DialogTitle>
-          <DialogDescription>{policy.detail}</DialogDescription>
-        </DialogHeader>
-        <div className="space-y-3 text-[0.8125rem] leading-relaxed text-foreground/85">
-          {policy.body.map((paragraph, i) => (
-            <p key={i}>{paragraph}</p>
-          ))}
-        </div>
-        <Button variant="outline" className="mt-2 w-full" onClick={() => downloadPolicy(policy)}>
-          Download PDF
-        </Button>
-      </DialogContent>
-    </Dialog>
-  )
-}
+import { PolicyDialog } from "@/features/policies/components/policy-dialog"
+import { downloadPolicy } from "@/features/policies/download"
+import { policies } from "@/features/policies/mock-data"
 
 export function PartnerPoliciesPage() {
   return (

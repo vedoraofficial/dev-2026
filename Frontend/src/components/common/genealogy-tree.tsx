@@ -92,6 +92,8 @@ function TeamRow({ member, only, ...tree }: TreeState & { member: TreeMember; on
             <>
               <Loader2 className="size-3.5 animate-spin" /> Loading team…
             </>
+          ) : member.teamHidden ? (
+            "Team view isn't available yet"
           ) : (
             "No partners yet"
           )}

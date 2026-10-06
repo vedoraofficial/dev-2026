@@ -68,7 +68,9 @@ export function MemberPanel({
             label="Direct slots"
             value={
               member.direct === null ? (
-                <span className="text-muted-foreground">Open the card to load</span>
+                <span className="text-muted-foreground">
+                  {member.teamHidden ? "Not available yet" : "Open the card to load"}
+                </span>
               ) : (
                 <span className={cn("font-mono", full && "text-danger")}>
                   {member.direct} / 20{full ? " full" : ""}

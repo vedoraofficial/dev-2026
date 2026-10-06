@@ -26,8 +26,8 @@ export function PartnerGenealogyPage() {
   const genealogy = useMyGenealogy()
   const slots = useMySlots()
 
-  // My direct partners as the first row of the tree. The backend only lets Admin read other
-  // IDs' teams, so the cards below me can't be opened further from here.
+  // My direct partners as the first row of the tree. Clicking one loads their team the same way
+  // Admin's viewer does; until the backend allows it for partners, the card says so.
   const joinedAt = new Map(
     (slots.data?.filledSlots ?? []).map((f) => [f.partner.vedId, formatDate(f.partner.joinedAt)]),
   )
@@ -47,11 +47,15 @@ export function PartnerGenealogyPage() {
         openSlot: nextOpenSlot(g.directPartners.map((p) => p.slotNumber)),
         status: g.user.status,
         children: g.directPartners.map((p) =>
-          toTreeMember(p, { id: g.user.vedId, level: 0 }, { joined: joinedAt.get(p.vedId) }),
+          toTreeMember(
+            p,
+            { id: g.user.vedId, level: 0 },
+            { joined: joinedAt.get(p.vedId), canLoadTeam: true },
+          ),
         ),
       }
     : null
-  const { tree, index } = useGenealogyTree(root)
+  const { tree, index, loadTeam } = useGenealogyTree(root)
 
   const [searchParams] = useSearchParams()
   const [selectedId, setSelectedId] = useState(searchParams.get("id") ?? "")
@@ -96,7 +100,10 @@ export function PartnerGenealogyPage() {
                   root={tree}
                   rootLabel={`${tree.fullName} — You`}
                   selectedId={selected.id}
-                  onSelect={(m) => setSelectedId(m.id)}
+                  onSelect={(m) => {
+                    setSelectedId(m.id)
+                    void loadTeam(m)
+                  }}
                 />
                 <GenealogyLegend />
               </div>
@@ -112,11 +119,12 @@ export function PartnerGenealogyPage() {
                       {tree.openSlot ? `Place partner in slot ${tree.openSlot}` : "All slots full"}
                     </Link>
                   </Button>
-                ) : (
+                ) : selected.teamHidden ? (
                   <p className="text-[0.6875rem] leading-relaxed text-muted-foreground">
-                    Deeper levels of your team aren&apos;t available from the server yet.
+                    Deeper team isn&apos;t available yet — the server lets only Admin open other
+                    members&apos; teams for now.
                   </p>
-                )}
+                ) : null}
               </MemberPanel>
             </div>
           ) : null}

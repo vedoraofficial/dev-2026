@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query"
 
 import {
   addBank,
+  adminVerifyBank,
   adminCreateUser,
   changePassword,
   deleteBank,
@@ -11,8 +12,9 @@ import {
   setPrimaryBank,
   updateMe,
   updateProfileDetails,
+  verifyBank,
 } from "@/features/account/api"
-import type { UpdateMeInput, UpdateProfileDetailsInput } from "@/features/account/types"
+import type { Bank, UpdateMeInput, UpdateProfileDetailsInput } from "@/features/account/types"
 import { useApiMutation } from "@/lib/mutation"
 import { useSession } from "@/lib/session"
 
@@ -58,10 +60,27 @@ export const useSaveAccountDetails = () => {
 export const useChangePassword = () =>
   useApiMutation(changePassword, { success: "Password updated" })
 
+/** Toast text after the backend's Penny Drop check. */
+const verificationResult = (b: Bank) =>
+  b.verificationStatus === "VERIFIED"
+    ? `${b.bankName} ****${b.accountNumber.slice(-4)} verified — you can withdraw to it`
+    : b.verificationStatus === "REJECTED"
+      ? `Bank couldn't be verified: ${b.verificationFailedReason ?? "check the details"}`
+      : "Bank account added — it will be verified before payouts"
+
+/** Adding a bank also runs the Penny Drop check, so the toast says how it went. */
 export const useAddBank = () =>
-  useApiMutation(addBank, {
-    success: "Bank account added — it will be verified before payouts",
-    invalidate: [accountKeys.banks],
+  useApiMutation(addBank, { success: verificationResult, invalidate: [accountKeys.banks] })
+
+export const useVerifyBank = () =>
+  useApiMutation(verifyBank, { success: verificationResult, invalidate: [accountKeys.banks] })
+
+/** [Admin] Verify or reject a bank by hand (from the "Bank account to verify" notification). */
+export const useAdminVerifyBank = () =>
+  useApiMutation(adminVerifyBank, {
+    success: (_b, v) =>
+      v.status === "VERIFIED" ? "Bank account verified" : "Bank account rejected",
+    invalidate: [accountKeys.banks, ["notifications"]],
   })
 
 export const useSetPrimaryBank = () =>

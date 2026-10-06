@@ -1,4 +1,10 @@
-import { Injectable, ConflictException, NotFoundException, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  ConflictException,
+  NotFoundException,
+  BadRequestException,
+  ForbiddenException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
 import * as bcrypt from 'bcrypt';
@@ -281,9 +287,15 @@ export class GenealogyService {
     }
   }
 
-  async getGenealogyByVedId(vedId: string) {
+  async getGenealogyByVedId(vedId: string, requester?: { sub: number; role: string }) {
     const user = await this.userRepo.findOne({ where: { vedId } });
     if (!user) throw new NotFoundException(`User with VED ID ${vedId} not found.`);
+
+    // Admin can open anyone; Founders and Partners only themselves or their own downline.
+    if (requester && requester.role !== 'ADMIN' && user.id !== requester.sub) {
+      const allowed = await this.isInDownline(requester.sub, user.id);
+      if (!allowed) throw new ForbiddenException('You can only view your own team.');
+    }
 
     // Direct children (max 20) under this user
     const directChildren = await this.nodeRepo.find({
@@ -302,6 +314,22 @@ export class GenealogyService {
       depth: child.depth,
       status: child.placementStatus,
     }));
+  }
+
+  /** True if `userId` sits anywhere below `ancestorId` (walks parent_user_id upwards). */
+  private async isInDownline(ancestorId: number, userId: number): Promise<boolean> {
+    const rows = await this.dataSource.query(
+      `WITH RECURSIVE up AS (
+         SELECT user_id, parent_user_id, 1 AS depth FROM genealogy_nodes WHERE user_id = $1
+         UNION ALL
+         SELECT n.user_id, n.parent_user_id, up.depth + 1
+         FROM genealogy_nodes n JOIN up ON n.user_id = up.parent_user_id
+         WHERE up.depth < 100
+       )
+       SELECT 1 FROM up WHERE parent_user_id = $2 LIMIT 1`,
+      [userId, ancestorId],
+    );
+    return rows.length > 0;
   }
 
   async getMyGenealogy(userId: number) {

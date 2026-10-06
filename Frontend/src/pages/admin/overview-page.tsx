@@ -7,7 +7,9 @@ import { PageBody, PageHeader } from "@/components/common/page-header"
 import { Panel, PanelHeader } from "@/components/common/panel"
 import { QueryState } from "@/components/common/query-state"
 import { StatCard, StatGrid } from "@/components/common/stat-card"
+import { FOUNDER_IDS, FOUNDER_NAMES } from "@/features/genealogy/use-genealogy-tree"
 import { useNetwork } from "@/features/genealogy/use-network"
+import { AnnouncementDialog } from "@/features/notifications/components/announcement-dialog"
 import { orderNo, orderStage } from "@/features/orders/labels"
 import { useAllOrders } from "@/features/orders/queries"
 import { useCommissionLedger } from "@/features/orders/use-commission-ledger"
@@ -120,12 +122,17 @@ export function AdminOverviewPage() {
           </>
         }
         actions={
-          <FilterSelect
-            label="Period"
-            options={[...PERIODS]}
-            defaultValue={period}
-            onValueChange={(value) => setPeriod(value as Period)}
-          />
+          <>
+            <AnnouncementDialog
+              founders={FOUNDER_IDS.map((id) => ({ vedId: id, name: FOUNDER_NAMES[id] ?? id }))}
+            />
+            <FilterSelect
+              label="Period"
+              options={[...PERIODS]}
+              defaultValue={period}
+              onValueChange={(value) => setPeriod(value as Period)}
+            />
+          </>
         }
       />
       <PageBody>

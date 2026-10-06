@@ -4,8 +4,6 @@ import { GenealogyService } from './genealogy.service';
 import { JoinPartnerDto } from './dto/join-partner.dto';
 import { RegisterPartnerBySponsorDto } from './dto/register-partner-by-sponsor.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
-import { RolesGuard } from '../common/guards/roles.guard';
-import { Roles } from '../common/decorators/roles.decorator';
 
 @ApiTags('Partner / Genealogy')
 @Controller('partner')
@@ -53,11 +51,12 @@ export class GenealogyController {
   }
 
   @ApiBearerAuth()
-  @Roles('ADMIN')
-  @UseGuards(JwtAuthGuard, RolesGuard)
+  @UseGuards(JwtAuthGuard)
   @Get(':vedId/genealogy')
-  @ApiOperation({ summary: '[Admin] Get direct partners below a specific user by VED ID' })
-  async getGenealogyByVedId(@Param('vedId') vedId: string) {
-    return this.genealogyService.getGenealogyByVedId(vedId);
+  @ApiOperation({
+    summary: 'Get direct partners below a VED ID (Admin: anyone; Founder/Partner: own downline only)',
+  })
+  async getGenealogyByVedId(@Request() req: any, @Param('vedId') vedId: string) {
+    return this.genealogyService.getGenealogyByVedId(vedId, req.user);
   }
 }

@@ -40,6 +40,7 @@ import {
 } from "@/features/placement/schemas"
 import { isPincode, usePincodeLookup } from "@/features/placement/queries"
 import { toCatalogProduct } from "@/features/products/catalog"
+import type { Product } from "@/features/products/mock-data"
 import { useProducts } from "@/features/products/queries"
 import { formatBV, formatINR } from "@/lib/format"
 import { useSession } from "@/lib/session"
@@ -114,18 +115,19 @@ function blankForm(slot: number, upline: string): DefaultValues<PlacementInput> 
   }
 }
 
-type Completed = { values: PlacementValues; partner: RegisteredPartner }
+type Completed = { values: PlacementValues; partner: RegisteredPartner; product: Product }
 
 export function PartnerManualPlacementPage() {
   // The new partner is always placed under the signed-in user (backend: register-downline).
   const me = useSession((s) => s.user)
   const slotsQuery = useMySlots()
-  const registerDownline = useRegisterDownline()
-  const emailLock = useEmailInputLock()
+  // The joining product is picked from what Admin has put live in Products.
   const productsQuery = useProducts()
   const products = (productsQuery.data ?? [])
     .filter((p) => p.status === "ACTIVE")
     .map((p) => toCatalogProduct(p))
+  const registerDownline = useRegisterDownline()
+  const emailLock = useEmailInputLock()
 
   const takenBySlot = new Map<number, string>(
     (slotsQuery.data?.filledSlots ?? []).map((f) => [f.slotNumber, f.partner.vedId]),
@@ -202,6 +204,11 @@ export function PartnerManualPlacementPage() {
   }
 
   const onValid = (values: PlacementValues) => {
+    const chosen = products.find((p) => p.sku === values.productSku)
+    if (!chosen) {
+      setError("productSku", { message: "Choose a product" })
+      return
+    }
     if (takenBySlot.has(values.slot)) {
       setError("slot", { message: `Slot ${values.slot} is already taken` })
       return
@@ -222,7 +229,7 @@ export function PartnerManualPlacementPage() {
       },
       {
         onSuccess: ({ partner }) => {
-          setCompleted({ values, partner })
+          setCompleted({ values, partner, product: chosen })
           window.scrollTo({ top: 0, behavior: "smooth" })
         },
       },
@@ -245,7 +252,6 @@ export function PartnerManualPlacementPage() {
   }
 
   if (completed) {
-    const done = products.find((p) => p.sku === completed.values.productSku) ?? products[0]
     return (
       <>
         <PageHeader title="Add Partner" subtitle="Partner registered and placed in your tree" />
@@ -253,7 +259,7 @@ export function PartnerManualPlacementPage() {
           <PlacementSuccess
             partner={completed.partner}
             values={completed.values}
-            product={done}
+            product={completed.product}
             onPlaceAnother={startOver}
           />
         </PageBody>
@@ -579,7 +585,7 @@ export function PartnerManualPlacementPage() {
                 query={productsQuery}
                 rows={1}
                 empty={products.length === 0}
-                emptyMessage="No products are on sale yet."
+                emptyMessage="No products are live yet. Admin can add them in Products."
               >
                 <Controller
                   control={control}
@@ -597,7 +603,7 @@ export function PartnerManualPlacementPage() {
               </QueryState>
               <FieldError message={errors.productSku?.message} />
               <p className="text-[0.6875rem] text-muted-foreground">
-                One bracelet per joining · {formatINR(1999)} MRP incl. GST · 1,000 BV.
+                One product per joining · price incl. GST · BV as set by Admin.
               </p>
             </Step>
 
@@ -758,11 +764,13 @@ export function PartnerManualPlacementPage() {
                 </div>
                 <div className="flex justify-between gap-4">
                   <dt className="text-muted-foreground">BV on joining order</dt>
-                  <dd className="font-mono text-gold">{formatBV(product?.bv ?? 1000)}</dd>
+                  <dd className="font-mono text-gold">{product ? formatBV(product.bv) : "—"}</dd>
                 </div>
                 <div className="flex items-baseline justify-between gap-4 border-t border-border/70 pt-2.5">
                   <dt className="font-medium">Joining order</dt>
-                  <dd className="font-display text-2xl">{formatINR(product?.price ?? 1999)}</dd>
+                  <dd className="font-display text-2xl">
+                    {product ? formatINR(product.price) : "—"}
+                  </dd>
                 </div>
               </dl>
 
@@ -786,8 +794,6 @@ export function PartnerManualPlacementPage() {
                       Agreement, Terms &amp; Conditions and{" "}
                       <Link
                         to={ROUTES.partner.policies}
-                        target="_blank"
-                        rel="noopener noreferrer"
                         onClick={(e) => e.stopPropagation()}
                         className="font-medium text-gold hover:underline"
                       >
