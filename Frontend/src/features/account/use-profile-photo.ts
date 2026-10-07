@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query"
 
 import { getProfileDetails, updateProfileDetails } from "@/features/account/api"
 import { accountKeys } from "@/features/account/queries"
+import { AppError } from "@/lib/errors"
 import { makeAvatar } from "@/lib/image"
 import { useApiMutation } from "@/lib/mutation"
 import { useSession } from "@/lib/session"
@@ -55,9 +56,10 @@ export function useProfilePhoto(enabled = true) {
 
   const upload = useApiMutation(
     async (file: File) => {
-      if (!vedId) throw new Error("Sign in again to change your photo")
-      if (!file.type.startsWith("image/")) throw new Error("Choose an image file (JPG, PNG or WebP)")
-      if (file.size > MAX_FILE_BYTES) throw new Error("Choose a photo smaller than 10 MB")
+      if (!vedId) throw new AppError("Sign in again to change your photo")
+      if (!file.type.startsWith("image/"))
+        throw new AppError("Choose an image file (JPG, PNG or WebP)")
+      if (file.size > MAX_FILE_BYTES) throw new AppError("Choose a photo smaller than 10 MB")
       const avatar = await makeAvatar(file, MAX_CHARS)
       await updateProfileDetails({ profilePhoto: avatar.thumb })
       writeLocal(vedId, avatar)

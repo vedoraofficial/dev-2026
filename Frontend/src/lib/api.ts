@@ -2,6 +2,7 @@ import axios from "axios"
 
 import { ROUTES } from "@/app/routes"
 import { env } from "@/lib/env"
+import { AppError } from "@/lib/errors"
 import { useSession } from "@/lib/session"
 
 /**
@@ -46,5 +47,7 @@ export function apiErrorMessage(
     if (Array.isArray(message)) return message.join(", ")
     if (typeof message === "string" && message) return message
   }
+  // Our own checks (wrong file type, photo too large…) explain themselves.
+  if (error instanceof AppError && error.message) return error.message
   return fallback
 }

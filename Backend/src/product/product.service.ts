@@ -1,7 +1,8 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { IsNull, Repository } from 'typeorm';
 import { Product, ProductStatus } from './entity/product.entity';
+import { Order } from '../order/entity/order.entity';
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
 import { NotificationService } from '../notification/notification.service';
@@ -37,11 +38,11 @@ export class ProductService {
   }
 
   async findAll(): Promise<Product[]> {
-    return this.productRepo.find({ order: { createdAt: 'DESC' } });
+    return this.productRepo.find({ where: { deletedAt: IsNull() }, order: { createdAt: 'DESC' } });
   }
 
   async findById(id: number): Promise<Product> {
-    const product = await this.productRepo.findOne({ where: { id } });
+    const product = await this.productRepo.findOne({ where: { id, deletedAt: IsNull() } });
     if (!product) throw new NotFoundException('Product not found');
     return product;
   }
@@ -70,7 +71,17 @@ export class ProductService {
 
   async remove(id: number): Promise<{ message: string }> {
     const product = await this.findById(id);
-    await this.productRepo.remove(product);
+
+    // Orders (and their payments and commissions) point at the product, so a product that was
+    // ever ordered is hidden instead of removed. Marking it INACTIVE also blocks new orders.
+    const orderCount = await this.productRepo.manager.count(Order, { where: { productId: product.id } });
+    if (orderCount > 0) {
+      product.deletedAt = new Date();
+      product.status = ProductStatus.INACTIVE;
+      await this.productRepo.save(product);
+    } else {
+      await this.productRepo.remove(product);
+    }
     return { message: 'Product deleted successfully' };
   }
 }

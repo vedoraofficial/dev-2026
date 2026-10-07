@@ -1,6 +1,9 @@
 /** Browser-side image helpers (no upload service needed). */
+import { AppError } from "@/lib/errors"
 
-async function loadImage(file: Blob): Promise<CanvasImageSource & { width: number; height: number }> {
+async function decodeImage(
+  file: Blob,
+): Promise<CanvasImageSource & { width: number; height: number }> {
   if ("createImageBitmap" in window) return createImageBitmap(file)
   const url = URL.createObjectURL(file)
   try {
@@ -10,6 +13,19 @@ async function loadImage(file: Blob): Promise<CanvasImageSource & { width: numbe
     return img
   } finally {
     URL.revokeObjectURL(url)
+  }
+}
+
+/** Decodes a picked photo; formats the browser can't read (e.g. iPhone HEIC) get a clear message. */
+async function loadImage(
+  file: Blob,
+): Promise<CanvasImageSource & { width: number; height: number }> {
+  try {
+    return await decodeImage(file)
+  } catch {
+    throw new AppError(
+      "This photo's format can't be read in the browser — choose a JPG, PNG or WebP photo",
+    )
   }
 }
 
@@ -24,7 +40,7 @@ function squareDataUrl(
   canvas.width = size
   canvas.height = size
   const ctx = canvas.getContext("2d")
-  if (!ctx) throw new Error("Canvas isn't available in this browser")
+  if (!ctx) throw new AppError("Canvas isn't available in this browser")
   const side = Math.min(img.width, img.height)
   ctx.imageSmoothingQuality = "high"
   ctx.drawImage(img, (img.width - side) / 2, (img.height - side) / 2, side, side, 0, 0, size, size)
@@ -46,7 +62,10 @@ function encodeSquare(
  * - `full`: 256 px, sharp, for this device
  * - `thumb`: the largest version that fits in `maxChars` characters (to store in a short text field)
  */
-export async function makeAvatar(file: File, maxChars: number): Promise<{ full: string; thumb: string }> {
+export async function makeAvatar(
+  file: File,
+  maxChars: number,
+): Promise<{ full: string; thumb: string }> {
   const img = await loadImage(file)
   const full = encodeSquare(img, 256, 0.85)
   for (const size of [96, 80, 72, 64, 56, 48, 40, 32]) {
@@ -55,5 +74,5 @@ export async function makeAvatar(file: File, maxChars: number): Promise<{ full: 
       if (thumb.length <= maxChars) return { full, thumb }
     }
   }
-  throw new Error("This photo can't be made small enough — try a simpler one")
+  throw new AppError("This photo can't be made small enough — try a simpler one")
 }

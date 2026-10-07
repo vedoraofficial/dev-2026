@@ -39,4 +39,8 @@ export class Product {
 
   @UpdateDateColumn({ name: 'updated_at', type: 'timestamptz', precision: 3 })
   updatedAt: Date;
+
+  /** Set when Admin deletes a product that already has orders — hidden from every list. */
+  @Column({ name: 'deleted_at', type: 'timestamptz', precision: 3, nullable: true })
+  deletedAt: Date | null;
 }

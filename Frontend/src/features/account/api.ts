@@ -15,6 +15,7 @@ import type {
   UserStatus,
 } from "@/features/account/types"
 import { api } from "@/lib/api"
+import { AppError } from "@/lib/errors"
 
 /** GET /api/user */
 export async function getMe(): Promise<Me> {
@@ -34,7 +35,7 @@ export async function updateMe(input: UpdateMeInput): Promise<Me> {
 /** PATCH /api/user/password — the backend answers 200 with success:false on a wrong old password. */
 export async function changePassword(input: ChangePasswordInput): Promise<ChangePasswordResponse> {
   const { data } = await api.patch<ChangePasswordResponse>("/user/password", input)
-  if (!data.success) throw new Error(data.message || "Current password is wrong")
+  if (!data.success) throw new AppError(data.message || "Current password is wrong")
   return data
 }
 
