@@ -1,6 +1,8 @@
 /** Single source of truth for URLs. Use these instead of hard-coded strings. */
 export const ROUTES = {
   login: "/login",
+  /** Public referral join page: /join/<sponsor VEDORA ID> */
+  join: "/join",
   /** Old admin sign-in URL — only redirects to `login` now. */
   adminLogin: "/admin-login",
   /** PhonePe sends the buyer back here after paying (set in the backend's PHONEPE_REDIRECT_URL). */

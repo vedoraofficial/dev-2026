@@ -30,6 +30,9 @@ export const router = createBrowserRouter([
     ErrorBoundary: RouteError,
     children: [
       { path: ROUTES.login, ...page(() => import("@/pages/auth/login-page"), "LoginPage") },
+      // Referral link — public, no sign-in needed.
+      { path: `${ROUTES.join}/:ref`, ...page(() => import("@/pages/auth/join-page"), "JoinPage") },
+      { path: ROUTES.join, ...page(() => import("@/pages/auth/join-page"), "JoinPage") },
       // Old separate admin sign-in link — everyone signs in at /login now.
       { path: ROUTES.adminLogin, element: <Navigate to={ROUTES.login} replace /> },
     ],

@@ -7,6 +7,7 @@ import { QueryState } from "@/components/common/query-state"
 import { BankAccountsPanel } from "@/features/account/components/bank-accounts-panel"
 import { PersonalDetailsForm } from "@/features/account/components/personal-details-form"
 import { ProfileCard } from "@/features/account/components/profile-card"
+import { ReferralLinkCard } from "@/features/genealogy/components/referral-link-card"
 import { useMyGenealogy } from "@/features/genealogy/queries"
 import { useSession } from "@/lib/session"
 
@@ -20,7 +21,8 @@ function PlacementRow({ label, children }: { label: string; children: ReactNode 
 }
 
 export function PartnerProfilePage() {
-  const isFounder = useSession((s) => s.user?.role === "FOUNDER")
+  const me = useSession((s) => s.user)
+  const isFounder = me?.role === "FOUNDER"
   const genealogy = useMyGenealogy()
   const node = genealogy.data?.node
 
@@ -31,6 +33,7 @@ export function PartnerProfilePage() {
         <div className="grid gap-4 md:gap-5 lg:grid-cols-[19rem_minmax(0,1fr)]">
           <div className="space-y-4 md:space-y-5">
             <ProfileCard tone={isFounder ? "gold" : "striped"} />
+            {me ? <ReferralLinkCard vedId={me.vedId} /> : null}
 
             <Panel>
               <p className="mb-4 eyebrow">Placement</p>
