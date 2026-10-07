@@ -23,7 +23,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
-import { useMySlots, useRegisterDownline } from "@/features/genealogy/queries"
+import { useGenealogyOf, useMySlots, useRegisterDownline } from "@/features/genealogy/queries"
 import { useEmailInputLock } from "@/hooks/use-email-input-lock"
 import { AreaSelect, PincodeHint } from "@/features/placement/components/pincode-lookup"
 import {
@@ -45,6 +45,7 @@ import { useProducts } from "@/features/products/queries"
 import { formatBV, formatINR } from "@/lib/format"
 import { useSession } from "@/lib/session"
 import { cn } from "@/lib/utils"
+import { normalizeVedId } from "@/lib/ved-id"
 import type { Gender } from "@/types/user"
 
 const TOTAL_SLOTS = 20
@@ -65,6 +66,12 @@ function formatAadhaar(value: string): string {
 /** Strips anything that isn't a digit and caps the length — e.g. for Age and Mobile. */
 function limitDigits(value: string, max: number): string {
   return value.replace(/\D/g, "").slice(0, max)
+}
+
+/** Lowest free slot (1–20) given the taken ones; 1 when everything is taken. */
+function firstFree(taken: Map<number, string>): number {
+  for (let n = 1; n <= TOTAL_SLOTS; n++) if (!taken.has(n)) return n
+  return 1
 }
 
 function Step({ n, title, children }: { n: number; title: string; children: ReactNode }) {
@@ -118,7 +125,8 @@ function blankForm(slot: number, upline: string): DefaultValues<PlacementInput> 
 type Completed = { values: PlacementValues; partner: RegisteredPartner; product: Product }
 
 export function PartnerManualPlacementPage() {
-  // The new partner is always placed under the signed-in user (backend: register-downline).
+  // The signed-in user is always the sponsor (earns the ₹200 direct commission). The partner is
+  // placed under them, or under a team member whose VEDORA ID is typed in "Place under".
   const me = useSession((s) => s.user)
   const slotsQuery = useMySlots()
   // The joining product is picked from what Admin has put live in Products.
@@ -129,15 +137,10 @@ export function PartnerManualPlacementPage() {
   const registerDownline = useRegisterDownline()
   const emailLock = useEmailInputLock()
 
-  const takenBySlot = new Map<number, string>(
+  const myTaken = new Map<number, string>(
     (slotsQuery.data?.filledSlots ?? []).map((f) => [f.slotNumber, f.partner.vedId]),
   )
-  const freeSlots = Array.from({ length: TOTAL_SLOTS }, (_, i) => i + 1).filter(
-    (n) => !takenBySlot.has(n),
-  )
-  const firstFreeSlot = freeSlots[0] ?? 1
-  const slotsUsed = slotsQuery.data?.totalFilled ?? takenBySlot.size
-  const allSlotsFull = !!slotsQuery.data && freeSlots.length === 0
+  const myFirstFreeSlot = firstFree(myTaken)
 
   const [completed, setCompleted] = useState<Completed | null>(null)
   const [shipSameAsRegistered, setShipSameAsRegistered] = useState(false)
@@ -153,23 +156,76 @@ export function PartnerManualPlacementPage() {
     formState: { errors },
   } = useForm<PlacementInput, unknown, PlacementValues>({
     resolver: zodResolver(placementSchema),
-    defaultValues: blankForm(firstFreeSlot, me?.vedId ?? ""),
+    defaultValues: blankForm(myFirstFreeSlot, me?.vedId ?? ""),
   })
 
-  const [slot, productSku, regAddress, regCity, regState, regPincode, regArea, shipPincode] =
-    useWatch({
-      control,
-      name: ["slot", "productSku", "address", "city", "state", "pincode", "area", "shipPincode"],
-    })
+  const [
+    slot,
+    productSku,
+    regAddress,
+    regCity,
+    regState,
+    regPincode,
+    regArea,
+    shipPincode,
+    uplineRaw,
+  ] = useWatch({
+    control,
+    name: [
+      "slot",
+      "productSku",
+      "address",
+      "city",
+      "state",
+      "pincode",
+      "area",
+      "shipPincode",
+      "upline",
+    ],
+  })
 
-  // Once the real slots arrive, move the selection off a slot that is already taken.
+  // "Place under": me by default, or a team member (their team comes from the genealogy API,
+  // which the backend allows only for IDs inside my own downline).
+  const upline = normalizeVedId(uplineRaw ?? "")
+  const underMe = upline === "" || upline === me?.vedId
+  const uplineLooksValid = /^VED\d{3,6}$/.test(upline)
+  const teamQuery = useGenealogyOf(!underMe && uplineLooksValid ? upline : "")
+  const placementData = underMe ? slotsQuery.data : teamQuery.data
+  const takenBySlot = underMe
+    ? myTaken
+    : new Map<number, string>((teamQuery.data ?? []).map((p) => [p.slotNumber, p.vedId]))
+  const freeCount = TOTAL_SLOTS - takenBySlot.size
+  const firstFreeSlot = firstFree(takenBySlot)
+  const allSlotsFull = !!placementData && freeCount <= 0
+  const uplineName = underMe
+    ? me?.name
+    : slotsQuery.data?.filledSlots.find((f) => f.partner.vedId === upline)?.partner.name
+  const uplineStatus = (teamQuery.error as { response?: { status?: number } } | null)?.response
+    ?.status
+  const uplineProblem = underMe
+    ? null
+    : !uplineLooksValid
+      ? "IDs look like VED000023"
+      : uplineStatus === 403
+        ? "This ID isn't in your team"
+        : uplineStatus === 404
+          ? "No partner has this VEDORA ID"
+          : teamQuery.isError
+            ? "Couldn't load this member's slots"
+            : null
+
+  // When the slots of a newly chosen upline arrive, select their first free slot; on a refresh
+  // of the same upline, only move the selection if it became taken.
+  const [slotsFor, setSlotsFor] = useState("")
   useEffect(() => {
-    if (slotsQuery.data && takenBySlot.has(getValues("slot"))) {
+    if (!placementData) return
+    if (slotsFor !== upline || takenBySlot.has(getValues("slot"))) {
       setValue("slot", firstFreeSlot)
+      setSlotsFor(upline)
     }
-    // takenBySlot / firstFreeSlot are derived from slotsQuery.data
+    // takenBySlot / firstFreeSlot are derived from placementData
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [slotsQuery.data])
+  }, [placementData, upline])
 
   // Pincode → city / state / areas. A found pincode fills City and State (still editable).
   const regLookup = usePincodeLookup(regPincode ?? "")
@@ -209,6 +265,10 @@ export function PartnerManualPlacementPage() {
       setError("productSku", { message: "Choose a product" })
       return
     }
+    if (uplineProblem) {
+      setError("upline", { message: uplineProblem })
+      return
+    }
     if (takenBySlot.has(values.slot)) {
       setError("slot", { message: `Slot ${values.slot} is already taken` })
       return
@@ -220,6 +280,7 @@ export function PartnerManualPlacementPage() {
         mobile: toMobile10(values.mobile),
         password: values.password,
         slotNumber: values.slot,
+        parentVedId: underMe ? undefined : upline,
         gender: GENDER_API[values.gender],
         addressLine1: values.address,
         addressLine2: values.area || undefined,
@@ -245,7 +306,7 @@ export function PartnerManualPlacementPage() {
   }
 
   const startOver = () => {
-    reset(blankForm(firstFreeSlot, me?.vedId ?? ""))
+    reset(blankForm(myFirstFreeSlot, me?.vedId ?? ""))
     setShipSameAsRegistered(false)
     setCompleted(null)
     window.scrollTo({ top: 0, behavior: "smooth" })
@@ -484,28 +545,62 @@ export function PartnerManualPlacementPage() {
 
             <Step n={2} title="Upline & slot">
               <div className="grid gap-3 sm:grid-cols-2">
-                <Field label="Upline VEDORA ID" htmlFor="upline">
+                <Field
+                  label="Place under (upline VEDORA ID)"
+                  htmlFor="upline"
+                  error={errors.upline?.message ?? uplineProblem ?? undefined}
+                >
                   <div className="relative">
                     <Input
                       id="upline"
-                      readOnly
-                      tabIndex={-1}
-                      className="border-gold/50 pr-20 font-mono uppercase"
+                      maxLength={9}
+                      autoCapitalize="characters"
+                      spellCheck={false}
+                      aria-invalid={!!uplineProblem || !!errors.upline}
+                      className="border-gold/50 pr-24 font-mono uppercase"
                       {...register("upline")}
                     />
-                    <span className="pointer-events-none absolute inset-y-0 right-3.5 flex items-center text-xs font-medium text-success">
-                      You ✓
+                    <span className="absolute inset-y-0 right-3.5 flex items-center text-xs font-medium">
+                      {underMe ? (
+                        <span className="text-success">You ✓</span>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => setValue("upline", me?.vedId ?? "")}
+                          className="text-gold hover:underline"
+                        >
+                          Use my ID
+                        </button>
+                      )}
                     </span>
                   </div>
+                  <p className="text-[0.6875rem] text-muted-foreground">
+                    Your ID by default. Type a team member&apos;s ID to place the partner under them
+                    — you still get the ₹200 direct commission; BV income follows the tree.
+                  </p>
                 </Field>
-                <div className="self-end rounded-xl border border-border bg-field/60 px-3.5 py-2.5">
-                  <div className="mb-1.5 flex items-center justify-between text-xs">
-                    <span className="text-foreground/85">{me?.name}</span>
-                    <span className="font-medium text-success">
-                      {TOTAL_SLOTS - slotsUsed} of {TOTAL_SLOTS} free
+                <div className="self-start rounded-xl border border-border bg-field/60 px-3.5 py-2.5 sm:mt-7">
+                  <div className="mb-1.5 flex items-center justify-between gap-3 text-xs">
+                    <span className="min-w-0 truncate text-foreground/85">
+                      {underMe ? me?.name : (uplineName ?? upline)}
+                      {underMe ? null : (
+                        <span className="ml-1 text-muted-foreground">· team member</span>
+                      )}
+                    </span>
+                    <span
+                      className={cn(
+                        "shrink-0 font-medium",
+                        allSlotsFull ? "text-danger" : "text-success",
+                      )}
+                    >
+                      {placementData ? `${freeCount} of ${TOTAL_SLOTS} free` : "—"}
                     </span>
                   </div>
-                  <ProgressBar value={slotsUsed} max={TOTAL_SLOTS} label="BV-eligible slots used" />
+                  <ProgressBar
+                    value={placementData ? TOTAL_SLOTS - freeCount : 0}
+                    max={TOTAL_SLOTS}
+                    label="BV-eligible slots used"
+                  />
                 </div>
               </div>
 
@@ -525,56 +620,64 @@ export function PartnerManualPlacementPage() {
                     </span>
                   </p>
                 </div>
-                <QueryState query={slotsQuery} rows={2}>
-                  <div className="grid grid-cols-5 gap-1.5 sm:grid-cols-10">
-                    {Array.from({ length: TOTAL_SLOTS }, (_, i) => i + 1).map((n) => {
-                      const takenBy = takenBySlot.get(n)
-                      const selected = n === slot && !takenBy
-                      return (
-                        <button
-                          key={n}
-                          type="button"
-                          disabled={!!takenBy}
-                          aria-pressed={selected}
-                          aria-label={
-                            takenBy
-                              ? `Slot ${n}, taken by ${takenBy}`
-                              : selected
-                                ? `Slot ${n}, selected for the new partner`
-                                : `Slot ${n}, free`
-                          }
-                          title={takenBy ? `Slot ${n} · ${takenBy}` : `Slot ${n} · free`}
-                          onClick={() => setValue("slot", n, { shouldValidate: true })}
-                          className={cn(
-                            "flex h-12 min-w-0 flex-col items-center justify-center gap-0.5 rounded-lg border px-0.5 text-xs font-medium tabular-nums transition-colors",
-                            takenBy && "border-border bg-field/70 text-muted-foreground/70",
-                            !takenBy &&
-                              !selected &&
-                              "border-dashed border-gold/40 text-gold hover:bg-gold/10",
-                            selected &&
-                              "border-gold bg-gold text-primary-foreground ring-3 ring-gold/25",
-                          )}
-                        >
-                          {String(n).padStart(2, "0")}
-                          {takenBy || selected ? (
-                            <span
-                              className={cn(
-                                "max-w-full truncate font-mono text-[0.5625rem] leading-none",
-                                takenBy ? "opacity-70" : "font-bold",
-                              )}
-                            >
-                              {takenBy ?? "New"}
-                            </span>
-                          ) : null}
-                        </button>
-                      )
-                    })}
-                  </div>
-                </QueryState>
+                {!underMe && uplineProblem ? (
+                  <p className="rounded-xl border border-dashed border-border px-3.5 py-6 text-center text-xs text-muted-foreground">
+                    Enter the VEDORA ID of someone in your team to see their slots.
+                  </p>
+                ) : (
+                  <QueryState query={underMe ? slotsQuery : teamQuery} rows={2}>
+                    <div className="grid grid-cols-5 gap-1.5 sm:grid-cols-10">
+                      {Array.from({ length: TOTAL_SLOTS }, (_, i) => i + 1).map((n) => {
+                        const takenBy = takenBySlot.get(n)
+                        const selected = n === slot && !takenBy
+                        return (
+                          <button
+                            key={n}
+                            type="button"
+                            disabled={!!takenBy}
+                            aria-pressed={selected}
+                            aria-label={
+                              takenBy
+                                ? `Slot ${n}, taken by ${takenBy}`
+                                : selected
+                                  ? `Slot ${n}, selected for the new partner`
+                                  : `Slot ${n}, free`
+                            }
+                            title={takenBy ? `Slot ${n} · ${takenBy}` : `Slot ${n} · free`}
+                            onClick={() => setValue("slot", n, { shouldValidate: true })}
+                            className={cn(
+                              "flex h-12 min-w-0 flex-col items-center justify-center gap-0.5 rounded-lg border px-0.5 text-xs font-medium tabular-nums transition-colors",
+                              takenBy && "border-border bg-field/70 text-muted-foreground/70",
+                              !takenBy &&
+                                !selected &&
+                                "border-dashed border-gold/40 text-gold hover:bg-gold/10",
+                              selected &&
+                                "border-gold bg-gold text-primary-foreground ring-3 ring-gold/25",
+                            )}
+                          >
+                            {String(n).padStart(2, "0")}
+                            {takenBy || selected ? (
+                              <span
+                                className={cn(
+                                  "max-w-full truncate font-mono text-[0.5625rem] leading-none",
+                                  takenBy ? "opacity-70" : "font-bold",
+                                )}
+                              >
+                                {takenBy ?? "New"}
+                              </span>
+                            ) : null}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </QueryState>
+                )}
                 <FieldError message={errors.slot?.message} />
                 <p className="mt-2 text-[0.6875rem] text-muted-foreground">
                   {allSlotsFull
-                    ? "All 20 slots under you are taken — the backend allows 20 direct partners."
+                    ? underMe
+                      ? "All 20 of your slots are taken — type a team member's VEDORA ID above to place the partner under them."
+                      : `All 20 slots under ${upline} are taken — try another team member.`
                     : "Grey slots show who is in them · pick a free slot for the new partner · slots 1–20 are BV-eligible."}
                 </p>
               </div>
@@ -759,9 +862,17 @@ export function PartnerManualPlacementPage() {
                 <div className="flex justify-between gap-4">
                   <dt className="text-muted-foreground">Placement</dt>
                   <dd className="text-right">
-                    Slot {slot} under <MonoId tone="gold">{me?.vedId}</MonoId>
+                    Slot {slot} under <MonoId tone="gold">{underMe ? me?.vedId : upline}</MonoId>
                   </dd>
                 </div>
+                {underMe ? null : (
+                  <div className="flex justify-between gap-4">
+                    <dt className="text-muted-foreground">Sponsor · ₹200 direct</dt>
+                    <dd className="text-right">
+                      You · <MonoId tone="gold">{me?.vedId}</MonoId>
+                    </dd>
+                  </div>
+                )}
                 <div className="flex justify-between gap-4">
                   <dt className="text-muted-foreground">BV on joining order</dt>
                   <dd className="font-mono text-gold">{product ? formatBV(product.bv) : "—"}</dd>
@@ -810,7 +921,9 @@ export function PartnerManualPlacementPage() {
                 type="submit"
                 size="lg"
                 className="w-full"
-                disabled={registerDownline.isPending || allSlotsFull || !slotsQuery.data}
+                disabled={
+                  registerDownline.isPending || allSlotsFull || !placementData || !!uplineProblem
+                }
               >
                 {registerDownline.isPending ? "Registering…" : "Register partner"}
               </Button>

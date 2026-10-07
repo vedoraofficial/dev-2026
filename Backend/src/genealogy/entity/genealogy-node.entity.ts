@@ -27,6 +27,10 @@ export class GenealogyNode {
   @JoinColumn({ name: 'parent_user_id' })
   parentUser: User | null;
 
+  /** Who enrolled this partner (earns the direct commission). Can differ from the tree parent. */
+  @Column({ name: 'sponsor_user_id', type: 'int', nullable: true })
+  sponsorUserId: number | null;
+
   @Column({ name: 'slot_number', type: 'smallint', nullable: true })
   slotNumber: number | null;
 

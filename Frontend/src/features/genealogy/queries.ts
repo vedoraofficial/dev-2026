@@ -22,11 +22,16 @@ export const useMyGenealogy = () =>
 export const useMySlots = () => useQuery({ queryKey: genealogyKeys.slots, queryFn: getMySlots })
 
 /** [Admin] direct partners under any VEDORA ID. */
+/** Not worth retrying: 403 (not in your team) and 404 (no such ID) won't change. */
+const retryServerErrorsOnce = (failures: number, error: unknown) =>
+  failures < 1 && ((error as { response?: { status?: number } })?.response?.status ?? 500) >= 500
+
 export const useGenealogyOf = (vedId: string) =>
   useQuery({
     queryKey: genealogyKeys.of(vedId),
     queryFn: () => getGenealogyOf(vedId),
     enabled: vedId.length > 0,
+    retry: retryServerErrorsOnce,
   })
 
 export const useRegisterDownline = () =>

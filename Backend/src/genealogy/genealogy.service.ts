@@ -6,7 +6,7 @@ import {
   ForbiddenException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, Repository } from 'typeorm';
+import { DataSource, EntityManager, Repository } from 'typeorm';
 import * as bcrypt from 'bcrypt';
 import { User, UserRole, UserStatus } from '../user/entity/user.entity';
 import { UserProfile } from '../user/entity/user-profile.entity';
@@ -170,6 +170,7 @@ export class GenealogyService {
         const newNode = nodeRepo.create({
           userId: newUser.id,
           parentUserId: sponsor.id,
+          sponsorUserId: sponsor.id,
           slotNumber: availableSlot,
           depth: calculatedDepth,
           placementStatus: PlacementStatus.ACTIVE,
@@ -317,8 +318,12 @@ export class GenealogyService {
   }
 
   /** True if `userId` sits anywhere below `ancestorId` (walks parent_user_id upwards). */
-  private async isInDownline(ancestorId: number, userId: number): Promise<boolean> {
-    const rows = await this.dataSource.query(
+  private async isInDownline(
+    ancestorId: number,
+    userId: number,
+    manager?: EntityManager,
+  ): Promise<boolean> {
+    const rows = await (manager ?? this.dataSource).query(
       `WITH RECURSIVE up AS (
          SELECT user_id, parent_user_id, 1 AS depth FROM genealogy_nodes WHERE user_id = $1
          UNION ALL
@@ -447,6 +452,29 @@ export class GenealogyService {
           throw new BadRequestException('Your account is currently blocked.');
         }
 
+        // 1b. Placement: under the sponsor, or under someone in the sponsor's own downline.
+        // The sponsor stays the sponsor (direct commission); `parent` is where the node sits.
+        let parent = sponsor;
+        const parentVedId = dto.parentVedId?.trim().toUpperCase();
+        if (parentVedId && parentVedId !== sponsor.vedId) {
+          const target = await userRepo
+            .createQueryBuilder('user')
+            .setLock('pessimistic_write')
+            .where('user.vedId = :vedId', { vedId: parentVedId })
+            .getOne();
+          if (!target) {
+            throw new NotFoundException(`No partner found with VED ID ${parentVedId}.`);
+          }
+          if (target.status === UserStatus.BLOCKED) {
+            throw new BadRequestException(`${target.name} (${target.vedId}) is blocked.`);
+          }
+          if (!(await this.isInDownline(sponsor.id, target.id, manager))) {
+            throw new ForbiddenException('You can only place partners inside your own team.');
+          }
+          parent = target;
+        }
+        const placedUnderYou = parent.id === sponsor.id;
+
       // 2. Check for duplicate email or mobile
       const existing = await userRepo.findOne({
         where: [{ email: dto.email }, { mobile: dto.mobile }],
@@ -457,12 +485,16 @@ export class GenealogyService {
 
       // 3. Verify total direct partners capacity (Max 20)
       const existingChildren = await nodeRepo.find({
-        where: { parentUserId: sponsor.id },
+        where: { parentUserId: parent.id },
         select: { slotNumber: true, userId: true },
       });
 
       if (existingChildren.length >= 20) {
-        throw new BadRequestException('You have reached the maximum capacity of 20 direct partners.');
+        throw new BadRequestException(
+          placedUnderYou
+            ? 'You have reached the maximum capacity of 20 direct partners.'
+            : `${parent.name} (${parent.vedId}) has reached the maximum capacity of 20 direct partners.`,
+        );
       }
 
       // 4. Determine slot: manual selection vs auto-allocation
@@ -494,29 +526,34 @@ export class GenealogyService {
       }
 
       // 5. Calculate tree depth and 5-level uplines
+      // (BV level income follows the tree, so the uplines start from the placement parent.)
       let calculatedDepth = 1;
-      let uplineLevel1: number | null = sponsor.id;
+      let uplineLevel1: number | null = parent.id;
       let uplineLevel2: number | null = null;
       let uplineLevel3: number | null = null;
       let uplineLevel4: number | null = null;
       let uplineLevel5: number | null = null;
 
-      if (sponsor.role === UserRole.FOUNDER) {
+      if (parent.role === UserRole.FOUNDER) {
         calculatedDepth = 1;
-        uplineLevel1 = sponsor.id;
+        uplineLevel1 = parent.id;
       } else {
-        const sponsorNode = await nodeRepo.findOne({ where: { userId: sponsor.id } });
-        if (!sponsorNode) {
-          throw new BadRequestException('Your account is not active in the genealogy tree.');
+        const parentNode = await nodeRepo.findOne({ where: { userId: parent.id } });
+        if (!parentNode) {
+          throw new BadRequestException(
+            placedUnderYou
+              ? 'Your account is not active in the genealogy tree.'
+              : `${parent.name} (${parent.vedId}) is not active in the genealogy tree.`,
+          );
         }
-        calculatedDepth = sponsorNode.depth + 1;
+        calculatedDepth = parentNode.depth + 1;
 
-        const sponsorUpline = await uplineRepo.findOne({ where: { userId: sponsor.id } });
-        uplineLevel1 = sponsor.id;
-        uplineLevel2 = sponsorUpline?.level1UserId ?? null;
-        uplineLevel3 = sponsorUpline?.level2UserId ?? null;
-        uplineLevel4 = sponsorUpline?.level3UserId ?? null;
-        uplineLevel5 = sponsorUpline?.level4UserId ?? null;
+        const parentUpline = await uplineRepo.findOne({ where: { userId: parent.id } });
+        uplineLevel1 = parent.id;
+        uplineLevel2 = parentUpline?.level1UserId ?? null;
+        uplineLevel3 = parentUpline?.level2UserId ?? null;
+        uplineLevel4 = parentUpline?.level3UserId ?? null;
+        uplineLevel5 = parentUpline?.level4UserId ?? null;
       }
 
       // 6. Generate sequential VED ID using database sequence
@@ -564,7 +601,8 @@ export class GenealogyService {
       // 9. Create GenealogyNode
       const newNode = nodeRepo.create({
         userId: newUser.id,
-        parentUserId: sponsor.id,
+        parentUserId: parent.id,
+        sponsorUserId: sponsor.id,
         slotNumber: chosenSlot,
         depth: calculatedDepth,
         placementStatus: PlacementStatus.ACTIVE,
@@ -591,16 +629,28 @@ export class GenealogyService {
         newUser.id,
         NotificationKey.PARTNER_WELCOME,
         `Welcome to VEDORA, ${newUser.name}`,
-        `Your VEDORA ID is ${newUser.vedId}. You are placed under ${sponsor.name} (${sponsor.vedId}) in slot ${chosenSlot}. Sign in at http://localhost:5173/login.`,
-        { vedId: newUser.vedId, sponsorVedId: sponsor.vedId, slotNumber: chosenSlot },
+        `Your VEDORA ID is ${newUser.vedId}. You are placed under ${parent.name} (${parent.vedId}) in slot ${chosenSlot}. Sign in at http://localhost:5173/login.`,
+        { vedId: newUser.vedId, sponsorVedId: sponsor.vedId, parentVedId: parent.vedId, slotNumber: chosenSlot },
         manager,
       );
 
-      // 2. TEAM_SLOTS_ALMOST_FULL (if 18) or TEAM_SLOTS_FULL (if 20)
+      // 1b. TEAM_DIRECT_JOINED to the placement parent when someone above placed the partner there
       const filledSlots = existingChildren.length + 1;
+      if (!placedUnderYou) {
+        await this.notificationService.create(
+          parent.id,
+          NotificationKey.TEAM_DIRECT_JOINED,
+          `${newUser.name} joined your team`,
+          `${sponsor.name} (${sponsor.vedId}) placed ${newUser.name} (${newUser.vedId}) under you in slot ${chosenSlot}. You now have ${filledSlots} of 20 direct slots filled.`,
+          { newVedId: newUser.vedId, newName: newUser.name, slotNumber: chosenSlot, filledSlots },
+          manager,
+        );
+      }
+
+      // 2. TEAM_SLOTS_ALMOST_FULL (if 18) or TEAM_SLOTS_FULL (if 20) — for the placement parent
       if (filledSlots === 18) {
         await this.notificationService.create(
-          sponsor.id,
+          parent.id,
           NotificationKey.TEAM_SLOTS_ALMOST_FULL,
           'Only 2 direct slots left',
           'You have filled 18 of your 20 direct slots.',
@@ -609,7 +659,7 @@ export class GenealogyService {
         );
       } else if (filledSlots === 20) {
         await this.notificationService.create(
-          sponsor.id,
+          parent.id,
           NotificationKey.TEAM_SLOTS_FULL,
           'All 20 direct slots are full',
           'All 20 of your direct slots are filled. New partners can join under your team members.',
@@ -631,8 +681,8 @@ export class GenealogyService {
             u.id,
             NotificationKey.TEAM_DOWNLINE_JOINED,
             `New partner at Level ${u.level}`,
-            `${newUser.name} (${newUser.vedId}) joined your team at Level ${u.level}, under ${sponsor.name}.`,
-            { newVedId: newUser.vedId, newName: newUser.name, level: u.level, sponsorName: sponsor.name },
+            `${newUser.name} (${newUser.vedId}) joined your team at Level ${u.level}, under ${parent.name}.`,
+            { newVedId: newUser.vedId, newName: newUser.name, level: u.level, sponsorName: parent.name },
             manager,
           );
         }
@@ -652,6 +702,8 @@ export class GenealogyService {
           depth: newNode.depth,
           sponsorVedId: sponsor.vedId,
           sponsorName: sponsor.name,
+          placedUnderVedId: parent.vedId,
+          placedUnderName: parent.name,
         },
       };
     });

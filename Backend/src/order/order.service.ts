@@ -12,6 +12,7 @@ import { CommissionDistribution } from './entity/commission-distribution.entity'
 import { Product, ProductStatus } from '../product/entity/product.entity';
 import { User, UserStatus } from '../user/entity/user.entity';
 import { CommissionUpline } from '../genealogy/entity/commission-upline.entity';
+import { GenealogyNode } from '../genealogy/entity/genealogy-node.entity';
 import { WalletService } from '../wallet/wallet.service';
 import { TransactionCategory } from '../wallet/entity/wallet-transaction.entity';
 import { NotificationService } from '../notification/notification.service';
@@ -219,6 +220,12 @@ export class OrderService {
       5: upline.level5UserId,
     };
 
+    // Who enrolled the buyer (earns the direct bonus); BV levels above follow the tree (uplineMap)
+    const buyerNode = await manager.getRepository(GenealogyNode).findOne({
+      where: { userId: order.userId },
+    });
+    const sponsorUserId = buyerNode?.sponsorUserId ?? null;
+
     // Get buyer info for notifications
     const buyer = await manager.getRepository(User).findOne({ where: { id: order.userId } });
     const buyerName = buyer?.name || 'Partner';
@@ -232,8 +239,9 @@ export class OrderService {
       let beneficiaryUserId: number | null = null;
 
       if (config.level === 0) {
-        // Direct referral bonus goes to level-1 upline (the direct sponsor)
-        beneficiaryUserId = uplineMap[1];
+        // Direct referral bonus goes to the sponsor who enrolled the buyer. That is usually the
+        // tree parent (level 1), but differs when the sponsor placed the buyer under a team member.
+        beneficiaryUserId = sponsorUserId ?? uplineMap[1];
       } else {
         beneficiaryUserId = uplineMap[config.level];
       }

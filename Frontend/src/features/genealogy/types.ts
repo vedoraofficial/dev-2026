@@ -74,6 +74,8 @@ export type RegisterDownlineInput = ProfileFields & {
   password: string
   /** 1–20; leave out for the lowest free slot */
   slotNumber?: number
+  /** Place under this team member instead of yourself; you stay the sponsor (direct ₹200) */
+  parentVedId?: string
 }
 
 /** POST /api/partner/join — public sign-up under a sponsor. */
@@ -100,6 +102,9 @@ export type JoinedPartner = {
     depth: number
     sponsorVedId: string
     sponsorName: string
+    /** Tree parent — differs from the sponsor when placed under a team member */
+    placedUnderVedId?: string
+    placedUnderName?: string
   }
 }
 

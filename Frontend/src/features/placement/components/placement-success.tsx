@@ -20,8 +20,12 @@ export type RegisteredPartner = {
   status: string
   slotNumber: number
   depth: number
+  /** Who enrolled the partner — earns the ₹200 direct commission (the signed-in user) */
   sponsorVedId: string
   sponsorName: string
+  /** Tree parent, when the partner was placed under a team member */
+  placedUnderVedId?: string
+  placedUnderName?: string
 }
 
 type Props = {
@@ -42,6 +46,9 @@ function Row({ label, value }: { label: string; value: ReactNode }) {
 
 /** Shown after a successful Manual Placement — every value comes from the backend's response. */
 export function PlacementSuccess({ partner, values, product, onPlaceAnother }: Props) {
+  const parentVedId = partner.placedUnderVedId ?? partner.sponsorVedId
+  const parentName = partner.placedUnderName ?? partner.sponsorName
+  const underYou = parentVedId === partner.sponsorVedId
   return (
     <div className="space-y-4 md:space-y-5">
       <Panel className="flex flex-wrap items-center gap-4 border-success/40 bg-success-soft/20">
@@ -69,9 +76,12 @@ export function PlacementSuccess({ partner, values, product, onPlaceAnother }: P
           <div className="mb-5 flex flex-col items-center">
             <div className="w-full max-w-60 rounded-xl border border-border bg-field/60 p-3 text-center">
               <MonoId tone="gold" className="text-[0.6875rem]">
-                {partner.sponsorVedId}
+                {parentVedId}
               </MonoId>
-              <p className="mt-0.5 text-[0.8125rem] font-medium">{partner.sponsorName} — You</p>
+              <p className="mt-0.5 text-[0.8125rem] font-medium">
+                {parentName}
+                {underYou ? " — You" : ""}
+              </p>
             </div>
             <span aria-hidden className="h-6 w-px bg-gold/50" />
             <div className="w-full max-w-60 rounded-xl border border-gold bg-gold/10 p-3 text-center ring-3 ring-gold/20">
@@ -85,7 +95,24 @@ export function PlacementSuccess({ partner, values, product, onPlaceAnother }: P
             </div>
           </div>
           <dl className="space-y-2.5 border-t border-border/70 pt-4">
-            <Row label="Sponsor" value={<MonoId>{partner.sponsorVedId}</MonoId>} />
+            <Row
+              label="Sponsor · ₹200 direct"
+              value={
+                <>
+                  <MonoId>{partner.sponsorVedId}</MonoId> (You)
+                </>
+              }
+            />
+            {underYou ? null : (
+              <Row
+                label="Placed under"
+                value={
+                  <>
+                    {parentName} <MonoId>{parentVedId}</MonoId>
+                  </>
+                }
+              />
+            )}
             <Row label="Slot" value={`${partner.slotNumber} of 20`} />
             <Row label="Depth in tree" value={partner.depth} />
             <Row label="Email" value={partner.email} />

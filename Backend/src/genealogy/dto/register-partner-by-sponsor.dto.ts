@@ -37,6 +37,16 @@ export class RegisterPartnerBySponsorDto {
   @IsOptional()
   slotNumber?: number;
 
+  @ApiProperty({
+    example: 'VED000023',
+    description:
+      'Place the new partner under this VED ID (must be in your own downline). Defaults to you. You stay the sponsor and earn the direct commission.',
+    required: false,
+  })
+  @IsString()
+  @IsOptional()
+  parentVedId?: string;
+
   // Extended profile details
   @ApiProperty({ example: '1996-07-15', description: 'Date of Birth (YYYY-MM-DD)', required: false })
   @IsDateString()
