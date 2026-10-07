@@ -11,6 +11,8 @@ export type Product = {
   shortName: string
   image: string
   price: number
+  /** MRP in rupees, when higher than the selling price it shows struck through */
+  mrp?: number
   bv: number
   description: string
   gemstones: string[]

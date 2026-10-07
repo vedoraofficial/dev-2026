@@ -7,6 +7,7 @@ import { MonoId } from "@/components/common/mono-id"
 import { PageBody, PageHeader } from "@/components/common/page-header"
 import { PersonAvatar } from "@/components/common/person-avatar"
 import { Panel, PanelHeader } from "@/components/common/panel"
+import { PriceTag } from "@/components/common/price-tag"
 import { ProgressBar } from "@/components/common/progress-bar"
 import { QueryState } from "@/components/common/query-state"
 import { StatCard, StatGrid } from "@/components/common/stat-card"
@@ -140,7 +141,11 @@ export function PartnerDashboardPage() {
                       <Link to={ROUTES.partner.products}>Order stock</Link>
                     </Button>
                     <span className="font-mono text-xs text-gold-light">
-                      {formatINR(paiseToRupees(featured.salePrice))} · {formatBV(featured.bvAmount)}
+                      <PriceTag
+                        price={paiseToRupees(featured.salePrice)}
+                        mrp={paiseToRupees(featured.mrp)}
+                      />{" "}
+                      · {formatBV(featured.bvAmount)}
                     </span>
                   </div>
                 </div>

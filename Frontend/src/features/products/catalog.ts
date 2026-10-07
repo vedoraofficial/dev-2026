@@ -24,6 +24,7 @@ export function toCatalogProduct(p: ApiProduct, unitsSold = 0): Product {
     name: p.name,
     shortName: p.name.replace(/^VEDORA\s+/i, ""),
     price: paiseToRupees(p.salePrice),
+    mrp: paiseToRupees(p.mrp),
     bv: p.bvAmount,
     description: p.description ?? "",
     unitsSold,

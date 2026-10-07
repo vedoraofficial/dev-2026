@@ -1,7 +1,8 @@
 import { Check } from "lucide-react"
 
 import { MonoId } from "@/components/common/mono-id"
-import { formatBV, formatINR } from "@/lib/format"
+import { PriceTag } from "@/components/common/price-tag"
+import { formatBV } from "@/lib/format"
 import { cn } from "@/lib/utils"
 
 /** What the picker needs from a product (the page passes the catalogue in). */
@@ -11,6 +12,7 @@ export type PickerProduct = {
   image: string
   gemstones: string[]
   price: number
+  mrp?: number
   bv: number
 }
 
@@ -69,7 +71,7 @@ export function ProductPicker({ products, value, onChange, invalid, className }:
                 {p.gemstones.join(" · ")}
               </span>
               <span className="font-mono text-[0.6875rem] text-gold-light">
-                {formatINR(p.price)} · {formatBV(p.bv)}
+                <PriceTag price={p.price} mrp={p.mrp} /> · {formatBV(p.bv)}
               </span>
             </span>
           </button>

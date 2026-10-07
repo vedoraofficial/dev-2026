@@ -3,6 +3,7 @@ import { Controller, useWatch, type UseFormReturn } from "react-hook-form"
 
 import { FieldError, FormField as Field } from "@/components/common/form-field"
 import { Panel } from "@/components/common/panel"
+import { PriceTag } from "@/components/common/price-tag"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
@@ -13,7 +14,7 @@ import { ProductPicker, type PickerProduct } from "@/features/placement/componen
 import { limitDigits } from "@/features/placement/partner-details"
 import { isPincode, usePincodeLookup } from "@/features/placement/queries"
 import type { JoiningFormInput } from "@/features/placement/schemas"
-import { formatBV, formatINR } from "@/lib/format"
+import { formatBV } from "@/lib/format"
 
 /** Any form that has the partner details + joining order fields (Add Partner, referral join). */
 type JoiningForm<T extends JoiningFormInput> = { form: UseFormReturn<T, unknown, unknown> }
@@ -290,7 +291,13 @@ export function ConfirmStep<T extends JoiningFormInput>({
         </ConfirmRow>
         <div className="flex items-baseline justify-between gap-4 border-t border-border/70 pt-2.5">
           <dt className="font-medium">Joining order</dt>
-          <dd className="font-display text-2xl">{product ? formatINR(product.price) : "—"}</dd>
+          <dd className="font-display text-2xl">
+            {product ? (
+              <PriceTag price={product.price} mrp={product.mrp} mrpClassName="font-sans text-sm" />
+            ) : (
+              "—"
+            )}
+          </dd>
         </div>
       </dl>
 

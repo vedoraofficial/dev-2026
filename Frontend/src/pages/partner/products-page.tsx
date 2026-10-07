@@ -5,6 +5,7 @@ import { toast } from "sonner"
 import { ROUTES } from "@/app/routes"
 import { PageBody, PageHeader } from "@/components/common/page-header"
 import { Panel } from "@/components/common/panel"
+import { PriceTag } from "@/components/common/price-tag"
 import { QueryState } from "@/components/common/query-state"
 import { Button } from "@/components/ui/button"
 import { useCreateOrder, useMyOrders } from "@/features/orders/queries"
@@ -133,9 +134,11 @@ export function PartnerProductsPage() {
                         {product.name} × {qty}
                       </span>
                       <span className="flex shrink-0 items-center gap-2">
-                        <span className="font-mono">
-                          {formatINR(paiseToRupees(product.salePrice) * qty)}
-                        </span>
+                        <PriceTag
+                          className="font-mono"
+                          price={paiseToRupees(product.salePrice) * qty}
+                          mrp={paiseToRupees(product.mrp) * qty}
+                        />
                         <button
                           type="button"
                           onClick={() => remove(product.id)}

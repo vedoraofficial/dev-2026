@@ -2,10 +2,11 @@ import { useState, type ReactNode } from "react"
 
 import { MonoId } from "@/components/common/mono-id"
 import { Panel } from "@/components/common/panel"
+import { PriceTag } from "@/components/common/price-tag"
 import { StatusPill } from "@/components/common/status-pill"
 import { Input } from "@/components/ui/input"
 import type { Product } from "@/features/products/mock-data"
-import { formatBV, formatNumber } from "@/lib/format"
+import { formatBV } from "@/lib/format"
 import { truncateWords } from "@/lib/text"
 
 const PREVIEW_WORDS = 32
@@ -51,7 +52,12 @@ export function ProductCard({
 
         <Input defaultValue={p.name} aria-label={`${p.sku} name`} />
         <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
-          <Input defaultValue={`₹ ${formatNumber(p.price)}`} aria-label={`${p.sku} price`} />
+          <div
+            aria-label={`${p.sku} price`}
+            className="flex h-11 items-center rounded-xl border border-input bg-field px-3.5 text-[16px] md:h-10 md:text-sm"
+          >
+            <PriceTag price={p.price} mrp={p.mrp} />
+          </div>
           <Input
             defaultValue={formatBV(p.bv)}
             aria-label={`${p.sku} BV`}

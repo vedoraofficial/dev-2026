@@ -5,11 +5,12 @@ import { Link } from "react-router-dom"
 import { ROUTES } from "@/app/routes"
 import { MonoId } from "@/components/common/mono-id"
 import { Panel, PanelHeader } from "@/components/common/panel"
+import { PriceTag } from "@/components/common/price-tag"
 import { StatusPill } from "@/components/common/status-pill"
 import { Button } from "@/components/ui/button"
 import type { PickerProduct } from "@/features/placement/components/product-picker"
 import type { PlacementValues } from "@/features/placement/schemas"
-import { formatBV, formatINR } from "@/lib/format"
+import { formatBV } from "@/lib/format"
 
 /** The partner the backend created (POST /api/partner/register-downline → `partner`). */
 export type RegisteredPartner = {
@@ -140,7 +141,7 @@ export function PlacementSuccess({ partner, values, product, onPlaceAnother }: P
                 {product.gemstones.join(" · ")}
               </p>
               <p className="mt-1 font-mono text-xs text-gold-light">
-                1 × {formatINR(product.price)} · {formatBV(product.bv)}
+                1 × <PriceTag price={product.price} mrp={product.mrp} /> · {formatBV(product.bv)}
               </p>
             </div>
           </div>
