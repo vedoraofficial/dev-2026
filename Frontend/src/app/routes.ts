@@ -14,6 +14,7 @@ export const ROUTES = {
     founders: "/admin/founders",
     genealogy: "/admin/genealogy",
     products: "/admin/products",
+    stock: "/admin/stock",
     orders: "/admin/orders",
     withdrawals: "/admin/withdrawals",
     incomeReports: "/admin/income-reports",

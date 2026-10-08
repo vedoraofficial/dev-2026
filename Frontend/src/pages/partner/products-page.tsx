@@ -46,7 +46,14 @@ export function PartnerProductsPage() {
   const bv = lines.reduce((sum, l) => sum + l.qty * l.product.bvAmount, 0)
   const total = lines.reduce((sum, l) => sum + l.qty * paiseToRupees(l.product.salePrice), 0)
 
-  const add = (id: number) => setCart((c) => ({ ...c, [id]: (c[id] ?? 0) + 1 }))
+  // Can't put more in the order than is in stock.
+  const stockOf = (id: number) => live.find((p) => p.id === id)?.stockAvailable ?? null
+  const add = (id: number) =>
+    setCart((c) => {
+      const next = (c[id] ?? 0) + 1
+      const stock = stockOf(id)
+      return stock != null && next > stock ? c : { ...c, [id]: next }
+    })
   const remove = (id: number) => setCart((c) => ({ ...c, [id]: Math.max(0, (c[id] ?? 0) - 1) }))
 
   const checkout = async () => {
@@ -99,6 +106,9 @@ export function PartnerProductsPage() {
             >
               {live.map((p) => {
                 const inOrder = cart[p.id] ?? 0
+                const stock = p.stockAvailable ?? null
+                const outOfStock = stock != null && stock <= 0
+                const atLimit = stock != null && inOrder >= stock
                 return (
                   <ProductCard
                     key={p.id}
@@ -107,10 +117,23 @@ export function PartnerProductsPage() {
                     action={
                       <Button
                         size="sm"
+                        variant={outOfStock ? "outline" : "default"}
+                        className={
+                          outOfStock
+                            ? "border-danger/50 font-bold text-danger disabled:opacity-100"
+                            : undefined
+                        }
+                        disabled={outOfStock || atLimit}
                         onClick={() => add(p.id)}
                         aria-label={`Add ${p.name} to order`}
                       >
-                        {inOrder ? `Add · ${inOrder} in order` : "Add to order"}
+                        {outOfStock
+                          ? "Out of stock"
+                          : atLimit
+                            ? `All ${stock} in order`
+                            : inOrder
+                              ? `Add · ${inOrder} in order`
+                              : "Add to order"}
                       </Button>
                     }
                   />

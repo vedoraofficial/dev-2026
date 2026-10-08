@@ -11,6 +11,7 @@ import { WalletModule } from './wallet/wallet.module';
 import { OrderModule } from './order/order.module';
 import { PaymentModule } from './payment/payment.module';
 import { NotificationModule } from './notification/notification.module';
+import { StockModule } from './stock/stock.module';
 
 @Module({
   imports: [
@@ -34,6 +35,7 @@ import { NotificationModule } from './notification/notification.module';
     OrderModule,
     PaymentModule,
     NotificationModule,
+    StockModule,
   ],
   controllers: [AppController],
   providers: [AppService],

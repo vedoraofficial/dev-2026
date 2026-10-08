@@ -5,6 +5,7 @@ import {
   deleteProduct,
   getProduct,
   getProducts,
+  getPublicProducts,
   updateProduct,
 } from "@/features/products/api"
 import { useApiMutation } from "@/lib/mutation"
@@ -15,6 +16,10 @@ export const productKeys = {
 }
 
 export const useProducts = () => useQuery({ queryKey: productKeys.all, queryFn: getProducts })
+
+/** Public (no sign-in) list for the referral join page. */
+export const usePublicProducts = () =>
+  useQuery({ queryKey: [...productKeys.all, "public"], queryFn: getPublicProducts })
 
 export const useProduct = (id: number) =>
   useQuery({ queryKey: productKeys.one(id), queryFn: () => getProduct(id), enabled: id > 0 })

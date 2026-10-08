@@ -3,6 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { IsNull, Repository } from 'typeorm';
 import { Product, ProductStatus } from './entity/product.entity';
 import { Order } from '../order/entity/order.entity';
+import { getStockLevels } from '../stock/stock-levels';
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
 import { NotificationService } from '../notification/notification.service';
@@ -37,14 +38,30 @@ export class ProductService {
     return saved;
   }
 
-  async findAll(): Promise<Product[]> {
-    return this.productRepo.find({ where: { deletedAt: IsNull() }, order: { createdAt: 'DESC' } });
+  async findAll() {
+    const products = await this.productRepo.find({ where: { deletedAt: IsNull() }, order: { createdAt: 'DESC' } });
+    return this.withStock(products);
+  }
+
+  /** Products partners can buy right now (ACTIVE), with stock — also served publicly. */
+  async findOnSale() {
+    const products = await this.productRepo.find({
+      where: { deletedAt: IsNull(), status: ProductStatus.ACTIVE },
+      order: { createdAt: 'DESC' },
+    });
+    return this.withStock(products);
   }
 
   async findById(id: number): Promise<Product> {
     const product = await this.productRepo.findOne({ where: { id, deletedAt: IsNull() } });
     if (!product) throw new NotFoundException('Product not found');
     return product;
+  }
+
+  /** Adds `stockAvailable`: units left (0 when no stock was ever added). */
+  private async withStock(products: Product[]) {
+    const levels = await getStockLevels(this.productRepo.manager, products.map((p) => Number(p.id)));
+    return products.map((p) => ({ ...p, stockAvailable: levels.get(Number(p.id))?.available ?? 0 }));
   }
 
   async update(id: number, dto: UpdateProductDto, userId: number): Promise<Product> {

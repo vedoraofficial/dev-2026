@@ -9,6 +9,8 @@ export type ApiProduct = {
   salePrice: number
   bvAmount: number
   status: ProductStatus
+  /** Units left — 0 (out of stock) until Admin adds stock */
+  stockAvailable?: number | null
   createdAt: string
   updatedAt: string
 }

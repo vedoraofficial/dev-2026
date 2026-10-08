@@ -8,11 +8,18 @@ const toProduct = (p: ApiProduct): ApiProduct => ({
   mrp: Number(p.mrp),
   salePrice: Number(p.salePrice),
   bvAmount: Number(p.bvAmount),
+  stockAvailable: Number(p.stockAvailable ?? 0),
 })
 
 /** GET /api/product */
 export async function getProducts(): Promise<ApiProduct[]> {
   const { data } = await api.get<ApiProduct[]>("/product")
+  return data.map(toProduct)
+}
+
+/** GET /api/public/products — no sign-in: products on sale, with stock (referral join page). */
+export async function getPublicProducts(): Promise<ApiProduct[]> {
+  const { data } = await api.get<ApiProduct[]>("/public/products")
   return data.map(toProduct)
 }
 

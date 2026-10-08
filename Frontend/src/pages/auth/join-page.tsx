@@ -9,6 +9,7 @@ import { ROUTES } from "@/app/routes"
 import logo from "@/assets/images/vedora-logo.jpg"
 import { MonoId } from "@/components/common/mono-id"
 import { Panel } from "@/components/common/panel"
+import { QueryState } from "@/components/common/query-state"
 import { Button } from "@/components/ui/button"
 import { useJoinPartner } from "@/features/genealogy/queries"
 import type { JoinedPartner } from "@/features/genealogy/types"
@@ -29,7 +30,8 @@ import {
   type ReferralJoinInput,
   type ReferralJoinValues,
 } from "@/features/placement/schemas"
-import { products } from "@/features/products/mock-data"
+import { toCatalogProduct } from "@/features/products/catalog"
+import { usePublicProducts } from "@/features/products/queries"
 import { normalizeVedId } from "@/lib/ved-id"
 
 const blank: DefaultValues<ReferralJoinInput> = {
@@ -61,8 +63,8 @@ const blank: DefaultValues<ReferralJoinInput> = {
 /**
  * Public page behind a referral link (/join/VED000021) — the Add Partner form without the
  * "Upline & slot" step. The sponsor is the ID in the link; POST /api/partner/join places the new
- * partner in that sponsor's lowest free slot. The product list needs sign-in on the backend, so
- * the joining product is picked from the four VEDORA bracelets.
+ * partner in that sponsor's lowest free slot. Products come from the public product list, with
+ * live stock.
  */
 export function JoinPage() {
   const { ref = "" } = useParams()
@@ -77,6 +79,9 @@ export function JoinPage() {
     resolver: zodResolver(referralJoinSchema),
     defaultValues: blank,
   })
+  // Products on sale come from the public API, so stock (and out of stock) is live here too.
+  const productsQuery = usePublicProducts()
+  const products = (productsQuery.data ?? []).map((p) => toCatalogProduct(p))
   const productSku = useWatch({ control: form.control, name: "productSku" })
   const product = products.find((p) => p.sku === productSku)
 
@@ -157,7 +162,21 @@ export function JoinPage() {
               <Step n={1} title="Your details">
                 <PartnerDetailsFields form={form} />
               </Step>
-              <JoiningProductStep n={2} form={form} products={products} />
+              <JoiningProductStep
+                n={2}
+                form={form}
+                products={products}
+                wrap={(picker) => (
+                  <QueryState
+                    query={productsQuery}
+                    rows={1}
+                    empty={products.length === 0}
+                    emptyMessage="No products are on sale right now."
+                  >
+                    {picker}
+                  </QueryState>
+                )}
+              />
               <ShippingStep
                 n={3}
                 form={form}

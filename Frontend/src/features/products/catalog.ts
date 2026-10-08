@@ -25,12 +25,16 @@ export function toCatalogProduct(p: ApiProduct, unitsSold = 0): Product {
     shortName: p.name.replace(/^VEDORA\s+/i, ""),
     price: paiseToRupees(p.salePrice),
     mrp: paiseToRupees(p.mrp),
+    stock: p.stockAvailable ?? null,
     bv: p.bvAmount,
     description: p.description ?? "",
     unitsSold,
     status: p.status === "ACTIVE" ? "live" : "draft",
   }
 }
+
+/** Nothing left to order (no stock added yet also counts as 0). */
+export const isOutOfStock = (p: { stock?: number | null }) => p.stock != null && p.stock <= 0
 
 /** Units per product id from a list of paid orders — "sold" on the product cards. */
 export function unitsByProduct(

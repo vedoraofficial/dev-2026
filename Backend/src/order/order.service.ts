@@ -13,6 +13,7 @@ import { Product, ProductStatus } from '../product/entity/product.entity';
 import { User, UserStatus } from '../user/entity/user.entity';
 import { CommissionUpline } from '../genealogy/entity/commission-upline.entity';
 import { GenealogyNode } from '../genealogy/entity/genealogy-node.entity';
+import { getAvailableStock } from '../stock/stock-levels';
 import { WalletService } from '../wallet/wallet.service';
 import { TransactionCategory } from '../wallet/entity/wallet-transaction.entity';
 import { NotificationService } from '../notification/notification.service';
@@ -60,6 +61,14 @@ export class OrderService {
     }
 
     const quantity = dto.quantity || 1;
+
+    // Only what Admin added under Stock can be ordered (no stock entries = out of stock).
+    const inStock = await getAvailableStock(this.productRepo.manager, Number(product.id));
+    if (inStock < quantity) {
+      throw new BadRequestException(
+        inStock <= 0 ? 'This product is out of stock.' : `Only ${inStock} left in stock.`,
+      );
+    }
     const unitPrice = Number(product.salePrice);
     const totalAmount = unitPrice * quantity;
     const bvTotal = Number(product.bvAmount) * quantity;
@@ -128,6 +137,14 @@ export class OrderService {
     }
 
     const quantity = dto.quantity || 1;
+
+    // Only what Admin added under Stock can be ordered (no stock entries = out of stock).
+    const inStock = await getAvailableStock(this.productRepo.manager, Number(product.id));
+    if (inStock < quantity) {
+      throw new BadRequestException(
+        inStock <= 0 ? 'This product is out of stock.' : `Only ${inStock} left in stock.`,
+      );
+    }
     const unitPrice = Number(product.salePrice);
     const totalAmount = unitPrice * quantity;
     const bvTotal = Number(product.bvAmount) * quantity;

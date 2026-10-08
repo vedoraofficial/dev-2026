@@ -52,7 +52,9 @@ export function PartnerDashboardPage() {
   const levelTotal = levels.reduce((a, b) => a + b, 0)
   const maxLevel = Math.max(1, ...levels)
 
-  const featured = (products.data ?? []).find((p) => p.status === "ACTIVE")
+  const featured = (products.data ?? []).find(
+    (p) => p.status === "ACTIVE" && !(p.stockAvailable != null && p.stockAvailable <= 0),
+  )
 
   const searchTeam = () => {
     if (!query.trim()) return

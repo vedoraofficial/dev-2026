@@ -14,6 +14,8 @@ export type PickerProduct = {
   price: number
   mrp?: number
   bv: number
+  /** Units left; null / undefined = stock not tracked (always available) */
+  stock?: number | null
 }
 
 type Props = {
@@ -35,18 +37,22 @@ export function ProductPicker({ products, value, onChange, invalid, className }:
     >
       {products.map((p) => {
         const selected = p.sku === value
+        const outOfStock = p.stock != null && p.stock <= 0
         return (
           <button
             key={p.sku}
             type="button"
             role="radio"
             aria-checked={selected}
+            disabled={outOfStock}
             onClick={() => onChange(p.sku)}
             className={cn(
               "relative flex min-w-0 flex-col overflow-hidden rounded-xl border text-left transition-colors",
               selected
                 ? "border-gold bg-gold/10 ring-3 ring-gold/20"
                 : "border-border bg-field/60 hover:border-gold/40",
+              outOfStock &&
+                "cursor-not-allowed hover:border-border [&>:not([data-oos])]:opacity-50",
             )}
           >
             <img
@@ -57,6 +63,14 @@ export function ProductPicker({ products, value, onChange, invalid, className }:
               height={750}
               className="aspect-[4/3] w-full object-cover"
             />
+            {outOfStock ? (
+              <span
+                data-oos
+                className="absolute top-2 left-2 rounded-full bg-danger px-2.5 py-0.5 text-[0.6875rem] font-bold text-white shadow-sm"
+              >
+                Out of stock
+              </span>
+            ) : null}
             {selected ? (
               <span className="absolute top-2 right-2 grid size-6 place-items-center rounded-full bg-gold text-primary-foreground">
                 <Check className="size-3.5" />

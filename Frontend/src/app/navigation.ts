@@ -9,6 +9,7 @@ export const ADMIN_NAV: NavItem[] = [
   { label: "Founders", to: ROUTES.admin.founders },
   { label: "Genealogy Viewer", to: ROUTES.admin.genealogy },
   { label: "Products", to: ROUTES.admin.products },
+  { label: "Stock", to: ROUTES.admin.stock },
   { label: "Orders", to: ROUTES.admin.orders },
   { label: "Withdrawals", to: ROUTES.admin.withdrawals },
   { label: "Income Reports", to: ROUTES.admin.incomeReports },

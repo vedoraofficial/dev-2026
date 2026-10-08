@@ -5,6 +5,7 @@ import { Panel } from "@/components/common/panel"
 import { PriceTag } from "@/components/common/price-tag"
 import { StatusPill } from "@/components/common/status-pill"
 import { Input } from "@/components/ui/input"
+import { isOutOfStock } from "@/features/products/catalog"
 import type { Product } from "@/features/products/mock-data"
 import { formatBV } from "@/lib/format"
 import { truncateWords } from "@/lib/text"
@@ -45,9 +46,15 @@ export function ProductCard({
           <MonoId tone="gold" className="text-[0.6875rem]">
             {p.sku}
           </MonoId>
-          <StatusPill variant={p.status === "live" ? "success" : "neutral"}>
-            {p.status === "live" ? "Live" : "Draft"}
-          </StatusPill>
+          {isOutOfStock(p) ? (
+            <StatusPill variant="danger" className="font-bold">
+              Out of stock
+            </StatusPill>
+          ) : (
+            <StatusPill variant={p.status === "live" ? "success" : "neutral"}>
+              {p.status === "live" ? "Live" : "Draft"}
+            </StatusPill>
+          )}
         </div>
 
         <Input defaultValue={p.name} aria-label={`${p.sku} name`} />
