@@ -7,6 +7,8 @@ import { RouteError } from "@/components/common/route-error"
 import { AdminLayout } from "@/layouts/admin-layout"
 import { AuthLayout } from "@/layouts/auth-layout"
 import { PartnerLayout } from "@/layouts/partner-layout"
+import { ROUTES as SITE_ROUTES } from "@/website/app/routes"
+import { SiteLayout } from "@/website/layouts/site-layout"
 
 /** Shown for the instant a lazy page's chunk is still downloading. */
 function RouteLoading() {
@@ -24,7 +26,31 @@ const page = (load: () => Promise<Record<string, unknown>>, name: string): Route
 })
 
 export const router = createBrowserRouter([
-  { path: "/", element: <Navigate to={ROUTES.login} replace />, ErrorBoundary: RouteError },
+  // Public website (static, src/website) — "/" opens its home page; "Partner Login" goes to /login.
+  {
+    element: <SiteLayout />,
+    ErrorBoundary: RouteError,
+    children: [
+      { path: SITE_ROUTES.home, ...page(() => import("@/website/pages/home-page"), "HomePage") },
+      { path: SITE_ROUTES.about, ...page(() => import("@/website/pages/about-page"), "AboutPage") },
+      {
+        path: SITE_ROUTES.products,
+        ...page(() => import("@/website/pages/products-page"), "ProductsPage"),
+      },
+      {
+        path: SITE_ROUTES.business,
+        ...page(() => import("@/website/pages/business-page"), "BusinessPage"),
+      },
+      {
+        path: SITE_ROUTES.contact,
+        ...page(() => import("@/website/pages/contact-page"), "ContactPage"),
+      },
+      {
+        path: SITE_ROUTES.privacy,
+        ...page(() => import("@/website/pages/privacy-page"), "PrivacyPage"),
+      },
+    ],
+  },
   {
     element: <AuthLayout />,
     ErrorBoundary: RouteError,

@@ -2,6 +2,7 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 @import "@fontsource-variable/cormorant-garamond";
+@import "@fontsource-variable/cormorant-garamond/wght-italic.css";
 @import "@fontsource-variable/manrope";
 @import "@fontsource-variable/jetbrains-mono";
 
@@ -52,6 +53,10 @@
   --color-gold-light: var(--gold-light);
   --color-gold-dim: var(--gold-dim);
   --color-forest: var(--forest);
+  /* Public website (src/website) */
+  --color-deep: var(--deep);
+  --color-panel: var(--panel);
+  --color-whatsapp: var(--whatsapp);
   --color-success: var(--success);
   --color-success-soft: var(--success-soft);
   --color-warning: var(--warning);
@@ -81,6 +86,10 @@
   --popover-foreground: #f4f1e9;
   --field: #081b12;
   --forest: #1a3a29;
+  /* Public website: darker band (quote, footer), dark panel inside cream bands, WhatsApp button */
+  --deep: #06140e;
+  --panel: #0c2419;
+  --whatsapp: #1f7a4d;
 
   /* Brand */
   --gold: #c9a961;
@@ -163,4 +172,84 @@
 @utility safe-x {
   padding-left: max(1rem, env(safe-area-inset-left));
   padding-right: max(1rem, env(safe-area-inset-right));
+}
+
+/* ─── Public website (src/website) ──────────────────────────────────────────────────────────
+ * SiteLayout puts `site` on <html> while a website page is open, so these base styles never
+ * touch the portal screens.
+ */
+@layer base {
+  html.site {
+    scroll-behavior: smooth;
+    scroll-padding-top: 5.5rem;
+  }
+  @media (min-width: 768px) {
+    html.site {
+      font-size: 15px;
+    }
+  }
+  html.site body {
+    /* Never scroll sideways on phones, whatever the content */
+    overflow-x: clip;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+  html.site img {
+    max-width: 100%;
+  }
+}
+
+/* Website form labels and table heads (a touch bolder than the portal's `eyebrow`) */
+@utility site-eyebrow {
+  @apply text-[0.6875rem] font-semibold tracking-[0.14em] text-muted-foreground uppercase;
+}
+
+/* Gold, wide-tracked monospace kicker above every section title ("THE COLLECTION") */
+@utility kicker {
+  @apply font-mono text-[0.6875rem] font-medium tracking-[0.28em] text-gold uppercase;
+}
+
+/*
+ * Light "cream" band (Why VEDORA, Founders, Staying active…). It re-points the theme tokens, so
+ * everything inside — text, borders, cards — switches to the light palette without extra classes.
+ */
+@utility surface-cream {
+  --background: #f3efe6;
+  --foreground: #10241a;
+  --card: #ffffff;
+  --card-foreground: #10241a;
+  --muted: #ebe5d7;
+  --muted-foreground: #5d665d;
+  --border: #ddd5c3;
+  --input: #d6cdb9;
+  --field: #ffffff;
+  --gold: #a8873f;
+  color-scheme: light;
+  background-color: var(--background);
+  color: var(--foreground);
+}
+
+/* Dark-green panel that stays dark inside a cream band (Warranty & ordering, Grievance card) */
+@utility surface-panel {
+  --foreground: #f4f1e9;
+  --muted-foreground: #9aa79b;
+  --border: #17321f;
+  --gold: #c9a961;
+  color-scheme: dark;
+  background-color: var(--panel);
+  color: var(--foreground);
+}
+
+/* Faint diagonal lines behind the page heroes */
+@utility hero-lines {
+  background-image: repeating-linear-gradient(
+    135deg,
+    transparent 0 26px,
+    rgb(201 169 97 / 0.03) 26px 27px
+  );
+}
+
+/* Striped placeholder used until the founder photos arrive */
+@utility photo-placeholder {
+  background-image: repeating-linear-gradient(135deg, #ede4d2 0 10px, #e5dac4 10px 20px);
 }
