@@ -3,12 +3,14 @@ import {
   PrimaryGeneratedColumn,
   Column,
   ManyToOne,
+  OneToOne,
   JoinColumn,
   CreateDateColumn,
   UpdateDateColumn,
 } from 'typeorm';
 import { User } from '../../user/entity/user.entity';
 import { Product } from '../../product/entity/product.entity';
+import { Shipment } from '../../shiprocket/entity/shipment.entity';
 
 export enum PaymentMethod {
   PHONEPE = 'PHONEPE',
@@ -26,8 +28,11 @@ export enum PaymentStatus {
 export enum OrderStatus {
   PENDING = 'PENDING',
   CONFIRMED = 'CONFIRMED',
-  CANCELLED = 'CANCELLED',
+  PROCESSING = 'PROCESSING',
+  SHIPPED = 'SHIPPED',
   DELIVERED = 'DELIVERED',
+  CANCELLED = 'CANCELLED',
+  RTO = 'RTO',
 }
 
 @Entity('orders')
@@ -92,6 +97,9 @@ export class Order {
   /** Admin user ID if this was a cash/admin order */
   @Column({ name: 'created_by_admin_id', type: 'int', nullable: true })
   createdByAdminId: number | null;
+
+  @OneToOne(() => Shipment, shipment => shipment.order)
+  shipment: Shipment;
 
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz', precision: 3 })
   createdAt: Date;
