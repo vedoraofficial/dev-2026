@@ -4,9 +4,11 @@ import { INestApplication, ValidationPipe } from '@nestjs/common';
 import request from 'supertest';
 import { DataSource } from 'typeorm';
 import { AppModule } from '../src/app.module';
-import { UserBank, BankVerificationStatus } from '../src/user/entity/user-bank.entity';
 import { Wallet } from '../src/wallet/entity/wallet.entity';
-import { PaymentMethod } from '../src/order/entity/order.entity';
+import { WalletService } from '../src/wallet/wallet.service';
+import { OrderService } from '../src/order/order.service';
+import { TransactionCategory } from '../src/wallet/entity/wallet-transaction.entity';
+import { Order, PaymentMethod, PaymentStatus, OrderStatus } from '../src/order/entity/order.entity';
 
 describe('VEDORA - Full System End-to-End API Test Suite', () => {
   let app: INestApplication;
@@ -501,7 +503,19 @@ describe('VEDORA - Full System End-to-End API Test Suite', () => {
       expect(res.status).toBe(201);
       expect(res.body).toHaveProperty('id');
       expect(res.body.salePrice).toBe(1200);
-      createdProductId = res.body.id;
+      createdProductId = Number(res.body.id);
+
+      // Add stock for the created product so downstream order tests succeed
+      const stockRes = await request(app.getHttpServer())
+        .post('/api/stock/movements')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({
+          productId: createdProductId,
+          type: 'IN',
+          quantity: 100,
+          note: 'Initial stock for tests',
+        });
+      expect(stockRes.status).toBe(201);
     });
 
     it('GET /api/product - Lists all products for authenticated users', async () => {
@@ -511,7 +525,7 @@ describe('VEDORA - Full System End-to-End API Test Suite', () => {
 
       expect(res.status).toBe(200);
       expect(Array.isArray(res.body)).toBe(true);
-      const found = res.body.find((p: any) => p.id === createdProductId);
+      const found = res.body.find((p: any) => Number(p.id) === createdProductId);
       expect(found).toBeDefined();
     });
 
@@ -521,7 +535,7 @@ describe('VEDORA - Full System End-to-End API Test Suite', () => {
         .set('Authorization', `Bearer ${partnerToken}`);
 
       expect(res.status).toBe(200);
-      expect(res.body.id).toBe(createdProductId);
+      expect(Number(res.body.id)).toBe(createdProductId);
       expect(res.body.name).toContain(uniqueSuffix);
     });
 
@@ -768,6 +782,62 @@ describe('VEDORA - Full System End-to-End API Test Suite', () => {
   });
 
   // ═══════════════════════════════════════════════════════════════════════════
+  // 8b. ORDER CANCELLATION, REFUND INTEGRITY & COMMISSION CLAWBACK
+  // ═══════════════════════════════════════════════════════════════════════════
+  describe('8b. Order Cancellation, Refund Integrity & Commission Clawback', () => {
+    it('POST /api/order/:id/cancel - Partner is FORBIDDEN from cancelling a PAID order directly (400)', async () => {
+      const res = await request(app.getHttpServer())
+        .post(`/api/order/${cashOrderId}/cancel`)
+        .set('Authorization', `Bearer ${partnerToken}`)
+        .send({ reason: 'Customer changed mind' });
+
+      expect(res.status).toBe(400);
+      expect(res.body.message).toContain('Paid and confirmed orders cannot be cancelled directly by customers');
+    });
+
+    it('POST /api/order/:id/cancel - Partner CAN cancel an unpaid PENDING order', async () => {
+      const res = await request(app.getHttpServer())
+        .post(`/api/order/${pendingOrderId}/cancel`)
+        .set('Authorization', `Bearer ${partnerToken}`);
+
+      expect(res.status).toBe(201);
+      expect(res.body.message).toContain('Pending order cancelled');
+    });
+
+    it('POST /api/order/:id/cancel - Admin cancels paid order, refunding buyer and clawing back upline commissions', async () => {
+      // 1. Get Founder available balance before refund
+      const founderWalletBefore = await request(app.getHttpServer())
+        .get('/api/wallet')
+        .set('Authorization', `Bearer ${founderToken}`);
+      const founderBalBefore = Number(founderWalletBefore.body.availableBalance);
+
+      // 2. Admin performs cancel and refund
+      const res = await request(app.getHttpServer())
+        .post(`/api/order/${cashOrderId}/cancel`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ reason: 'Admin approved customer return' });
+
+      expect(res.status).toBe(201);
+      expect(res.body.paymentStatus).toBe('REFUNDED');
+      expect(res.body.orderStatus).toBe('CANCELLED');
+      expect(res.body).toHaveProperty('refundAmount');
+
+      // 3. Verify Founder upline had commission clawed back
+      const founderWalletAfter = await request(app.getHttpServer())
+        .get('/api/wallet')
+        .set('Authorization', `Bearer ${founderToken}`);
+      const founderBalAfter = Number(founderWalletAfter.body.availableBalance);
+      expect(founderBalAfter).toBeLessThan(founderBalBefore);
+
+      // 4. Verify duplicate refund attempt is rejected with ConflictException (409)
+      const duplicateRes = await request(app.getHttpServer())
+        .post(`/api/order/${cashOrderId}/cancel`)
+        .set('Authorization', `Bearer ${adminToken}`);
+      expect(duplicateRes.status).toBe(400); // Already cancelled
+    });
+  });
+
+  // ═══════════════════════════════════════════════════════════════════════════
   // 9. ADMIN USER MANAGEMENT & PRODUCT CLEANUP (/api/user, /api/product)
   // ═══════════════════════════════════════════════════════════════════════════
   describe('9. Admin User Management & RBAC Protection', () => {
@@ -928,4 +998,230 @@ describe('VEDORA - Full System End-to-End API Test Suite', () => {
       expect(partnerNotifs.body.unreadCount).toBeGreaterThanOrEqual(1);
     });
   });
+
+  // ═════════════════════════════════════════════════════════════════════
+  // 11. Security Hardening & Vulnerability Remediation (Second Pass)
+  // ═════════════════════════════════════════════════════════════════════
+  describe('11. Security Hardening & Vulnerability Remediation (Second Pass)', () => {
+    it('DELETE /api/user/bank/:id - Reject deletion of bank account linked to withdrawal records (400)', async () => {
+      // primaryBankId was used in Section 7 for withdrawalId
+      const res = await request(app.getHttpServer())
+        .delete(`/api/user/bank/${primaryBankId}`)
+        .set('Authorization', `Bearer ${partnerToken}`);
+
+      expect(res.status).toBe(400);
+      expect(res.body.message).toContain('Cannot delete bank account linked to existing withdrawal records');
+    });
+
+    it('POST /api/wallet/topup - Reject extreme topup amounts exceeding Max limit (400)', async () => {
+      const res = await request(app.getHttpServer())
+        .post('/api/wallet/topup')
+        .set('Authorization', `Bearer ${partnerToken}`)
+        .send({ amount: 99999999999 });
+
+      expect(res.status).toBe(400);
+      expect(res.body.message).toContain('Maximum single topup amount is ₹5,00,000 (50,000,000 paise).');
+    });
+
+    it('POST /api/wallet/withdraw - Reject extreme withdrawal amounts exceeding Max limit (400)', async () => {
+      const res = await request(app.getHttpServer())
+        .post('/api/wallet/withdraw')
+        .set('Authorization', `Bearer ${partnerToken}`)
+        .send({ amount: 9999999, bankId: primaryBankId });
+
+      expect(res.status).toBe(400);
+      expect(res.body.message).toContain('Maximum single withdrawal amount is ₹5,00,000.');
+    });
+
+    it('JWT Strategy - Immediately invalidates active token when user account is BLOCKED by Admin', async () => {
+      // 1. Admin blocks the partner account
+      const blockRes = await request(app.getHttpServer())
+        .patch(`/api/user/${partnerUserId}/status`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ status: 'BLOCKED' });
+
+      expect(blockRes.status).toBe(200);
+      expect(blockRes.body.status).toBe('BLOCKED');
+
+      // 2. Previously issued partnerToken must now be rejected with 401 Unauthorized
+      const profileRes = await request(app.getHttpServer())
+        .get('/api/user')
+        .set('Authorization', `Bearer ${partnerToken}`);
+
+      expect(profileRes.status).toBe(401);
+      expect(profileRes.body.message).toContain('blocked');
+
+      // 3. Admin unblocks the account
+      const unblockRes = await request(app.getHttpServer())
+        .patch(`/api/user/${partnerUserId}/status`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ status: 'ACTIVE' });
+
+      expect(unblockRes.status).toBe(200);
+      expect(unblockRes.body.status).toBe('ACTIVE');
+
+      // 4. Partner token works again
+      const restoredRes = await request(app.getHttpServer())
+        .get('/api/user')
+        .set('Authorization', `Bearer ${partnerToken}`);
+
+      expect(restoredRes.status).toBe(200);
+      expect(restoredRes.body.id).toBe(partnerUserId);
+    });
+
+    it('Admin Status Protection - Rejects blocking root admin VED108 or admin accounts (400)', async () => {
+      // Find root admin id
+      const rootAdmin = await dataSource.query(`SELECT id FROM users WHERE ved_id = 'VED108'`);
+      const rootAdminId = rootAdmin[0]?.id;
+
+      const res = await request(app.getHttpServer())
+        .patch(`/api/user/${rootAdminId}/status`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ status: 'BLOCKED' });
+
+      expect(res.status).toBe(400);
+      expect(res.body.message).toContain('Cannot block an administrator or root account');
+    });
+
+    it('Wallet Accounting Integrity - Top-up does not inflate totalEarned', async () => {
+      const walletService = app.get(WalletService);
+      const summaryBefore = await walletService.getWalletSummary(partnerUserId);
+      const initialEarned = Number(summaryBefore.totalEarned);
+
+      // Perform a top-up credit
+      await walletService.credit(
+        partnerUserId,
+        50000, // ₹500 in paise
+        TransactionCategory.TOPUP,
+        'Topup test credit',
+        'TOPUP',
+        'TOPUP_TEST_1',
+      );
+
+      const summaryAfter = await walletService.getWalletSummary(partnerUserId);
+      // availableBalance increased, but totalEarned must remain identical
+      expect(Number(summaryAfter.availableBalance)).toBeGreaterThan(Number(summaryBefore.availableBalance));
+      expect(Number(summaryAfter.totalEarned)).toBe(initialEarned);
+    });
+
+    it('Oversell Race Prevention - Confirming PhonePe order when out of stock refunds to wallet and skips commission distribution', async () => {
+      const orderService = app.get(OrderService);
+      const walletService = app.get(WalletService);
+
+      // 1. Create a special product with 0 stock
+      const prodRes = await request(app.getHttpServer())
+        .post('/api/product')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({
+          name: `ZeroStockProduct_${uniqueSuffix}`,
+          description: 'Zero stock product for oversell test',
+          mrp: 2000,
+          salePrice: 1500,
+          bvAmount: 500,
+        });
+      expect(prodRes.status).toBe(201);
+      const zeroStockProdId = prodRes.body.id;
+
+      // Add 1 stock unit so order can be initiated
+      await request(app.getHttpServer())
+        .post('/api/stock/movements')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({
+          productId: zeroStockProdId,
+          type: 'IN',
+          quantity: 1,
+          note: 'Stock for test',
+        });
+
+      // 2. Partner initiates PhonePe order for 1 unit
+      const orderRes = await request(app.getHttpServer())
+        .post('/api/order')
+        .set('Authorization', `Bearer ${partnerToken}`)
+        .send({
+          productId: zeroStockProdId,
+          quantity: 1,
+          paymentMethod: PaymentMethod.PHONEPE,
+        });
+      expect(orderRes.status).toBe(201);
+      const testOrderId = orderRes.body.order.id;
+
+      // 3. Stock is depleted to 0 before payment confirmation
+      await request(app.getHttpServer())
+        .post('/api/stock/movements')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({
+          productId: zeroStockProdId,
+          type: 'OUT',
+          quantity: 1,
+          note: 'Stock depleted by competitor',
+        });
+
+      const balanceBefore = Number((await walletService.getWalletSummary(partnerUserId)).availableBalance);
+
+      // 4. Confirm payment via orderService.confirmOrderPayment
+      await orderService.confirmOrderPayment(Number(testOrderId), 'TXN_OVERSELL_TEST');
+
+      // 5. Verify order was marked CANCELLED with PAID status, stockout auto-refund was credited to wallet
+      const orderRepo = dataSource.getRepository(Order);
+      const confirmedOrder = await orderRepo.findOne({ where: { id: testOrderId } });
+      expect(confirmedOrder?.orderStatus).toBe(OrderStatus.CANCELLED);
+      expect(confirmedOrder?.paymentStatus).toBe(PaymentStatus.PAID);
+
+      const balanceAfter = Number((await walletService.getWalletSummary(partnerUserId)).availableBalance);
+      expect(balanceAfter).toBe(balanceBefore + Number(confirmedOrder?.totalAmount));
+
+      // Verify no commission was distributed
+      const commCount = await dataSource.query(
+        `SELECT COUNT(*) FROM commission_distributions WHERE order_id = $1`,
+        [testOrderId],
+      );
+      expect(Number(commCount[0].count)).toBe(0);
+    });
+
+    it('DELETE /api/user/:id - Rejects deletion of root admin / VED108 account', async () => {
+      // Find root admin ID
+      const rootAdmin = await dataSource.query(`SELECT id FROM users WHERE ved_id = 'VED108' LIMIT 1`);
+      const rootId = rootAdmin[0]?.id;
+
+      const res = await request(app.getHttpServer())
+        .delete(`/api/user/${rootId}`)
+        .set('Authorization', `Bearer ${adminToken}`);
+
+      expect(res.status).toBe(400);
+      expect(res.body.message).toMatch(/cannot delete (their own account|your own account|an administrator or root account)/i);
+    });
+
+    it('POST /api/payment/initiate/:orderId - Rejects non-integer order ID cleanly with 400', async () => {
+      const res = await request(app.getHttpServer())
+        .post('/api/payment/initiate/invalid_order_id')
+        .set('Authorization', `Bearer ${partnerToken}`);
+
+      expect(res.status).toBe(400);
+      expect(res.body.message).toMatch(/numeric string is expected/i);
+    });
+
+    it('GET /api/product/:id - Rejects non-integer product ID cleanly with 400', async () => {
+      const res = await request(app.getHttpServer())
+        .get('/api/product/invalid_prod_id')
+        .set('Authorization', `Bearer ${partnerToken}`);
+
+      expect(res.status).toBe(400);
+      expect(res.body.message).toMatch(/numeric string is expected/i);
+    });
+
+    it('POST /api/order - Rejects order quantity exceeding 1,000 units with 400', async () => {
+      const res = await request(app.getHttpServer())
+        .post('/api/order')
+        .set('Authorization', `Bearer ${partnerToken}`)
+        .send({
+          productId: createdProductId,
+          quantity: 1001,
+          paymentMethod: PaymentMethod.WALLET,
+        });
+
+      expect(res.status).toBe(400);
+      expect(JSON.stringify(res.body)).toMatch(/Maximum purchase quantity is 1,000 units/i);
+    });
+  });
 });
+

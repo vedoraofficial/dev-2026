@@ -6,7 +6,7 @@ export class Otp {
   @PrimaryGeneratedColumn()
   id: number;
 
-  @Column({ name: 'otp_code', type: 'varchar', length: 10 })
+  @Column({ name: 'otp_code', type: 'varchar', length: 255 })
   otpCode: string;
 
   @Column({ type: 'varchar', length: 50 })
@@ -17,6 +17,9 @@ export class Otp {
 
   @Column({ name: 'is_used', default: false })
   isUsed: boolean;
+
+  @Column({ name: 'attempts_count', type: 'int', default: 0 })
+  attemptsCount: number;
 
   @ManyToOne(() => User, { onDelete: 'CASCADE', nullable: false })
   @JoinColumn({ name: 'user_id' })

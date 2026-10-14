@@ -1,4 +1,4 @@
-import { Controller, Post, Body, Get, Patch, Delete, UseGuards, Request, Param, ParseIntPipe } from '@nestjs/common';
+import { Controller, Post, Body, Get, Patch, Delete, UseGuards, Request, Param, ParseIntPipe, BadRequestException } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags, ApiResponse } from '@nestjs/swagger';
 import { UserService } from './user.service';
 import { CreateUserDto, UpdateUserDto } from './dto/create-user.dto';
@@ -10,6 +10,7 @@ import { AdminVerifyBankDto } from './dto/admin-verify-bank.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
+import { RateLimit, RateLimitGuard } from '../common/guards/rate-limit.guard';
 
 @ApiTags('User')
 @Controller('user')
@@ -29,13 +30,40 @@ export class UserController {
     return { message: 'User created successfully', vedId: user.vedId };
   }
 
+  @Patch(':id/status')
+  @Roles('ADMIN')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: '[Admin] Change user status by ID (Pending/Active/Inactive/Blocked)' })
+  async changeStatusById(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: UpdateUserStatusDto,
+  ) {
+    return this.userService.changeStatus(id, dto);
+  }
+
   @Patch('status')
   @Roles('ADMIN')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @ApiBearerAuth()
-  @ApiOperation({ summary: '[Admin] Change user status (Pending/Active/Inactive/Blocked)' })
+  @ApiOperation({ summary: '[Admin] Change user status by userId in request body' })
   async changeStatus(@Request() req: any, @Body() dto: UpdateUserStatusDto) {
-    return this.userService.changeStatus(req.user.sub, dto);
+    if (!dto.userId) {
+      throw new BadRequestException('userId is required in the request body.');
+    }
+    return this.userService.changeStatus(dto.userId, dto);
+  }
+
+  @Delete(':id')
+  @Roles('ADMIN')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: '[Admin] Delete a user account by ID' })
+  async deleteAccountById(@Param('id', ParseIntPipe) id: number, @Request() req: any) {
+    if (id === req.user.sub) {
+      throw new BadRequestException('Administrators cannot delete their own account.');
+    }
+    return this.userService.delete(id);
   }
 
   @Delete()
@@ -43,8 +71,8 @@ export class UserController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: '[Admin] Delete a user account' })
-  async deleteAccount(@Request() req: any) {
-    return this.userService.delete(req.user.sub);
+  async deleteAccount(@Request() _req: any) {
+    throw new BadRequestException('Must specify user ID to delete (e.g. DELETE /api/user/:id).');
   }
 
   @Patch('admin/bank/:id/verify')
@@ -78,7 +106,8 @@ export class UserController {
   }
 
   @Patch('password')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, RateLimitGuard)
+  @RateLimit({ windowMs: 60000, max: 5, message: 'Too many password change attempts. Please wait 1 minute.' })
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Change current user password' })
   async changePassword(@Request() req: any, @Body() dto: ChangePasswordDto) {
@@ -96,7 +125,8 @@ export class UserController {
   }
 
   @Post('bank')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, RateLimitGuard)
+  @RateLimit({ windowMs: 60000, max: 10, message: 'Too many bank account addition requests. Please try again later.' })
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Add a new bank account' })
   async addBankAccount(@Request() req: any, @Body() dto: AddBankDetailsDto) {
@@ -104,7 +134,8 @@ export class UserController {
   }
 
   @Post('bank/:id/verify')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, RateLimitGuard)
+  @RateLimit({ windowMs: 60000, max: 5, message: 'Too many bank verification attempts. Please wait a minute before retrying.' })
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Trigger Penny Drop verification for an existing bank account' })
   async verifyBank(@Request() req: any, @Param('id', ParseIntPipe) bankId: number) {

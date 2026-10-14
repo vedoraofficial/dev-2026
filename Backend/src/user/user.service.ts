@@ -14,6 +14,11 @@ import { generateNextVedId } from '../common/utils/ved-id.generator';
 import { CashfreeVerificationService } from '../bank-verification/cashfree-verification.service';
 import { NotificationService } from '../notification/notification.service';
 import { NotificationKey } from '../notification/notification.constants';
+import { WalletService } from '../wallet/wallet.service';
+import { Order } from '../order/entity/order.entity';
+import { WalletTransaction } from '../wallet/entity/wallet-transaction.entity';
+import { Withdrawal } from '../wallet/entity/withdrawal.entity';
+import { GenealogyNode } from '../genealogy/entity/genealogy-node.entity';
 
 @Injectable()
 export class UserService {
@@ -26,6 +31,7 @@ export class UserService {
     private readonly userProfileRepo: Repository<UserProfile>,
     private readonly cashfreeVerification: CashfreeVerificationService,
     private readonly notificationService: NotificationService,
+    private readonly walletService: WalletService,
   ) {}
 
   async create(dto: CreateUserDto): Promise<User> {
@@ -50,7 +56,12 @@ export class UserService {
       status: UserStatus.PENDING,
     });
 
-    return this.userRepo.save(user);
+    const saved = await this.userRepo.save(user);
+
+    // Ensure wallet is created immediately for the new user
+    await this.walletService.createWallet(saved.id);
+
+    return saved;
   }
 
   async findById(id: number): Promise<User> {
@@ -73,6 +84,11 @@ export class UserService {
     if (dto.email && dto.email !== user.email) {
       const emailExists = await this.findByEmail(dto.email);
       if (emailExists) throw new ConflictException('Email already in use');
+    }
+
+    if (dto.mobile && dto.mobile !== user.mobile) {
+      const mobileExists = await this.userRepo.findOne({ where: { mobile: dto.mobile } });
+      if (mobileExists) throw new ConflictException('Mobile number already in use');
     }
 
     const oldMobile = user.mobile;
@@ -133,12 +149,55 @@ export class UserService {
 
   async delete(id: number): Promise<{ message: string }> {
     const user = await this.findById(id);
+
+    // Safeguard 1: Disallow deleting administrators or root accounts
+    if (user.role === UserRole.ADMIN || user.vedId === 'VED108') {
+      throw new BadRequestException('Cannot delete an administrator or root account.');
+    }
+
+    // Safeguard 2: Prevent deletion if user has existing orders
+    const orderCount = await this.userRepo.manager.count(Order, { where: { userId: user.id } });
+    if (orderCount > 0) {
+      throw new BadRequestException('Cannot delete user with existing orders. Set status to BLOCKED or INACTIVE instead.');
+    }
+
+    // Safeguard 3: Prevent deletion if user has financial transaction history
+    const txnCount = await this.userRepo.manager.count(WalletTransaction, {
+      where: { wallet: { userId: user.id } },
+    });
+    if (txnCount > 0) {
+      throw new BadRequestException('Cannot delete user with financial transaction history.');
+    }
+
+    // Safeguard 4: Prevent deletion if user has withdrawal records
+    const withdrawalCount = await this.userRepo.manager.count(Withdrawal, {
+      where: { userId: user.id },
+    });
+    if (withdrawalCount > 0) {
+      throw new BadRequestException('Cannot delete user with withdrawal payout history. Set status to BLOCKED or INACTIVE instead.');
+    }
+
+    // Safeguard 5: Prevent deletion if user is a sponsor/parent to downlines in the genealogy tree
+    const downlineCount = await this.userRepo.manager.count(GenealogyNode, {
+      where: { parentUserId: user.id },
+    });
+    if (downlineCount > 0) {
+      throw new BadRequestException(
+        'Cannot delete user who has downline partners in the genealogy tree. Set status to BLOCKED or INACTIVE instead.',
+      );
+    }
+
     await this.userRepo.remove(user);
     return { message: 'User deleted successfully' };
   }
 
   async changeStatus(id: number, dto: UpdateUserStatusDto): Promise<User> {
     const user = await this.findById(id);
+
+    if (dto.status === UserStatus.BLOCKED && (user.role === 'ADMIN' || user.vedId === 'VED108')) {
+      throw new BadRequestException('Cannot block an administrator or root account.');
+    }
+
     user.status = dto.status;
     const updated = await this.userRepo.save(user);
 
@@ -345,6 +404,16 @@ export class UserService {
   async deleteBankAccount(userId: number, bankId: number): Promise<{ message: string }> {
     const bank = await this.userBankRepo.findOne({ where: { id: bankId, user: { id: userId } } });
     if (!bank) throw new NotFoundException('Bank account not found');
+
+    // Prevent deletion if bank is linked to any withdrawal requests (preserves audit trail & prevents FK violations)
+    const withdrawalCount = await this.userBankRepo.manager.count(Withdrawal, {
+      where: { bankId: bank.id },
+    });
+    if (withdrawalCount > 0) {
+      throw new BadRequestException(
+        'Cannot delete bank account linked to existing withdrawal records.',
+      );
+    }
 
     const bankMasked = `${bank.bankName} (XX${bank.accountNumber.slice(-4)})`;
     await this.userBankRepo.remove(bank);

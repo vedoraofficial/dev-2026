@@ -4,6 +4,7 @@ import { GenealogyService } from './genealogy.service';
 import { JoinPartnerDto } from './dto/join-partner.dto';
 import { RegisterPartnerBySponsorDto } from './dto/register-partner-by-sponsor.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { RateLimit, RateLimitGuard } from '../common/guards/rate-limit.guard';
 
 @ApiTags('Partner / Genealogy')
 @Controller('partner')
@@ -11,6 +12,8 @@ export class GenealogyController {
   constructor(private readonly genealogyService: GenealogyService) {}
 
   @Post('join')
+  @UseGuards(RateLimitGuard)
+  @RateLimit({ windowMs: 60000, max: 10, message: 'Too many registration requests. Please try again later.' })
   @ApiOperation({ summary: 'Public join as a new partner under a sponsor (referral VED ID)' })
   @ApiResponse({ status: 201, description: 'Partner joined successfully, slot allocated and 5 uplines mapped.' })
   @ApiResponse({ status: 400, description: 'Sponsor reached 20-partner limit or is inactive.' })
@@ -21,7 +24,8 @@ export class GenealogyController {
   }
 
   @ApiBearerAuth()
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, RateLimitGuard)
+  @RateLimit({ windowMs: 60000, max: 10, message: 'Too many downline registration requests. Please wait a moment.' })
   @Post('register-downline')
   @ApiOperation({
     summary: 'Register a new downline partner directly from own login (optional manual slotNumber 1-20)',

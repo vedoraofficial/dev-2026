@@ -5,7 +5,7 @@ import {
   ConflictException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, Repository, EntityManager, MoreThanOrEqual, LessThanOrEqual } from 'typeorm';
+import { DataSource, Repository, EntityManager } from 'typeorm';
 import { Wallet } from './entity/wallet.entity';
 import { WalletTransaction, TransactionType, TransactionCategory } from './entity/wallet-transaction.entity';
 import { Withdrawal, WithdrawalStatus } from './entity/withdrawal.entity';
@@ -91,24 +91,36 @@ export class WalletService {
   ): Promise<WalletTransaction> {
     if (amount <= 0) throw new BadRequestException('Credit amount must be positive.');
 
-    const em = manager || this.dataSource.manager;
-
     const runInTransaction = async (txManager: EntityManager): Promise<WalletTransaction> => {
       const walletRepo = txManager.getRepository(Wallet);
       const txnRepo = txManager.getRepository(WalletTransaction);
 
       // Lock wallet row for update
-      const wallet = await walletRepo
+      let wallet = await walletRepo
         .createQueryBuilder('wallet')
         .setLock('pessimistic_write')
         .where('wallet.user_id = :userId', { userId })
         .getOne();
 
-      if (!wallet) throw new NotFoundException('Wallet not found.');
+      if (!wallet) {
+        wallet = await this.createWallet(userId, txManager);
+      }
 
-      // Update balance
+      // Update balance - only legitimate commission earnings increment totalEarned
+      // Topups (capital deposited) and refunds (returned order payments) do not inflate earned income
+      const isEarning = [
+        TransactionCategory.COMMISSION_DIRECT,
+        TransactionCategory.COMMISSION_LEVEL_1,
+        TransactionCategory.COMMISSION_LEVEL_2,
+        TransactionCategory.COMMISSION_LEVEL_3,
+        TransactionCategory.COMMISSION_LEVEL_4,
+        TransactionCategory.COMMISSION_LEVEL_5,
+      ].includes(category);
+
       const newAvailable = Number(wallet.availableBalance) + amount;
-      const newTotalEarned = Number(wallet.totalEarned) + amount;
+      const newTotalEarned = isEarning
+        ? Number(wallet.totalEarned) + amount
+        : Number(wallet.totalEarned);
 
       await walletRepo.update(wallet.id, {
         availableBalance: newAvailable,
@@ -234,9 +246,14 @@ export class WalletService {
 
     if (!wallet) throw new NotFoundException('Wallet not found.');
 
+    const currentLocked = Number(wallet.lockedBalance);
+    if (currentLocked < amount) {
+      throw new BadRequestException('Locked balance is less than unlock amount.');
+    }
+
     await walletRepo.update(wallet.id, {
       availableBalance: Number(wallet.availableBalance) + amount,
-      lockedBalance: Number(wallet.lockedBalance) - amount,
+      lockedBalance: currentLocked - amount,
     });
   }
 
@@ -252,8 +269,13 @@ export class WalletService {
 
     if (!wallet) throw new NotFoundException('Wallet not found.');
 
+    const currentLocked = Number(wallet.lockedBalance);
+    if (currentLocked < amount) {
+      throw new BadRequestException('Locked balance is less than withdrawal amount.');
+    }
+
     await walletRepo.update(wallet.id, {
-      lockedBalance: Number(wallet.lockedBalance) - amount,
+      lockedBalance: currentLocked - amount,
       totalWithdrawn: Number(wallet.totalWithdrawn) + amount,
     });
   }
@@ -423,6 +445,7 @@ export class WalletService {
       const withdrawal = await withdrawalRepo.findOne({
         where: { id: withdrawalId },
         relations: { bank: true },
+        lock: { mode: 'pessimistic_write' },
       });
 
       if (!withdrawal) throw new NotFoundException('Withdrawal not found.');
@@ -472,6 +495,7 @@ export class WalletService {
 
       const withdrawal = await withdrawalRepo.findOne({
         where: { id: withdrawalId },
+        lock: { mode: 'pessimistic_write' },
       });
 
       if (!withdrawal) throw new NotFoundException('Withdrawal not found.');

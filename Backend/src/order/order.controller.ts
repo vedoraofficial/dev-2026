@@ -49,6 +49,19 @@ export class OrderController {
     return this.orderService.getOrderById(id, userId);
   }
 
+  @Post(':id/cancel')
+  @UseGuards(AuthGuard('jwt'))
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Cancel order and refund payment (wallet credit)' })
+  async cancelOrder(
+    @Param('id', ParseIntPipe) id: number,
+    @Request() req: any,
+    @Body('reason') reason?: string,
+  ) {
+    const isAdmin = req.user.role === 'ADMIN';
+    return this.orderService.cancelAndRefundOrder(id, req.user.sub, isAdmin, reason);
+  }
+
   // ─── Admin Endpoints ───────────────────────────────────────────────
 
   @Post('admin/cash')

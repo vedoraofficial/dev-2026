@@ -25,7 +25,9 @@ export class StockController {
   @ApiQuery({ name: 'productId', required: false })
   @ApiQuery({ name: 'limit', required: false })
   movements(@Query('productId') productId?: string, @Query('limit') limit?: string) {
-    return this.stockService.movements(productId ? Number(productId) : undefined, limit ? Number(limit) : undefined);
+    const parsedPid = productId && !Number.isNaN(Number(productId)) ? Number(productId) : undefined;
+    const parsedLimit = limit && !Number.isNaN(Number(limit)) ? Number(limit) : undefined;
+    return this.stockService.movements(parsedPid, parsedLimit);
   }
 
   @Post('movements')

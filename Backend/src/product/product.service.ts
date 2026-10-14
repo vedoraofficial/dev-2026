@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { IsNull, Repository } from 'typeorm';
 import { Product, ProductStatus } from './entity/product.entity';
@@ -18,6 +18,10 @@ export class ProductService {
   ) {}
 
   async create(dto: CreateProductDto, userId: number): Promise<Product> {
+    if (dto.salePrice > dto.mrp) {
+      throw new BadRequestException('Sale price cannot exceed Maximum Retail Price (MRP).');
+    }
+
     const product = this.productRepo.create({
       ...dto,
       createdBy: userId,
@@ -67,6 +71,12 @@ export class ProductService {
   async update(id: number, dto: UpdateProductDto, userId: number): Promise<Product> {
     const product = await this.findById(id);
     const wasActive = product.status === ProductStatus.ACTIVE;
+
+    const effectiveMrp = dto.mrp !== undefined ? dto.mrp : product.mrp;
+    const effectiveSalePrice = dto.salePrice !== undefined ? dto.salePrice : product.salePrice;
+    if (effectiveSalePrice > effectiveMrp) {
+      throw new BadRequestException('Sale price cannot exceed Maximum Retail Price (MRP).');
+    }
     
     Object.assign(product, dto);
     product.updatedBy = userId;

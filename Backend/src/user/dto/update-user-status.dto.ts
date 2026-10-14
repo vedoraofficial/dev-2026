@@ -1,8 +1,13 @@
-import { ApiProperty } from '@nestjs/swagger';
-import { IsEnum, IsNotEmpty } from 'class-validator';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { IsEnum, IsInt, IsNotEmpty, IsOptional } from 'class-validator';
 import { UserStatus } from '../entity/user.entity';
 
 export class UpdateUserStatusDto {
+  @ApiPropertyOptional({ example: 5, description: 'Target user ID to update' })
+  @IsInt()
+  @IsOptional()
+  userId?: number;
+
   @ApiProperty({ 
     example: UserStatus.PENDING, 
     enum: UserStatus,

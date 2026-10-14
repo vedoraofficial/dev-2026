@@ -1,9 +1,11 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { IsEnum, IsInt, IsOptional, IsString, MaxLength, Min } from 'class-validator';
+import { Type } from 'class-transformer';
 import { StockMovementType } from '../entity/stock-movement.entity';
 
 export class CreateStockMovementDto {
   @ApiProperty({ example: 4, description: 'Product ID' })
+  @Type(() => Number)
   @IsInt()
   productId: number;
 
@@ -12,6 +14,7 @@ export class CreateStockMovementDto {
   type: StockMovementType;
 
   @ApiProperty({ example: 10, description: 'How many units' })
+  @Type(() => Number)
   @IsInt()
   @Min(1)
   quantity: number;

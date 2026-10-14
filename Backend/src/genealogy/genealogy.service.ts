@@ -460,7 +460,7 @@ export class GenealogyService {
           const target = await userRepo
             .createQueryBuilder('user')
             .setLock('pessimistic_write')
-            .where('user.vedId = :vedId', { vedId: parentVedId })
+            .where('user.ved_id = :vedId', { vedId: parentVedId })
             .getOne();
           if (!target) {
             throw new NotFoundException(`No partner found with VED ID ${parentVedId}.`);

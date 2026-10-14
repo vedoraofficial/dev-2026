@@ -9,23 +9,41 @@ import {
   Request,
   UseGuards,
   ParseIntPipe,
+  Inject,
+  forwardRef,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags, ApiOperation, ApiQuery } from '@nestjs/swagger';
 import { AuthGuard } from '@nestjs/passport';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
 import { WalletService } from './wallet.service';
+import { PaymentService } from '../payment/payment.service';
 import { WalletTransactionsQueryDto } from './dto/wallet-transactions-query.dto';
 import { RequestWithdrawalDto } from './dto/request-withdrawal.dto';
+import { TopupWalletDto } from './dto/topup-wallet.dto';
 import { AdminWithdrawalActionDto } from './dto/admin-withdrawal-action.dto';
 import { WithdrawalStatus } from './entity/withdrawal.entity';
+import { RateLimit, RateLimitGuard } from '../common/guards/rate-limit.guard';
 
 @ApiTags('Wallet')
 @Controller('wallet')
 export class WalletController {
-  constructor(private readonly walletService: WalletService) {}
+  constructor(
+    private readonly walletService: WalletService,
+    @Inject(forwardRef(() => PaymentService))
+    private readonly paymentService: PaymentService,
+  ) {}
 
   // ─── Partner Endpoints ──────────────────────────────────────────────
+
+  @Post('topup')
+  @UseGuards(AuthGuard('jwt'), RateLimitGuard)
+  @RateLimit({ windowMs: 60000, max: 10, message: 'Too many topup requests. Please try again later.' })
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Initiate wallet add-money (top-up) via PhonePe gateway' })
+  async initiateTopup(@Request() req: any, @Body() dto: TopupWalletDto) {
+    return this.paymentService.initiateTopup(req.user.sub, dto.amount);
+  }
 
   @Get()
   @UseGuards(AuthGuard('jwt'))
@@ -44,7 +62,8 @@ export class WalletController {
   }
 
   @Post('withdraw')
-  @UseGuards(AuthGuard('jwt'))
+  @UseGuards(AuthGuard('jwt'), RateLimitGuard)
+  @RateLimit({ windowMs: 60000, max: 10, message: 'Too many withdrawal requests. Please try again later.' })
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Request withdrawal to verified bank account (min ₹100)' })
   async requestWithdrawal(@Request() req: any, @Body() dto: RequestWithdrawalDto) {

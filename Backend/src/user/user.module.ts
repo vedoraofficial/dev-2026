@@ -7,12 +7,14 @@ import { UserService } from './user.service';
 import { UserController } from './user.controller';
 import { BankVerificationModule } from '../bank-verification/bank-verification.module';
 import { NotificationModule } from '../notification/notification.module';
+import { WalletModule } from '../wallet/wallet.module';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([User, UserBank, UserProfile]),
     BankVerificationModule,
     NotificationModule,
+    WalletModule,
   ],
   controllers: [UserController],
   providers: [UserService],

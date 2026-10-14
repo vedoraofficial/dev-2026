@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards, Request } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards, Request, ParseIntPipe } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags, ApiResponse } from '@nestjs/swagger';
 import { ProductService } from './product.service';
 import { CreateProductDto } from './dto/create-product.dto';
@@ -31,23 +31,23 @@ export class ProductController {
 
   @Get(':id')
   @ApiOperation({ summary: 'Get a product by id' })
-  findById(@Param('id') id: string) {
-    return this.productService.findById(+id);
+  findById(@Param('id', ParseIntPipe) id: number) {
+    return this.productService.findById(id);
   }
 
   @Patch(':id')
   @Roles('ADMIN')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @ApiOperation({ summary: '[Admin] Update a product' })
-  update(@Param('id') id: string, @Body() updateProductDto: UpdateProductDto, @Request() req: any) {
-    return this.productService.update(+id, updateProductDto, req.user.sub);
+  update(@Param('id', ParseIntPipe) id: number, @Body() updateProductDto: UpdateProductDto, @Request() req: any) {
+    return this.productService.update(id, updateProductDto, req.user.sub);
   }
 
   @Delete(':id')
   @Roles('ADMIN')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @ApiOperation({ summary: '[Admin] Delete a product' })
-  remove(@Param('id') id: string) {
-    return this.productService.remove(+id);
+  remove(@Param('id', ParseIntPipe) id: number) {
+    return this.productService.remove(id);
   }
 }

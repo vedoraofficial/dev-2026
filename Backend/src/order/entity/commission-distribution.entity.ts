@@ -5,12 +5,14 @@ import {
   ManyToOne,
   JoinColumn,
   CreateDateColumn,
+  Unique,
 } from 'typeorm';
 import { Order } from './order.entity';
 import { User } from '../../user/entity/user.entity';
 import { WalletTransaction } from '../../wallet/entity/wallet-transaction.entity';
 
 @Entity('commission_distributions')
+@Unique(['orderId', 'level', 'beneficiaryUserId'])
 export class CommissionDistribution {
   @PrimaryGeneratedColumn('increment', { type: 'bigint' })
   id: number;

@@ -4,6 +4,8 @@ import {
   BadRequestException,
   ConflictException,
   Logger,
+  Inject,
+  forwardRef,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository, EntityManager } from 'typeorm';
@@ -14,8 +16,11 @@ import { User, UserStatus } from '../user/entity/user.entity';
 import { CommissionUpline } from '../genealogy/entity/commission-upline.entity';
 import { GenealogyNode } from '../genealogy/entity/genealogy-node.entity';
 import { getAvailableStock } from '../stock/stock-levels';
+import { OrderRefund, OrderRefundStatus } from './entity/order-refund.entity';
+import { StockMovement, StockMovementType } from '../stock/entity/stock-movement.entity';
+import { Wallet } from '../wallet/entity/wallet.entity';
 import { WalletService } from '../wallet/wallet.service';
-import { TransactionCategory } from '../wallet/entity/wallet-transaction.entity';
+import { WalletTransaction, TransactionType, TransactionCategory } from '../wallet/entity/wallet-transaction.entity';
 import { NotificationService } from '../notification/notification.service';
 import { NotificationKey } from '../notification/notification.constants';
 import { CreateOrderDto } from './dto/create-order.dto';
@@ -47,6 +52,11 @@ export class OrderService {
     private readonly userRepo: Repository<User>,
     @InjectRepository(CommissionUpline)
     private readonly uplineRepo: Repository<CommissionUpline>,
+    @InjectRepository(OrderRefund)
+    private readonly refundRepo: Repository<OrderRefund>,
+    @InjectRepository(StockMovement)
+    private readonly movementRepo: Repository<StockMovement>,
+    @Inject(forwardRef(() => WalletService))
     private readonly walletService: WalletService,
     private readonly notificationService: NotificationService,
   ) {}
@@ -73,7 +83,100 @@ export class OrderService {
     const totalAmount = unitPrice * quantity;
     const bvTotal = Number(product.bvAmount) * quantity;
 
-    // Create order record
+    // For CASH orders, only admin can create
+    if (dto.paymentMethod === PaymentMethod.CASH) {
+      throw new BadRequestException('Cash orders can only be created by an Admin.');
+    }
+
+    // For WALLET purchases, atomically debit wallet, record stock OUT, and distribute commissions
+    if (dto.paymentMethod === PaymentMethod.WALLET) {
+      return this.dataSource.transaction(async (manager) => {
+        // Re-verify stock inside transaction
+        const inStockInTx = await getAvailableStock(manager, Number(product.id));
+        if (inStockInTx < quantity) {
+          throw new BadRequestException(
+            inStockInTx <= 0 ? 'This product is out of stock.' : `Only ${inStockInTx} left in stock.`,
+          );
+        }
+
+        // Debit buyer's wallet (locks row and validates sufficient balance)
+        const walletTxn = await this.walletService.debit(
+          userId,
+          totalAmount,
+          TransactionCategory.ORDER_PAYMENT,
+          `Purchase: ${product.name} × ${quantity} (Order payment)`,
+          'ORDER',
+          undefined,
+          manager,
+        );
+
+        const orderRepo = manager.getRepository(Order);
+        const order = orderRepo.create({
+          userId,
+          productId: product.id,
+          quantity,
+          unitPrice,
+          totalAmount,
+          bvTotal,
+          paymentMethod: PaymentMethod.WALLET,
+          paymentStatus: PaymentStatus.PAID,
+          orderStatus: OrderStatus.CONFIRMED,
+        });
+
+        const savedOrder = await orderRepo.save(order);
+
+        // Update referenceId on the wallet transaction
+        if (walletTxn) {
+          await manager.getRepository(WalletTransaction).update(walletTxn.id, {
+            referenceId: String(savedOrder.id),
+          });
+        }
+
+        // Record stock movement OUT
+        await manager.getRepository(StockMovement).save(
+          manager.getRepository(StockMovement).create({
+            productId: Number(product.id),
+            type: StockMovementType.OUT,
+            quantity,
+            note: `Wallet order #${savedOrder.id}`,
+            createdBy: userId,
+          }),
+        );
+
+        // Distribute upline commissions
+        await this.distributeCommissions(Number(savedOrder.id), manager);
+
+        // In-app Notification: PAYMENT_SUCCESS
+        const formattedAmount = `₹${(totalAmount / 100).toFixed(2)}`;
+        await this.notificationService.create(
+          userId,
+          NotificationKey.PAYMENT_SUCCESS,
+          `Order #${savedOrder.id} confirmed`,
+          `Paid ${formattedAmount} via wallet for ${product.name} × ${quantity}.`,
+          { orderId: Number(savedOrder.id), amountPaise: totalAmount },
+          manager,
+        );
+
+        return {
+          message: 'Order placed and paid successfully using wallet balance.',
+          order: {
+            id: Number(savedOrder.id),
+            productName: product.name,
+            quantity,
+            unitPrice,
+            totalAmount,
+            totalAmountFormatted: formattedAmount,
+            bvTotal,
+            paymentMethod: savedOrder.paymentMethod,
+            paymentStatus: savedOrder.paymentStatus,
+            orderStatus: savedOrder.orderStatus,
+            createdAt: savedOrder.createdAt,
+          },
+        };
+      });
+    }
+
+    // For PHONEPE, create pending order and return details so caller can initiate payment
     const order = this.orderRepo.create({
       userId,
       productId: product.id,
@@ -97,11 +200,6 @@ export class OrderService {
       `${product.name} × ${quantity} · ${formattedAmount}. Pay with PhonePe from My Orders.`,
       { orderId: Number(order.id), amountPaise: totalAmount },
     );
-
-    // For CASH orders, mark as paid immediately and distribute commissions
-    if (dto.paymentMethod === PaymentMethod.CASH) {
-      throw new BadRequestException('Cash orders can only be created by an Admin.');
-    }
 
     // For PHONEPE, the PhonePe payment flow will be handled by PaymentService
     // Return order details so the caller can initiate payment
@@ -166,6 +264,17 @@ export class OrderService {
       });
       await orderRepo.save(order);
 
+      // Record stock movement OUT for cash purchase
+      await manager.getRepository(StockMovement).save(
+        manager.getRepository(StockMovement).create({
+          productId: Number(product.id),
+          type: StockMovementType.OUT,
+          quantity,
+          note: `Cash order #${order.id}`,
+          createdBy: adminUserId,
+        }),
+      );
+
       // Distribute commissions immediately for cash orders
       await this.distributeCommissions(Number(order.id), manager);
 
@@ -208,11 +317,22 @@ export class OrderService {
     const orderRepo = manager.getRepository(Order);
     const commissionRepo = manager.getRepository(CommissionDistribution);
 
-    const order = await orderRepo.findOne({ where: { id: orderId } });
+    const order = await orderRepo.findOne({
+      where: { id: orderId },
+      lock: { mode: 'pessimistic_write' },
+    });
     if (!order) throw new NotFoundException('Order not found.');
 
     if (order.commissionsDistributed) {
       this.logger.warn(`Commissions already distributed for order #${orderId}. Skipping.`);
+      return;
+    }
+
+    const existingCount = await commissionRepo.count({ where: { orderId } });
+    if (existingCount > 0) {
+      this.logger.warn(`Commission distribution records already exist for order #${orderId}. Marking order and skipping.`);
+      order.commissionsDistributed = true;
+      await orderRepo.save(order);
       return;
     }
 
@@ -366,7 +486,10 @@ export class OrderService {
   ): Promise<void> {
     await this.dataSource.transaction(async (manager) => {
       const orderRepo = manager.getRepository(Order);
-      const order = await orderRepo.findOne({ where: { id: orderId } });
+      const order = await orderRepo.findOne({
+        where: { id: orderId },
+        lock: { mode: 'pessimistic_write' },
+      });
 
       if (!order) throw new NotFoundException('Order not found.');
       if (order.paymentStatus === PaymentStatus.PAID) {
@@ -374,12 +497,57 @@ export class OrderService {
         return;
       }
 
-      order.paymentStatus = PaymentStatus.PAID;
-      order.orderStatus = OrderStatus.CONFIRMED;
       if (phonepeTransactionId) {
         order.phonepeTransactionId = phonepeTransactionId;
       }
+
+      // Re-verify stock inside transaction to prevent oversell race condition
+      const inStock = await getAvailableStock(manager, Number(order.productId));
+      if (inStock < order.quantity) {
+        this.logger.error(
+          `Oversell detected: Order #${orderId} (Product #${order.productId}) paid via PhonePe, but only ${inStock} items in stock (ordered: ${order.quantity}).`,
+        );
+        order.paymentStatus = PaymentStatus.PAID;
+        order.orderStatus = OrderStatus.CANCELLED;
+        await orderRepo.save(order);
+
+        // Notify admins immediately of the oversold order
+        await this.notificationService.notifyAllAdmins(
+          NotificationKey.ADMIN_ORDER_CANCELLED,
+          `Oversell alert: Order #${order.id} cancelled`,
+          `Order #${order.id} was paid via PhonePe (${phonepeTransactionId || 'TXN'}) but product is out of stock. Automatic refund credited to wallet.`,
+          { orderId: Number(order.id), productId: Number(order.productId), quantity: order.quantity },
+          manager,
+        );
+
+        // Refund buyer directly to their wallet so their funds are immediately returned
+        await this.walletService.credit(
+          order.userId,
+          Number(order.totalAmount),
+          TransactionCategory.REFUND,
+          `Automatic refund for out-of-stock order #${order.id}`,
+          'ORDER',
+          String(order.id),
+          manager,
+        );
+
+        return;
+      }
+
+      order.paymentStatus = PaymentStatus.PAID;
+      order.orderStatus = OrderStatus.CONFIRMED;
       await orderRepo.save(order);
+
+      // Record stock movement OUT for paid PhonePe order
+      await manager.getRepository(StockMovement).save(
+        manager.getRepository(StockMovement).create({
+          productId: Number(order.productId),
+          type: StockMovementType.OUT,
+          quantity: order.quantity,
+          note: `PhonePe order #${order.id} confirmed`,
+          createdBy: order.userId,
+        }),
+      );
 
       // Distribute commissions
       await this.distributeCommissions(Number(order.id), manager);
@@ -432,10 +600,12 @@ export class OrderService {
 
     return orders.map((o) => ({
       id: Number(o.id),
-      product: {
-        id: Number(o.product.id),
-        name: o.product.name,
-      },
+      product: o.product
+        ? {
+            id: Number(o.product.id),
+            name: o.product.name,
+          }
+        : null,
       quantity: o.quantity,
       totalAmount: Number(o.totalAmount),
       totalAmountFormatted: `₹${(Number(o.totalAmount) / 100).toFixed(2)}`,
@@ -466,16 +636,20 @@ export class OrderService {
 
     return {
       id: Number(order.id),
-      user: {
-        id: order.user.id,
-        vedId: order.user.vedId,
-        name: order.user.name,
-      },
-      product: {
-        id: Number(order.product.id),
-        name: order.product.name,
-        description: order.product.description,
-      },
+      user: order.user
+        ? {
+            id: order.user.id,
+            vedId: order.user.vedId,
+            name: order.user.name,
+          }
+        : null,
+      product: order.product
+        ? {
+            id: Number(order.product.id),
+            name: order.product.name,
+            description: order.product.description,
+          }
+        : null,
       quantity: order.quantity,
       unitPrice: Number(order.unitPrice),
       totalAmount: Number(order.totalAmount),
@@ -488,11 +662,13 @@ export class OrderService {
       commissionsDistributed: order.commissionsDistributed,
       commissions: commissions.map((c) => ({
         level: c.level,
-        beneficiary: {
-          id: c.beneficiaryUser.id,
-          vedId: c.beneficiaryUser.vedId,
-          name: c.beneficiaryUser.name,
-        },
+        beneficiary: c.beneficiaryUser
+          ? {
+              id: c.beneficiaryUser.id,
+              vedId: c.beneficiaryUser.vedId,
+              name: c.beneficiaryUser.name,
+            }
+          : null,
         commissionRate: c.level === 0 ? '₹200 flat' : `${c.commissionRate / 100}%`,
         amount: Number(c.amount),
         amountFormatted: `₹${(Number(c.amount) / 100).toFixed(2)}`,
@@ -510,15 +686,19 @@ export class OrderService {
 
     return orders.map((o) => ({
       id: Number(o.id),
-      user: {
-        id: o.user.id,
-        vedId: o.user.vedId,
-        name: o.user.name,
-      },
-      product: {
-        id: Number(o.product.id),
-        name: o.product.name,
-      },
+      user: o.user
+        ? {
+            id: o.user.id,
+            vedId: o.user.vedId,
+            name: o.user.name,
+          }
+        : null,
+      product: o.product
+        ? {
+            id: Number(o.product.id),
+            name: o.product.name,
+          }
+        : null,
       quantity: o.quantity,
       totalAmount: Number(o.totalAmount),
       totalAmountFormatted: `₹${(Number(o.totalAmount) / 100).toFixed(2)}`,
@@ -529,5 +709,164 @@ export class OrderService {
       commissionsDistributed: o.commissionsDistributed,
       createdAt: o.createdAt,
     }));
+  }
+
+  // ─── Cancel and Refund Order ────────────────────────────────────────
+  async cancelAndRefundOrder(
+    orderId: number,
+    requestingUserId: number,
+    isAdmin: boolean = false,
+    reason?: string,
+  ) {
+    return this.dataSource.transaction(async (manager) => {
+      const orderRepo = manager.getRepository(Order);
+      const refundRepo = manager.getRepository(OrderRefund);
+
+      const order = await orderRepo.findOne({
+        where: { id: orderId },
+        relations: { product: true },
+        lock: { mode: 'pessimistic_write' },
+      });
+
+      if (!order) throw new NotFoundException('Order not found.');
+
+      if (!isAdmin && order.userId !== requestingUserId) {
+        throw new BadRequestException('You do not have permission to cancel this order.');
+      }
+
+      if (order.orderStatus === OrderStatus.CANCELLED) {
+        throw new BadRequestException('Order is already cancelled.');
+      }
+
+      // If pending (unpaid), cancel without financial refund
+      if (order.paymentStatus === PaymentStatus.PENDING) {
+        order.orderStatus = OrderStatus.CANCELLED;
+        order.paymentStatus = PaymentStatus.FAILED;
+        await orderRepo.save(order);
+        return { message: 'Pending order cancelled.', orderId: Number(order.id) };
+      }
+
+      // Paid and confirmed orders require administrator review
+      if (!isAdmin) {
+        throw new BadRequestException(
+          'Paid and confirmed orders cannot be cancelled directly by customers. Please contact support or an administrator for cancellation and refunds.',
+        );
+      }
+
+      if (order.paymentStatus !== PaymentStatus.PAID) {
+        throw new BadRequestException(`Cannot refund order with payment status: ${order.paymentStatus}`);
+      }
+
+      // Check if refund already processed
+      const existingRefund = await refundRepo.findOne({
+        where: { orderId: order.id, status: OrderRefundStatus.COMPLETED },
+      });
+      if (existingRefund) {
+        throw new ConflictException('This order has already been refunded.');
+      }
+
+      // Claw back / reverse distributed commissions from uplines
+      if (order.commissionsDistributed) {
+        const distributions = await manager.getRepository(CommissionDistribution).find({
+          where: { orderId: order.id },
+        });
+
+        for (const dist of distributions) {
+          const commAmount = Number(dist.amount);
+          if (commAmount > 0) {
+            const beneficiaryWallet = await manager.getRepository(Wallet).findOne({
+              where: { userId: dist.beneficiaryUserId },
+              lock: { mode: 'pessimistic_write' },
+            });
+
+            if (beneficiaryWallet) {
+              const currentAvailable = Number(beneficiaryWallet.availableBalance);
+              const currentEarned = Number(beneficiaryWallet.totalEarned);
+              const newAvailable = Math.max(0, currentAvailable - commAmount);
+              const newEarned = Math.max(0, currentEarned - commAmount);
+
+              await manager.getRepository(Wallet).update(beneficiaryWallet.id, {
+                availableBalance: newAvailable,
+                totalEarned: newEarned,
+              });
+
+              await manager.getRepository(WalletTransaction).save(
+                manager.getRepository(WalletTransaction).create({
+                  walletId: beneficiaryWallet.id,
+                  type: TransactionType.DEBIT,
+                  category: TransactionCategory.ADMIN_DEBIT,
+                  amount: commAmount,
+                  balanceAfter: newAvailable,
+                  referenceType: 'ORDER_COMMISSION_REVERSAL',
+                  referenceId: String(order.id),
+                  description: `Commission reversal for cancelled order #${order.id}`,
+                }),
+              );
+            }
+          }
+        }
+      }
+
+      let walletTxnId: number | null = null;
+
+      // Refund credited back to user's wallet
+      const txn = await this.walletService.credit(
+        order.userId,
+        Number(order.totalAmount),
+        TransactionCategory.REFUND,
+        `Refund for cancelled order #${order.id} (${order.product?.name || 'Product'})`,
+        'ORDER_REFUND',
+        String(order.id),
+        manager,
+      );
+      walletTxnId = txn ? Number(txn.id) : null;
+
+      // Restore product stock
+      await manager.getRepository(StockMovement).save(
+        manager.getRepository(StockMovement).create({
+          productId: Number(order.productId),
+          type: StockMovementType.IN,
+          quantity: order.quantity,
+          note: `Restocked from cancelled order #${order.id}`,
+          createdBy: requestingUserId,
+        }),
+      );
+
+      // Record refund
+      const refundRecord = refundRepo.create({
+        orderId: Number(order.id),
+        refundAmount: Number(order.totalAmount),
+        status: OrderRefundStatus.COMPLETED,
+        reason: reason || (isAdmin ? 'Cancelled by Admin' : 'Cancelled by customer'),
+        walletTransactionId: walletTxnId,
+        adminUserId: isAdmin ? requestingUserId : null,
+      });
+      await refundRepo.save(refundRecord);
+
+      // Update order status
+      order.orderStatus = OrderStatus.CANCELLED;
+      order.paymentStatus = PaymentStatus.REFUNDED;
+      await orderRepo.save(order);
+
+      // In-app Notification to buyer
+      const formattedAmount = `₹${(Number(order.totalAmount) / 100).toFixed(2)}`;
+      await this.notificationService.create(
+        order.userId,
+        NotificationKey.PAYMENT_FAILED,
+        `Order #${order.id} cancelled & refunded`,
+        `Your order of ${formattedAmount} for ${order.product?.name || 'Product'} has been refunded to your wallet balance.`,
+        { orderId: Number(order.id), refundAmountPaise: Number(order.totalAmount) },
+        manager,
+      );
+
+      return {
+        message: 'Order cancelled and refunded successfully.',
+        orderId: Number(order.id),
+        refundAmount: Number(order.totalAmount),
+        refundAmountFormatted: formattedAmount,
+        paymentStatus: PaymentStatus.REFUNDED,
+        orderStatus: OrderStatus.CANCELLED,
+      };
+    });
   }
 }
