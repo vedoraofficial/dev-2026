@@ -36,9 +36,9 @@ export function LoginPage() {
           <img
             src={logo}
             alt="VEDORA — Wear Your Energy"
-            className="aspect-[5/3] w-full object-cover"
+            className="aspect-[3/2] w-full object-cover"
             width={1400}
-            height={834}
+            height={933}
           />
         </div>
         <div className="mx-auto w-full max-w-xl">

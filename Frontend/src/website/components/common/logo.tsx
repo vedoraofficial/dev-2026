@@ -1,12 +1,17 @@
+import mark from "@/assets/images/vedora-logo-mark.jpg"
 import { cn } from "@/website/lib/utils"
 
-/** Gold diamond + VEDORA wordmark (same mark as the partner portal). */
+/** VEDORA logo (gold V on cream) with the wordmark beside it — header and footer. */
 export function Logo({ className, tagline = true }: { className?: string; tagline?: boolean }) {
   return (
     <span className={cn("flex items-center gap-3", className)}>
-      <span aria-hidden className="grid size-8 shrink-0 place-items-center">
-        <span className="size-5.5 rotate-45 rounded-[5px] bg-gold" />
-      </span>
+      <img
+        src={mark}
+        alt=""
+        width={640}
+        height={398}
+        className="h-10 w-auto shrink-0 rounded-md border border-gold/40"
+      />
       <span className="flex flex-col">
         <span className="font-display text-[1.25rem] leading-none tracking-[0.32em] text-foreground">
           VEDORA

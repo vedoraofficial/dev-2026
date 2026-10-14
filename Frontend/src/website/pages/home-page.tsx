@@ -7,16 +7,9 @@ import { PageHero } from "@/website/components/common/page-hero"
 import { Kicker, Section, SectionHeading } from "@/website/components/common/section"
 import { Button } from "@/website/components/ui/button"
 import { FOUNDER_SHORT_NAMES, FOUNDERS_QUOTE } from "@/website/features/about/content"
-import { PlanSummaryCard } from "@/website/features/business/components/plan-summary-card"
-import { PLAN } from "@/website/features/business/plan"
+import { Price } from "@/website/features/products/components/price"
 import { ProductCard } from "@/website/features/products/components/product-card"
-import {
-  BRACELET_PRICE,
-  BRACELETS,
-  stoneLine,
-  WARRANTY_DAYS,
-} from "@/website/features/products/catalog"
-import { formatINR } from "@/website/lib/format"
+import { BRACELETS, stoneLine, WARRANTY_DAYS } from "@/website/features/products/catalog"
 
 const HERO_STATS = [
   { value: "100%", label: "Natural gemstone beads" },
@@ -55,9 +48,7 @@ function HeroImage() {
             {stoneLine(featured)}
           </p>
         </div>
-        <span className="shrink-0 font-display text-[1.5rem] leading-none text-gold">
-          {formatINR(BRACELET_PRICE)}
-        </span>
+        <Price className="shrink-0 font-display text-[1.5rem] leading-none text-gold" />
       </div>
     </div>
   )
@@ -75,14 +66,14 @@ export function HomePage() {
             <em className="text-gold-light">Energy</em>
           </>
         }
-        description="Handcrafted bracelets of Pyrite, Tiger Eye, Citrine and Onyx — and a direct-selling business built on a product people genuinely love wearing."
+        description="Handcrafted bracelets of Pyrite, Tiger Eye, Citrine and Onyx — natural gemstones, hand-strung for everyday wear."
         actions={
           <>
             <Button size="lg" asChild>
               <Link to={ROUTES.products}>Explore the collection</Link>
             </Button>
             <Button size="lg" variant="outline" asChild>
-              <Link to={ROUTES.business}>See the opportunity</Link>
+              <Link to={ROUTES.becomePartner}>Become a Partner</Link>
             </Button>
           </>
         }
@@ -102,7 +93,7 @@ export function HomePage() {
       <Section>
         <SectionHeading
           kicker="The collection"
-          title="Four stones. Four intentions."
+          title="Four stones. Four designs."
           aside={
             <Link
               to={ROUTES.products}
@@ -143,23 +134,6 @@ export function HomePage() {
         </div>
       </Section>
 
-      <Section containerClassName="grid items-center gap-10 lg:grid-cols-2 lg:gap-14">
-        <div>
-          <Kicker>The business</Kicker>
-          <h2 className="mt-4 font-display text-[2.25rem] leading-[1.1] font-normal md:text-[2.75rem]">
-            Every bracelet sold pays {formatINR(PLAN.totalPerSale)} across five levels.
-          </h2>
-          <p className="mt-4 max-w-lg text-[0.9375rem] leading-relaxed text-muted-foreground">
-            VEDORA partners earn from real product sales — a direct commission on what they sell,
-            plus Business Volume income from their team up to five levels deep.
-          </p>
-          <Button size="lg" className="mt-7" asChild>
-            <Link to={ROUTES.incomePlan}>How the plan works</Link>
-          </Button>
-        </div>
-        <PlanSummaryCard />
-      </Section>
-
       <Section tone="deep" divided className="text-center">
         <Kicker>From our founders</Kicker>
         <blockquote className="mx-auto mt-6 max-w-3xl font-display text-[1.625rem] leading-snug text-foreground/90 italic md:text-[2.125rem]">
@@ -180,7 +154,7 @@ export function HomePage() {
             <>
               Ready to wear it —
               <br />
-              or to build with it?
+              or to join us?
             </>
           }
           description="Talk to us about the collection, or register your interest as a VEDORA partner."

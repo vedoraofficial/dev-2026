@@ -38,8 +38,13 @@ export const router = createBrowserRouter([
         ...page(() => import("@/website/pages/products-page"), "ProductsPage"),
       },
       {
-        path: SITE_ROUTES.business,
-        ...page(() => import("@/website/pages/business-page"), "BusinessPage"),
+        path: SITE_ROUTES.register,
+        ...page(() => import("@/website/pages/register-page"), "RegisterPage"),
+      },
+      // The Business Opportunity page is hidden — its old link opens registration.
+      {
+        path: SITE_ROUTES.oldBusiness,
+        element: <Navigate to={SITE_ROUTES.register} replace />,
       },
       {
         path: SITE_ROUTES.contact,

@@ -33,7 +33,7 @@ export const PRIVACY_POLICY: readonly PolicySection[] = [
       "Process orders and deliveries.",
       "Create and manage Partner IDs.",
       "Verify KYC details.",
-      "Process commissions and payments.",
+      "Process payments.",
       "Send order updates, OTPs, and important notifications.",
     ],
   },

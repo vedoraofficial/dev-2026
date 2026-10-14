@@ -41,6 +41,11 @@ function SupportCard() {
         Official support
       </p>
       <div className="mt-3">
+        <DetailRow label="Owner" value={SITE.legalName} />
+        <DetailRow
+          label="Phone"
+          value={<a href={`tel:${SITE.phone.replace(/\s/g, "")}`}>{SITE.phone}</a>}
+        />
         <DetailRow label="Email" value={<a href={`mailto:${SITE.email}`}>{SITE.email}</a>} />
         <DetailRow label="Website" value={<a href={`https://${SITE.website}`}>{SITE.website}</a>} />
         <DetailRow label="Hours" value={SITE.hours} />
@@ -79,7 +84,7 @@ export function ContactPage() {
       <PageHero
         kicker="Contact & support"
         title="We're here to help."
-        description="Questions about a bracelet, an order or the partner plan — write to us and we'll respond within published timelines."
+        description="Questions about a bracelet, an order or your partner account — write to us and we'll respond within published timelines."
       />
 
       <Section containerClassName="grid items-start gap-5 lg:grid-cols-2">

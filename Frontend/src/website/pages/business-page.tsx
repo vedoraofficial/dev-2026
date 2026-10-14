@@ -26,6 +26,7 @@ function IncomeTile({ label, amount, note }: { label: string; amount: number; no
   )
 }
 
+/** Hidden: no route opens this page (the business plan is not shown on the site). */
 export function BusinessPage() {
   return (
     <>
@@ -44,7 +45,7 @@ export function BusinessPage() {
               <Link to={ROUTES.becomePartner}>Register your interest</Link>
             </Button>
             <Button size="lg" variant="outline" asChild>
-              <Link to={ROUTES.incomePlan}>See the income plan</Link>
+              <a href="#income-plan">See the income plan</a>
             </Button>
           </>
         }

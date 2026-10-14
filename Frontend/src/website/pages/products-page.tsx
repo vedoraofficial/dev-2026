@@ -3,7 +3,6 @@ import { PageHero } from "@/website/components/common/page-hero"
 import { Section, SectionHeading } from "@/website/components/common/section"
 import { ProductShowcase } from "@/website/features/products/components/product-showcase"
 import {
-  BRACELET_PRICE,
   BRACELETS,
   CARE_INSTRUCTIONS,
   NATURAL_VARIATION_NOTE,
@@ -11,14 +10,18 @@ import {
   WARRANTY_AND_ORDERING,
   WARRANTY_DAYS,
 } from "@/website/features/products/catalog"
-import { formatINR } from "@/website/lib/format"
+import { Price } from "@/website/features/products/components/price"
 
 function HeroStats() {
   return (
     <dl className="flex gap-10">
       <div className="flex flex-col-reverse">
-        <dt className="mt-1.5 text-[0.6875rem] text-muted-foreground">MRP · GST inclusive</dt>
-        <dd className="font-display text-[2rem] leading-none">{formatINR(BRACELET_PRICE)}</dd>
+        <dt className="mt-1.5 text-[0.6875rem] text-muted-foreground">
+          Offer price · GST inclusive
+        </dt>
+        <dd className="font-display text-[2rem] leading-none">
+          <Price />
+        </dd>
       </div>
       <div className="flex flex-col-reverse">
         <dt className="mt-1.5 text-[0.6875rem] text-muted-foreground">Defect warranty</dt>
@@ -40,7 +43,7 @@ export function ProductsPage() {
             one standard.
           </>
         }
-        description="Each design combines three natural gemstones chosen for a single intention. Same craftsmanship, same price, same warranty."
+        description="Each design combines three natural gemstones in a symmetrical, hand-strung layout. Same craftsmanship, same price, same warranty."
         aside={<HeroStats />}
         asideAlign="end"
       />

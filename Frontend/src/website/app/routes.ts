@@ -3,14 +3,15 @@ export const ROUTES = {
   home: "/",
   about: "/about",
   products: "/products",
-  business: "/business-opportunity",
+  /** "Become a Partner" — registration only (the business plan is not shown on the site). */
+  register: "/register",
   contact: "/contact",
   privacy: "/privacy-policy",
   /** Grievance Redressal lives on the contact page. */
   grievance: "/contact#grievance",
-  /** "Become a Partner" — the interest form on the business page. */
-  becomePartner: "/business-opportunity#register",
-  incomePlan: "/business-opportunity#income-plan",
+  becomePartner: "/register",
+  /** Old Business Opportunity URL — only redirects to `register` now. */
+  oldBusiness: "/business-opportunity",
   founders: "/about#founders",
   /** "Partner Login" — the portal sign-in page, in this same app. */
   portalLogin: "/login",

@@ -1,24 +1,26 @@
 export const PILLARS = [
   {
     label: "What we do",
-    title: "Make, sell, reward.",
-    body: "We source natural stones, handcraft four signature bracelets, and sell them through partners who earn on every genuine sale they and their team make.",
+    title: "Source, craft, deliver.",
+    body: "We source natural stones, handcraft four signature bracelets, and deliver them to customers across India.",
   },
   {
     label: "Vision",
     title: "Energy you can wear.",
-    body: "To become India's most trusted natural gemstone brand — known as much for product quality as for the fairness of its partner plan.",
+    body: "To become India's most trusted natural gemstone brand — known for product quality and honest service.",
   },
   {
     label: "Mission",
-    title: "Income from real sales.",
-    body: "To give every partner a transparent, product-first way to earn — no joining fees for income, no reward for recruitment alone.",
+    title: "Quality you can see.",
+    body: "To offer genuine natural gemstone bracelets at one honest price, with clear policies and reliable after-sale care.",
   },
 ] as const
 
-export type Founder = { id: string; name: string; role: string; photo?: string }
+export type Founder = { id?: string; name: string; role: string }
 
-/** Founder photos are still to come — cards show a placeholder until `photo` is set. */
+/** Owner of VEDORA — shown first in the leadership section. */
+export const OWNER: Founder = { name: "Prashant Dongre", role: "Owner" }
+
 export const FOUNDERS: readonly Founder[] = [
   { id: "VED000001", name: "Poonam Amit Medhavi", role: "Founder" },
   { id: "VED000002", name: "Neelam Prashant Dongare", role: "Founder" },
@@ -29,7 +31,7 @@ export const FOUNDERS: readonly Founder[] = [
 export const FOUNDER_SHORT_NAMES = "Poonam Medhavi · Neelam Dongare · Shital Bhor"
 
 export const FOUNDERS_QUOTE =
-  "We started VEDORA to make something people would wear every day — and to build a business where honest effort is what gets rewarded."
+  "We started VEDORA to make something people would wear every day — crafted with care and offered at an honest price."
 
 export const VALUES = [
   {
@@ -37,12 +39,12 @@ export const VALUES = [
     body: "Natural stones only, honestly described — natural variation is a feature, not a flaw.",
   },
   {
-    title: "Fair reward",
-    body: "Income comes from sales. Every partner can see exactly how each rupee is earned.",
+    title: "Honest pricing",
+    body: "One price for every bracelet, with a GST invoice on every order.",
   },
   {
     title: "Transparency",
-    body: "One price, one plan, published policies — nothing hidden in the fine print.",
+    body: "Clear, published policies — nothing hidden in the fine print.",
   },
   {
     title: "Care after sale",

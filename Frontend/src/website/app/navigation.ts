@@ -5,7 +5,6 @@ export const MAIN_NAV = [
   { label: "Home", to: ROUTES.home },
   { label: "About", to: ROUTES.about },
   { label: "Products", to: ROUTES.products },
-  { label: "Business Opportunity", to: ROUTES.business },
   { label: "Contact", to: ROUTES.contact },
 ] as const
 
@@ -14,7 +13,7 @@ export const FOOTER_EXPLORE = [
   { label: "Home", to: ROUTES.home },
   { label: "About VEDORA", to: ROUTES.about },
   { label: "Products", to: ROUTES.products },
-  { label: "Business Opportunity", to: ROUTES.business },
+  { label: "Become a Partner", to: ROUTES.becomePartner },
   { label: "Contact", to: ROUTES.contact },
 ] as const
 

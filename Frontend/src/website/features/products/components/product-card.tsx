@@ -1,10 +1,10 @@
 import { Link } from "react-router-dom"
 
 import { ROUTES } from "@/website/app/routes"
-import { BRACELET_PRICE, type Bracelet, stoneLine } from "@/website/features/products/catalog"
-import { formatINR } from "@/website/lib/format"
+import { type Bracelet, stoneLine } from "@/website/features/products/catalog"
+import { Price } from "@/website/features/products/components/price"
 
-/** Collection tile on the home page: image, intention, name, stones, price. */
+/** Collection tile on the home page: image, style, name, stones, price. */
 export function ProductCard({ bracelet }: { bracelet: Bracelet }) {
   return (
     <Link
@@ -20,13 +20,13 @@ export function ProductCard({ bracelet }: { bracelet: Bracelet }) {
         />
       </div>
       <div className="flex flex-1 flex-col p-5">
-        <p className="kicker text-[0.5625rem] tracking-[0.22em]">{bracelet.intention}</p>
+        <p className="kicker text-[0.5625rem] tracking-[0.22em]">{bracelet.style}</p>
         <h3 className="mt-2.5 font-display text-[1.375rem] leading-tight font-normal">
           {bracelet.name}
         </h3>
         <p className="mt-1.5 text-[0.75rem] text-muted-foreground">{stoneLine(bracelet)}</p>
         <p className="mt-auto pt-4 text-[0.8125rem] font-bold text-gold">
-          {formatINR(BRACELET_PRICE)}
+          <Price />
         </p>
       </div>
     </Link>

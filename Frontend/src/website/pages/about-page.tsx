@@ -4,21 +4,21 @@ import { InfoCard } from "@/website/components/common/info-card"
 import { PageHero } from "@/website/components/common/page-hero"
 import { Kicker, Section, SectionHeading } from "@/website/components/common/section"
 import { FounderCard } from "@/website/features/about/components/founder-card"
-import { COMPLIANCE, FOUNDERS, PILLARS, VALUES } from "@/website/features/about/content"
+import { COMPLIANCE, FOUNDERS, OWNER, PILLARS, VALUES } from "@/website/features/about/content"
 
 export function AboutPage() {
   return (
     <>
       <PageHero
         kicker="About VEDORA"
-        title="A gemstone brand with a business built in."
-        description="VEDORA designs and sells premium natural gemstone bracelets through a network of independent partners. We make one thing carefully, price it honestly, and reward the people who share it."
+        title="A gemstone brand built on quality."
+        description="VEDORA designs and sells premium natural gemstone bracelets. We make one thing carefully, price it honestly, and stand behind every piece."
         aside={
           <div className="overflow-hidden rounded-2xl border border-border shadow-2xl shadow-black/50">
             <img
               src={logoImage}
               alt="VEDORA — Wear your energy"
-              className="aspect-[5/3] w-full object-cover"
+              className="aspect-[3/2] w-full object-cover"
             />
           </div>
         }
@@ -37,7 +37,7 @@ export function AboutPage() {
       <Section tone="cream" id="founders" className="scroll-mt-16">
         <SectionHeading
           kicker="Leadership"
-          title="The founders of VEDORA"
+          title="Owner & founders of VEDORA"
           aside={
             <p className="text-[0.8125rem] leading-relaxed font-semibold text-foreground/80">
               Three founders hold the first three VEDORA IDs — permanently, at the top of the
@@ -45,7 +45,8 @@ export function AboutPage() {
             </p>
           }
         />
-        <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+          <FounderCard founder={OWNER} />
           {FOUNDERS.map((f) => (
             <FounderCard key={f.id} founder={f} />
           ))}
