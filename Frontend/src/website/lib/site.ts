@@ -7,7 +7,8 @@ export const SITE = {
   email: "support@vedoraofficial.in",
   website: "www.vedoraofficial.in",
   hours: "Mon–Sat · 10:00–18:00 IST",
-  address: "To be supplied by VEDORA",
+  address:
+    "B/106, Dashmesh Crystal, Behind Panvelkar Sankul, Kharvai, Karjat Road, Badlapur East, Thane, Maharashtra – 421503",
   grievanceOfficer: "VEDORA Customer Support Team",
   year: 2026,
 } as const
