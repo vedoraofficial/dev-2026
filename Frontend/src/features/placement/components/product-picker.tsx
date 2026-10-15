@@ -66,13 +66,13 @@ export function ProductPicker({ products, value, onChange, invalid, className }:
             {outOfStock ? (
               <span
                 data-oos
-                className="absolute top-2 left-2 rounded-full bg-danger px-2.5 py-0.5 text-[0.6875rem] font-bold text-white shadow-sm"
+                className="absolute top-2 left-2 rounded-full bg-danger px-2.5 py-0.5 text-[0.6875rem] font-bold text-primary-foreground shadow-sm"
               >
                 Out of stock
               </span>
             ) : null}
             {selected ? (
-              <span className="absolute top-2 right-2 grid size-6 place-items-center rounded-full bg-gold text-primary-foreground">
+              <span className="absolute top-2 right-2 grid size-6 place-items-center rounded-full bg-gold text-gold-foreground">
                 <Check className="size-3.5" />
               </span>
             ) : null}

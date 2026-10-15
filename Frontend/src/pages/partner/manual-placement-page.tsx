@@ -352,7 +352,7 @@ export function PartnerManualPlacementPage() {
                                 !selected &&
                                 "border-dashed border-gold/40 text-gold hover:bg-gold/10",
                               selected &&
-                                "border-gold bg-gold text-primary-foreground ring-3 ring-gold/25",
+                                "border-gold bg-gold text-gold-foreground ring-3 ring-gold/25",
                             )}
                           >
                             {String(n).padStart(2, "0")}

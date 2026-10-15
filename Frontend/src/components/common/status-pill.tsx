@@ -14,10 +14,13 @@ export type PillVariant = keyof typeof variants
 
 export function StatusPill({
   variant = "neutral",
+  dot,
   className,
   children,
 }: {
   variant?: PillVariant
+  /** Small coloured dot before the text */
+  dot?: boolean
   className?: string
   children: ReactNode
 }) {
@@ -26,9 +29,11 @@ export function StatusPill({
       className={cn(
         "inline-flex items-center rounded-full px-2.5 py-0.5 text-[0.6875rem] font-medium whitespace-nowrap ring-1 ring-inset",
         variants[variant],
+        dot && "gap-1.5",
         className,
       )}
     >
+      {dot ? <span aria-hidden className="size-1.5 shrink-0 rounded-full bg-current" /> : null}
       {children}
     </span>
   )

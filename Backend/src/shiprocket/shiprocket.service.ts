@@ -82,11 +82,12 @@ export class ShiprocketService {
         );
       }
 
-      this.cachedToken = data.token;
+      const token: string = data.token;
+      this.cachedToken = token;
       // Shiprocket token valid for 10 days, refresh in 9 days
       this.tokenExpiresAt = now + 9 * 24 * 60 * 60 * 1000;
       this.logger.log('Shiprocket token successfully acquired and cached.');
-      return this.cachedToken;
+      return token;
     } catch (error: any) {
       this.logger.error(`Shiprocket auth error: ${error.message}`);
       throw new InternalServerErrorException(

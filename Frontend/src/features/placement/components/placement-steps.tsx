@@ -26,7 +26,7 @@ export function Step({ n, title, children }: { n: number; title: string; childre
   return (
     <Panel>
       <h2 className="mb-4 flex items-center gap-3 text-[0.9375rem] font-medium">
-        <span className="grid size-6 place-items-center rounded-full bg-gold text-xs font-bold text-primary-foreground">
+        <span className="grid size-6 place-items-center rounded-full bg-gold text-xs font-bold text-gold-foreground">
           {n}
         </span>
         {title}

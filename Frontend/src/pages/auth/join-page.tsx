@@ -6,7 +6,7 @@ import { Link, useParams } from "react-router-dom"
 import { toast } from "sonner"
 
 import { ROUTES } from "@/app/routes"
-import logo from "@/assets/images/vedora-logo.jpg"
+import logo from "@/assets/images/vedora-logo-mark.jpg"
 import { MonoId } from "@/components/common/mono-id"
 import { Panel } from "@/components/common/panel"
 import { QueryState } from "@/components/common/query-state"
@@ -110,9 +110,9 @@ export function JoinPage() {
         <img
           src={logo}
           alt="VEDORA — Wear Your Energy"
-          width={1400}
-          height={834}
-          className="h-20 w-auto rounded-xl border border-gold/20 shadow-[0_12px_30px_-12px_rgba(0,0,0,0.7)] md:h-24"
+          width={640}
+          height={398}
+          className="h-20 w-auto rounded-xl border border-gold/20 shadow-[0_12px_30px_-12px_var(--shadow-color)] md:h-24"
         />
         <Button asChild variant="outline">
           <Link to={ROUTES.login}>Sign in</Link>

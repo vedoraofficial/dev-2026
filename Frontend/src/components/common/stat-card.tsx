@@ -1,4 +1,4 @@
-import { ChevronRight } from "lucide-react"
+import { ChevronRight, type LucideIcon } from "lucide-react"
 import type { ReactNode } from "react"
 import { Link } from "react-router-dom"
 
@@ -7,6 +7,8 @@ import { cn } from "@/lib/utils"
 type Props = {
   label: string
   value: ReactNode
+  /** Icon in a gold ring, left of the label */
+  icon?: LucideIcon
   /** Small line under the value */
   hint?: ReactNode
   /** Gold outline — the one card that needs attention */
@@ -22,11 +24,16 @@ type Props = {
   className?: string
 }
 
-const labelTone = { success: "text-success", warning: "text-gold", danger: "text-danger" } as const
+const labelTone = {
+  success: "text-success-on-deep",
+  warning: "text-gold-light",
+  danger: "text-danger-on-deep",
+} as const
 
 export function StatCard({
   label,
   value,
+  icon: Icon,
   hint,
   highlight,
   tone,
@@ -36,33 +43,51 @@ export function StatCard({
   className,
 }: Props) {
   const content = (
-    <>
-      <div className="flex items-start justify-between gap-2">
-        <p className={cn("eyebrow", highlight && "text-gold", tone && labelTone[tone])}>{label}</p>
-        {href ? (
-          <ChevronRight
-            aria-hidden
-            className="mt-px size-3.5 shrink-0 text-muted-foreground/70 transition-transform group-hover:translate-x-0.5 group-hover:text-gold"
-          />
-        ) : null}
+    <div className="flex items-start gap-3.5">
+      {Icon ? (
+        <span
+          aria-hidden
+          className="grid size-11 shrink-0 place-items-center rounded-full border border-gold-light/60 text-gold-light md:size-12"
+        >
+          <Icon className="size-5 md:size-[1.375rem]" />
+        </span>
+      ) : null}
+      <div className="min-w-0 flex-1">
+        <div className="flex items-start justify-between gap-2">
+          <p
+            className={cn(
+              "eyebrow text-foreground/85",
+              highlight && "text-gold-light",
+              tone && labelTone[tone],
+            )}
+          >
+            {label}
+          </p>
+          {href ? (
+            <ChevronRight
+              aria-hidden
+              className="mt-px size-3.5 shrink-0 text-muted-foreground/70 transition-transform group-hover:translate-x-0.5 group-hover:text-gold-light"
+            />
+          ) : null}
+        </div>
+        <p
+          className={cn(
+            "mt-2 font-display text-[1.875rem] leading-none font-medium md:text-[2.125rem]",
+            tone === "danger" && "text-danger-on-deep",
+          )}
+        >
+          {value}
+        </p>
+        {hint ? <div className="mt-2 text-xs text-muted-foreground">{hint}</div> : null}
       </div>
-      <p
-        className={cn(
-          "mt-2 font-display text-[1.875rem] leading-none font-medium md:text-[2.125rem]",
-          tone === "danger" && "text-danger",
-        )}
-      >
-        {value}
-      </p>
-      {hint ? <div className="mt-2 text-xs text-muted-foreground">{hint}</div> : null}
-    </>
+    </div>
   )
 
   const cardClass = cn(
-    "group min-w-0 rounded-2xl border bg-card p-4 md:p-5",
-    highlight ? "border-gold/45" : "border-border",
+    "group min-w-0 rounded-2xl border p-4 surface-deep shadow-[0_10px_24px_-14px_var(--shadow-color)] md:p-5",
+    highlight ? "border-gold/70" : "border-border",
     (href || onClick) &&
-      "transition-colors hover:border-gold/40 hover:bg-accent/30 focus-visible:border-gold/50 focus-visible:ring-3 focus-visible:ring-gold/20 focus-visible:outline-none",
+      "transition-[filter,border-color] hover:border-gold/60 hover:brightness-110 focus-visible:border-gold/60 focus-visible:ring-3 focus-visible:ring-gold/25 focus-visible:outline-none",
     className,
   )
 

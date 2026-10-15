@@ -33,21 +33,18 @@ function SidebarBody({ sectionLabel, nav, user, onNavigate }: Props & { onNaviga
                 onClick={onNavigate}
                 className={({ isActive }) =>
                   cn(
-                    "flex items-center gap-3 rounded-xl px-3 py-2.5 text-[0.8125rem] transition-colors",
+                    "flex items-center gap-3 rounded-full border px-3.5 py-2.5 text-[0.875rem] transition-colors",
                     isActive
-                      ? "bg-accent font-medium text-foreground shadow-[inset_2px_0_0_var(--gold)]"
-                      : "text-muted-foreground hover:bg-muted/60 hover:text-foreground",
+                      ? "border-gold/70 bg-linear-to-r from-gold/30 to-gold/5 font-medium text-foreground"
+                      : "border-transparent text-foreground/80 hover:bg-white/5 hover:text-foreground",
                   )
                 }
               >
                 {({ isActive }) => (
                   <>
-                    <span
+                    <item.icon
                       aria-hidden
-                      className={cn(
-                        "size-1.5 shrink-0 rotate-45 rounded-[1px]",
-                        isActive ? "bg-gold" : "bg-muted-foreground/40",
-                      )}
+                      className={cn("size-[1.125rem] shrink-0", isActive && "text-gold-light")}
                     />
                     {item.label}
                   </>
@@ -62,7 +59,7 @@ function SidebarBody({ sectionLabel, nav, user, onNavigate }: Props & { onNaviga
         <NavLink
           to={user.profileHref}
           onClick={onNavigate}
-          className="flex items-center gap-3 rounded-xl border border-border bg-accent/60 px-3 py-2.5 transition-colors hover:border-gold/30"
+          className="flex items-center gap-3 rounded-xl border border-border bg-white/5 px-3 py-2.5 transition-colors hover:border-gold/40"
         >
           <PersonAvatar
             tone={user.role === "Root Admin" ? "gold" : "striped"}
@@ -93,7 +90,7 @@ export function AppShell(props: Props) {
 
   return (
     <div className="min-h-svh lg:pl-64">
-      <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 border-r border-sidebar-border bg-sidebar lg:block">
+      <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 border-r border-sidebar-border surface-deep lg:block">
         <SidebarBody {...props} />
       </aside>
 
@@ -101,7 +98,7 @@ export function AppShell(props: Props) {
         <SheetContent
           side="left"
           showCloseButton={false}
-          className="w-[18.5rem] max-w-[85vw] gap-0 border-sidebar-border bg-sidebar p-0 sm:max-w-[18.5rem]"
+          className="w-[18.5rem] max-w-[85vw] gap-0 border-sidebar-border p-0 surface-deep sm:max-w-[18.5rem]"
         >
           <SheetTitle className="sr-only">Navigation</SheetTitle>
           <SheetDescription className="sr-only">Main navigation menu</SheetDescription>

@@ -212,10 +212,7 @@ export function AdminIncomeReportsPage() {
           </div>
 
           <Panel>
-            <PanelHeader
-              title="Commission ledger"
-              aside="Every row is one entry written by the engine — auditable against the sale"
-            />
+            <PanelHeader title="Commission ledger" />
             <DataTable
               columns={columns}
               rows={rows}

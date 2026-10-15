@@ -10,6 +10,8 @@ export type Column<T> = {
   align?: "left" | "right"
   /** Extra classes for the desktop <td> */
   className?: string
+  /** Extra classes for the column heading (e.g. the same padding as `className`) */
+  headerClassName?: string
   /** Phones: this column becomes the card title */
   primary?: boolean
   /** Buttons. Right-aligned on desktop, card footer on phones. Return the buttons as a fragment. */
@@ -62,8 +64,9 @@ export function DataTable<T>({
                   key={c.key}
                   scope="col"
                   className={cn(
-                    "px-3 pb-3 eyebrow font-medium first:pl-0 last:pr-0",
+                    "bg-table-head px-3 py-3 text-[0.6875rem] font-semibold tracking-[0.08em] text-foreground uppercase first:rounded-l-lg last:rounded-r-lg",
                     (c.align === "right" || c.actions) && "text-right",
+                    c.headerClassName,
                   )}
                 >
                   {c.header}
@@ -84,7 +87,7 @@ export function DataTable<T>({
                   <td
                     key={c.key}
                     className={cn(
-                      "px-3 py-3.5 align-middle first:pl-0 last:pr-0",
+                      "px-3 py-3.5 align-middle",
                       c.align === "right" && "text-right",
                       c.className,
                     )}

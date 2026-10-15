@@ -8,11 +8,11 @@ const buttonVariants = cva(
   {
     variants: {
       variant: {
-        // Solid gold — the one primary action on a screen
-        default: "bg-primary font-semibold text-primary-foreground hover:bg-gold-light",
+        // Solid primary (deep green) — the one primary action on a screen
+        default: "bg-primary font-semibold text-primary-foreground hover:bg-primary/90",
         // Gold outline — "Secondary" in the design system
         outline:
-          "border-gold/45 bg-transparent text-gold hover:bg-gold/10 aria-expanded:bg-gold/10",
+          "border-gold/60 bg-transparent text-gold-light hover:bg-gold/10 aria-expanded:bg-gold/10",
         // Neutral outline — View / Reset / Cancel
         quiet:
           "border-border bg-transparent text-foreground/85 hover:bg-muted aria-expanded:bg-muted",
@@ -20,7 +20,7 @@ const buttonVariants = cva(
         ghost:
           "text-muted-foreground hover:bg-accent hover:text-accent-foreground aria-expanded:bg-accent",
         destructive: "border-danger/40 bg-transparent text-danger hover:bg-danger/10",
-        link: "text-gold underline-offset-4 hover:underline",
+        link: "text-gold-light underline-offset-4 hover:underline",
       },
       // Touch-friendly (40px) on phones, compact on desktop.
       size: {

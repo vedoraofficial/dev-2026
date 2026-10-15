@@ -19,7 +19,7 @@ export function PageHeader({ title, subtitle, actions, hideUtilities }: Props) {
   const openNav = useShellStore((s) => s.setMobileNavOpen)
 
   return (
-    <header className="sticky top-0 z-20 border-b border-border bg-sidebar/90 safe-x backdrop-blur md:px-6 lg:px-8">
+    <header className="sticky top-0 z-20 border-b border-border bg-background/85 safe-x backdrop-blur md:px-6 lg:px-8">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-3 py-3.5 md:py-4">
         <Button
           variant="quiet"

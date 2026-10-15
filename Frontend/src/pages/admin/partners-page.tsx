@@ -23,7 +23,6 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
-import { CreateUserDialog } from "@/features/account/components/create-user-dialog"
 import { useNetwork, type NetworkMember } from "@/features/genealogy/use-network"
 import { downloadCsv } from "@/lib/csv"
 import { formatNumber } from "@/lib/format"
@@ -265,7 +264,6 @@ export function AdminPartnersPage() {
               onChange={(e) => setQuery(e.target.value)}
               className="w-full md:w-72"
             />
-            <CreateUserDialog />
           </>
         }
       />
@@ -315,8 +313,7 @@ export function AdminPartnersPage() {
             />
           </QueryState>
           <p className="mt-3 text-[0.6875rem] text-muted-foreground">
-            Lists everyone placed in the genealogy. Users created with “Create user” appear here
-            once they are placed under a sponsor.
+            Lists everyone placed in the genealogy.
           </p>
         </Panel>
       </PageBody>

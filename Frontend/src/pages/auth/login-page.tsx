@@ -60,14 +60,14 @@ export function LoginPage() {
   return (
     <div className="grid min-h-svh lg:grid-cols-[1.1fr_1fr]">
       {/* Brand side */}
-      <section className="relative flex flex-col justify-center gap-6 bg-[radial-gradient(ellipse_at_30%_20%,#0d2f20_0%,var(--background)_70%)] py-8 safe-x md:px-10 lg:px-14 lg:py-12">
-        <div className="mx-auto w-full max-w-xl overflow-hidden rounded-3xl border border-gold/15 shadow-[0_24px_60px_-20px_rgba(0,0,0,0.7)]">
+      <section className="relative flex flex-col justify-center gap-6 bg-[radial-gradient(ellipse_at_30%_20%,var(--secondary)_0%,transparent_70%)] py-8 safe-x md:px-10 lg:px-14 lg:py-12">
+        <div className="mx-auto w-full max-w-xl overflow-hidden rounded-3xl border border-gold/15 shadow-[0_24px_60px_-20px_var(--shadow-color)]">
           <img
             src={logo}
             alt="VEDORA — Wear Your Energy"
-            className="aspect-[5/3] w-full object-cover"
+            className="aspect-[3/2] w-full object-cover"
             width={1400}
-            height={834}
+            height={933}
           />
         </div>
         <div className="mx-auto w-full max-w-xl">
@@ -79,7 +79,7 @@ export function LoginPage() {
       </section>
 
       {/* Form side */}
-      <section className="flex items-center bg-sidebar py-10 safe-x md:px-10 lg:px-16">
+      <section className="flex items-center bg-card/50 py-10 safe-x md:px-10 lg:px-16">
         <form
           onSubmit={handleSubmit(onSubmit)}
           noValidate

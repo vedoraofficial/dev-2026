@@ -9,11 +9,11 @@ import {
   Loader2Icon,
 } from "lucide-react"
 
-// VEDORA is dark-only, so the toaster is pinned to dark (no next-themes provider needed).
+// VEDORA has one light theme, so the toaster is pinned to light (no next-themes provider needed).
 const Toaster = ({ ...props }: ToasterProps) => {
   return (
     <Sonner
-      theme="dark"
+      theme="light"
       className="toaster group"
       icons={{
         success: <CircleCheckIcon className="size-4" />,

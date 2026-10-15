@@ -5,7 +5,7 @@
 @import "@fontsource-variable/manrope";
 @import "@fontsource-variable/jetbrains-mono";
 
-/* VEDORA is a dark-only product. `.dark` is kept so shadcn's `dark:` variants keep working. */
+/* VEDORA uses one light (cream) theme. `dark:` variants only apply under a `.dark` parent. */
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
@@ -50,6 +50,7 @@
   --color-field: var(--field);
   --color-gold: var(--gold);
   --color-gold-light: var(--gold-light);
+  --color-gold-foreground: var(--gold-foreground);
   --color-gold-dim: var(--gold-dim);
   --color-forest: var(--forest);
   --color-success: var(--success);
@@ -58,6 +59,14 @@
   --color-warning-soft: var(--warning-soft);
   --color-danger: var(--danger);
   --color-danger-soft: var(--danger-soft);
+  --color-deep: var(--deep);
+  --color-deep-foreground: var(--deep-foreground);
+  --color-deep-muted: var(--deep-muted);
+  --color-deep-border: var(--deep-border);
+  --color-gold-on-deep: var(--gold-on-deep);
+  --color-success-on-deep: var(--success-on-deep);
+  --color-danger-on-deep: var(--danger-on-deep);
+  --color-table-head: var(--table-head);
 
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
@@ -68,63 +77,94 @@
   --radius-4xl: calc(var(--radius) * 2.6);
 }
 
-:root,
-.dark {
-  color-scheme: dark;
+/*
+ * THEME — every colour in the app comes from these tokens. Change a value here and it changes
+ * everywhere (portal, login, join page). Brand palette:
+ *   background #f3ebdd · heading #123c2f · gold accent #c9a451 · body text #43564a
+ */
+:root {
+  color-scheme: light;
 
-  /* Surfaces: page -> card -> raised (values sampled from the approved design) */
-  --background: #071a13;
-  --foreground: #f4f1e9;
-  --card: #0c2419;
-  --card-foreground: #f4f1e9;
-  --popover: #0c2419;
-  --popover-foreground: #f4f1e9;
-  --field: #081b12;
-  --forest: #1a3a29;
+  /* Surfaces: page -> card -> raised */
+  --background: #f3ebdd;
+  --foreground: #123c2f;
+  --card: #fbf7ef;
+  --card-foreground: #123c2f;
+  --popover: #fffdf8;
+  --popover-foreground: #123c2f;
+  /* Inputs and inset areas */
+  --field: #fffdf8;
+  /* Tracks, empty bars, inactive dots */
+  --forest: #e2d6c0;
 
   /* Brand */
-  --gold: #c9a961;
-  --gold-light: #e4ca8e;
-  --gold-dim: #454c2e;
-  --primary: #c9a961;
-  --primary-foreground: #071a13;
-  --secondary: #1a3a29;
-  --secondary-foreground: #f4f1e9;
-  --accent: #202d1c;
-  --accent-foreground: #e4ca8e;
+  --gold: #c9a451;
+  /* Gold for text and emphasis (dark, so it reads on cream even in bright light) */
+  --gold-light: #7a5a16;
+  --gold-dim: #e6d7b2;
+  /* Text on a gold background */
+  --gold-foreground: #123c2f;
+  /* Main buttons: deep green with cream text */
+  --primary: #123c2f;
+  --primary-foreground: #f3ebdd;
+  --secondary: #e9dfcc;
+  --secondary-foreground: #123c2f;
+  --accent: #ece2cf;
+  --accent-foreground: #123c2f;
 
-  --muted: #0f2b1e;
-  --muted-foreground: #8d9a8e;
-  --border: #17321f;
-  --input: #1d3f2b;
-  --ring: #c9a96180;
+  --muted: #ede4d3;
+  /* Body / secondary text (a shade darker than the brand #43564a, for bright light) */
+  --muted-foreground: #2f4238;
+  --border: #d9cbb0;
+  --input: #cdbd9e;
+  --ring: #c9a45180;
 
   /* Status */
-  --success: #6fd3a0;
-  --success-soft: #1e412f;
-  --warning: #dcc88f;
-  --warning-soft: #2a3a22;
-  --danger: #e8866e;
-  --danger-soft: #3d2f28;
-  --destructive: #e8866e;
+  --success: #2f7a4f;
+  --success-soft: #dcebdd;
+  --warning: #946512;
+  --warning-soft: #f4e5c2;
+  --danger: #b4452f;
+  --danger-soft: #f7ddd4;
+  --destructive: #b4452f;
 
   /* Charts: gold fading to olive, as used for BV / level bars */
-  --chart-1: #c9a961;
-  --chart-2: #a8924f;
-  --chart-3: #857541;
-  --chart-4: #5d5b35;
-  --chart-5: #454c2e;
+  --chart-1: #c9a451;
+  --chart-2: #b08f4a;
+  --chart-3: #8f7c47;
+  --chart-4: #6e6c47;
+  --chart-5: #4f5a40;
+
+  /* Soft drop shadows (images, highlighted cards) */
+  --shadow-color: #123c2f40;
+  --glow-color: #c9a45159;
+
+  /* Deep green surfaces: sidebar, stat cards and panel title bars */
+  --deep: #123c2f;
+  --deep-2: #0c2d22;
+  --deep-foreground: #f3ebdd;
+  --deep-muted: #c3cfc2;
+  --deep-border: #2a5544;
+  --gold-on-deep: #e0c27a;
+  --success-on-deep: #9fdcb5;
+  --danger-on-deep: #f2a48f;
+  /* Header row of tables */
+  --table-head: #e3ebdf;
+
+  /* Leafy branches in the page corners (0 hides them) */
+  --leaves-opacity: 0.6;
+  --leaves-size: min(32rem, 60vw);
 
   --radius: 0.875rem;
 
-  --sidebar: #081b12;
-  --sidebar-foreground: #f4f1e9;
-  --sidebar-primary: #c9a961;
-  --sidebar-primary-foreground: #071a13;
-  --sidebar-accent: #202d1c;
-  --sidebar-accent-foreground: #e4ca8e;
-  --sidebar-border: #14301f;
-  --sidebar-ring: #c9a96180;
+  --sidebar: #123c2f;
+  --sidebar-foreground: #f3ebdd;
+  --sidebar-primary: #c9a451;
+  --sidebar-primary-foreground: #123c2f;
+  --sidebar-accent: #1d4c3b;
+  --sidebar-accent-foreground: #f3ebdd;
+  --sidebar-border: #2a5544;
+  --sidebar-ring: #c9a45180;
 }
 
 @layer base {
@@ -147,7 +187,7 @@
     @apply bg-background text-foreground antialiased;
     min-height: 100svh;
   }
-  /* Thin, dark scrollbars for tables and panels */
+  /* Thin scrollbars for tables and panels */
   * {
     scrollbar-width: thin;
     scrollbar-color: var(--forest) transparent;
@@ -163,4 +203,74 @@
 @utility safe-x {
   padding-left: max(1rem, env(safe-area-inset-left));
   padding-right: max(1rem, env(safe-area-inset-right));
+}
+
+/*
+ * Small gold text (IDs, links, labels) uses the darker gold so it stays readable; gold fills,
+ * lines and bars keep the brand #c9a451. Unlayered, so it wins over the generated utility.
+ */
+.text-gold {
+  color: var(--gold-light);
+}
+
+/*
+ * Background leaves: a leafy branch in the top-right and bottom-right corners of every page.
+ * Cards and the sidebar sit on top, so the leaves only show in the open space around them.
+ */
+body::before,
+body::after {
+  content: "";
+  position: fixed;
+  z-index: -1;
+  width: var(--leaves-size);
+  height: var(--leaves-size);
+  background: url("./assets/images/leaves.svg") no-repeat center / contain;
+  opacity: var(--leaves-opacity);
+  pointer-events: none;
+}
+body::before {
+  top: 0;
+  right: 0;
+}
+body::after {
+  bottom: 0;
+  right: 0;
+  transform: scaleY(-1);
+}
+
+/*
+ * Deep green surface (sidebar, stat cards, panel title bars). It re-points the text tokens, so
+ * everything inside — text, muted text, gold links, borders, inputs — reads on dark green.
+ */
+@utility surface-deep {
+  --foreground: var(--deep-foreground);
+  --muted-foreground: var(--deep-muted);
+  --gold-light: var(--gold-on-deep);
+  --border: var(--deep-border);
+  --field: #ffffff14;
+  --input: var(--deep-border);
+  --accent: #ffffff12;
+  --accent-foreground: var(--deep-foreground);
+  --muted: #ffffff12;
+  color-scheme: dark;
+  color: var(--deep-foreground);
+  /* Leaves sit under a deep-green veil so they stay faint */
+  background:
+    linear-gradient(color-mix(in srgb, var(--deep) 62%, transparent) 0 0),
+    url("./assets/images/leaves.svg") no-repeat right -1.5rem bottom -2rem / 8rem auto,
+    linear-gradient(135deg, var(--deep), var(--deep-2));
+}
+
+/*
+ * BOLDER TEXT — every weight one step heavier (normal 400→500, medium 500→600, semibold 600→700).
+ * Delete this block to go back to the lighter text.
+ */
+@theme {
+  --font-weight-normal: 500;
+  --font-weight-medium: 600;
+  --font-weight-semibold: 700;
+  --font-weight-bold: 800;
+}
+body {
+  font-weight: 500;
 }

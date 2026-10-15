@@ -230,10 +230,10 @@ export function GenealogyTree({ root, rootLabel, selectedId, onSelect }: Genealo
   return (
     <div
       ref={scrollRef}
-      className="overflow-x-auto rounded-2xl border border-border bg-[radial-gradient(ellipse_at_50%_0%,#0d2b1e_0%,transparent_70%)] p-4 md:p-6"
+      className="overflow-x-auto rounded-2xl border border-border bg-[radial-gradient(ellipse_at_50%_0%,var(--muted)_0%,transparent_70%)] p-4 md:p-6"
     >
       <div className="mx-auto flex w-max flex-col items-center">
-        <div className="w-64 rounded-xl border border-gold/60 bg-card p-4 text-center shadow-[0_0_24px_-6px_rgba(201,169,97,0.35)]">
+        <div className="w-64 rounded-xl border border-gold/60 bg-card p-4 text-center shadow-[0_0_24px_-6px_var(--glow-color)]">
           <MonoId tone="gold" className="text-[0.6875rem]">
             {root.id}
           </MonoId>

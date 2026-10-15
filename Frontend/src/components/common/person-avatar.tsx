@@ -7,7 +7,7 @@ const tones = {
   /** Founders */
   gold: "bg-gold",
   /** Inactive / capped */
-  muted: "bg-[#2a1c17] ring-1 ring-danger/20",
+  muted: "bg-danger-soft ring-1 ring-danger/20",
   plain: "bg-forest/70",
 } as const
 
