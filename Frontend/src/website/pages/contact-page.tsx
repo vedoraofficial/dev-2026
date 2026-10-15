@@ -41,7 +41,7 @@ function SupportCard() {
         Official support
       </p>
       <div className="mt-3">
-        <DetailRow label="Owner" value={SITE.legalName} />
+        <DetailRow label="Legal name" value={SITE.legalName} />
         <DetailRow
           label="Phone"
           value={<a href={`tel:${SITE.phone.replace(/\s/g, "")}`}>{SITE.phone}</a>}

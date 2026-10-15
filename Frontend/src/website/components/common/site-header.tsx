@@ -2,7 +2,7 @@ import { ArrowRight, Menu } from "lucide-react"
 import { useState } from "react"
 import { Link, NavLink } from "react-router-dom"
 
-import { MAIN_NAV } from "@/website/app/navigation"
+import { MAIN_NAV, SHOW_PARTNER_LINKS } from "@/website/app/navigation"
 import { ROUTES } from "@/website/app/routes"
 import { Container } from "@/website/components/common/container"
 import { Logo } from "@/website/components/common/logo"
@@ -29,12 +29,16 @@ export function SiteHeader() {
 
   return (
     <header className="sticky top-0 z-40 border-b border-border bg-background/90 backdrop-blur-md">
-      <Container className="flex h-16 items-center justify-between gap-4 md:h-[4.5rem]">
+      <Container className="relative flex h-16 items-center justify-between gap-4 md:h-[4.5rem]">
         <Link to={ROUTES.home} aria-label="VEDORA home">
           <Logo />
         </Link>
 
-        <nav aria-label="Main" className="hidden items-center gap-1 lg:flex">
+        {/* Centred on the page, whatever sits left and right of it */}
+        <nav
+          aria-label="Main"
+          className="hidden items-center gap-1 lg:absolute lg:left-1/2 lg:flex lg:-translate-x-1/2"
+        >
           {MAIN_NAV.map((item) => (
             <NavLink key={item.to} to={item.to} end className={navLinkClass}>
               {item.label}
@@ -42,16 +46,18 @@ export function SiteHeader() {
           ))}
         </nav>
 
-        <div className="hidden items-center gap-2.5 lg:flex">
-          <Button variant="outline" size="sm" asChild>
-            <Link to={ROUTES.becomePartner}>Become a Partner</Link>
-          </Button>
-          <Button size="sm" asChild>
-            <Link to={ROUTES.portalLogin}>
-              Partner Login <ArrowRight data-icon="inline-end" />
-            </Link>
-          </Button>
-        </div>
+        {SHOW_PARTNER_LINKS ? (
+          <div className="hidden items-center gap-2.5 lg:flex">
+            <Button variant="outline" size="sm" asChild>
+              <Link to={ROUTES.becomePartner}>Become a Partner</Link>
+            </Button>
+            <Button size="sm" asChild>
+              <Link to={ROUTES.portalLogin}>
+                Partner Login <ArrowRight data-icon="inline-end" />
+              </Link>
+            </Button>
+          </div>
+        ) : null}
 
         <Sheet open={open} onOpenChange={setOpen}>
           <SheetTrigger asChild>
@@ -79,18 +85,20 @@ export function SiteHeader() {
                 </NavLink>
               ))}
             </nav>
-            <div className="mt-4 flex flex-col gap-3 px-4">
-              <Button variant="outline" size="lg" asChild>
-                <Link to={ROUTES.becomePartner} onClick={close}>
-                  Become a Partner
-                </Link>
-              </Button>
-              <Button size="lg" asChild>
-                <Link to={ROUTES.portalLogin} onClick={close}>
-                  Partner Login <ArrowRight data-icon="inline-end" />
-                </Link>
-              </Button>
-            </div>
+            {SHOW_PARTNER_LINKS ? (
+              <div className="mt-4 flex flex-col gap-3 px-4">
+                <Button variant="outline" size="lg" asChild>
+                  <Link to={ROUTES.becomePartner} onClick={close}>
+                    Become a Partner
+                  </Link>
+                </Button>
+                <Button size="lg" asChild>
+                  <Link to={ROUTES.portalLogin} onClick={close}>
+                    Partner Login <ArrowRight data-icon="inline-end" />
+                  </Link>
+                </Button>
+              </div>
+            ) : null}
           </SheetContent>
         </Sheet>
       </Container>

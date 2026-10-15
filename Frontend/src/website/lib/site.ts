@@ -4,8 +4,8 @@ import { env } from "@/website/lib/env"
 export const SITE = {
   legalName: "Prashant Dongre",
   phone: "+91 91365 39436",
-  email: "support@vedoraofficial.in",
-  website: "www.vedoraofficial.in",
+  email: "support@vedoraofficial.com",
+  website: "www.vedoraofficial.com",
   hours: "Mon–Sat · 10:00–18:00 IST",
   address:
     "B/106, Dashmesh Crystal, Behind Panvelkar Sankul, Kharvai, Karjat Road, Badlapur East, Thane, Maharashtra – 421503",

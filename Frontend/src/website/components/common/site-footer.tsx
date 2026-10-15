@@ -1,7 +1,7 @@
 import type { ReactNode } from "react"
 import { Link } from "react-router-dom"
 
-import { FOOTER_EXPLORE, FOOTER_LEGAL } from "@/website/app/navigation"
+import { FOOTER_EXPLORE, FOOTER_LEGAL, SHOW_PARTNER_LINKS } from "@/website/app/navigation"
 import { ROUTES } from "@/website/app/routes"
 import { Container } from "@/website/components/common/container"
 import { Logo } from "@/website/components/common/logo"
@@ -44,14 +44,16 @@ export function SiteFooter() {
                 </Link>
               </li>
             ))}
-            <li>
-              <Link
-                to={ROUTES.portalLogin}
-                className="text-[0.8125rem] text-gold hover:text-gold-light"
-              >
-                Partner Login →
-              </Link>
-            </li>
+            {SHOW_PARTNER_LINKS ? (
+              <li>
+                <Link
+                  to={ROUTES.portalLogin}
+                  className="text-[0.8125rem] text-gold hover:text-gold-light"
+                >
+                  Partner Login →
+                </Link>
+              </li>
+            ) : null}
           </FooterColumn>
 
           <FooterColumn title="Legal">

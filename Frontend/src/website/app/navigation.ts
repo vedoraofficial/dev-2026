@@ -1,5 +1,8 @@
 import { ROUTES } from "@/website/app/routes"
 
+/** Show "Partner Login" and "Become a Partner" in the header and footer. Hidden for now. */
+export const SHOW_PARTNER_LINKS = false
+
 /** Top navigation, in display order. */
 export const MAIN_NAV = [
   { label: "Home", to: ROUTES.home },
@@ -13,7 +16,7 @@ export const FOOTER_EXPLORE = [
   { label: "Home", to: ROUTES.home },
   { label: "About VEDORA", to: ROUTES.about },
   { label: "Products", to: ROUTES.products },
-  { label: "Become a Partner", to: ROUTES.becomePartner },
+  ...(SHOW_PARTNER_LINKS ? [{ label: "Become a Partner", to: ROUTES.becomePartner }] : []),
   { label: "Contact", to: ROUTES.contact },
 ] as const
 
