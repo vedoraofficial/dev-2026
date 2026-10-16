@@ -72,9 +72,6 @@ export function HomePage() {
             <Button size="lg" asChild>
               <Link to={ROUTES.products}>Explore the collection</Link>
             </Button>
-            <Button size="lg" variant="outline" asChild>
-              <Link to={ROUTES.becomePartner}>Become a Partner</Link>
-            </Button>
           </>
         }
         footer={
@@ -152,16 +149,16 @@ export function HomePage() {
         <CtaPanel
           title={
             <>
-              Ready to wear it —
+              Ready to find
               <br />
-              or to join us?
+              your bracelet?
             </>
           }
-          description="Talk to us about the collection, or register your interest as a VEDORA partner."
+          description="Explore the collection, or talk to us and we'll help you choose."
           actions={
             <>
               <Button size="lg" asChild>
-                <Link to={ROUTES.becomePartner}>Become a Partner</Link>
+                <Link to={ROUTES.products}>Explore the collection</Link>
               </Button>
               <Button size="lg" variant="outline" asChild>
                 <Link to={ROUTES.contact}>Contact us</Link>

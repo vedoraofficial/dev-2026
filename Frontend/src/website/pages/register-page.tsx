@@ -5,12 +5,12 @@ import { PageHero } from "@/website/components/common/page-hero"
 import { Section } from "@/website/components/common/section"
 import { PartnerInterestForm } from "@/website/features/enquiries/components/partner-interest-form"
 
-/** "Become a Partner": registration only — the interest form and a link to sign in. */
+/** Partner registration only — the interest form and a link to sign in. Not linked from the site. */
 export function RegisterPage() {
   return (
     <>
       <PageHero
-        kicker="Become a partner"
+        kicker="Partner registration"
         title="Register your interest"
         description="Share your details and our team will call you to complete your registration. Have a sponsor? Add their VEDORA ID."
       />

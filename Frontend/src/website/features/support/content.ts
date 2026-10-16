@@ -43,7 +43,7 @@ export const FAQS = [
     a: "Write to support with your Order ID as soon as possible. Our team will confirm whether the order can still be cancelled before dispatch, within 3–5 business days.",
   },
   {
-    q: "How do I become a partner?",
-    a: "Register your interest on the Become a Partner page and our team will call you. You join under a sponsor with your PAN and details, accept the Partner Agreement, and activate your ID with your first VEDORA bracelet purchase.",
+    q: "How do I join VEDORA as a partner?",
+    a: "Contact our team and we'll call you. You join under a sponsor with your PAN and details, accept the Partner Agreement, and activate your ID with your first VEDORA bracelet purchase.",
   },
 ] as const

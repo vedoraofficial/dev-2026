@@ -32,7 +32,7 @@ export const WARRANTY_DAYS = 7
 export const BRACELETS: readonly Bracelet[] = [
   {
     slug: "protection",
-    name: "VEDORA Protection Bracelet",
+    name: "VEDORA PYRITE LEGACY",
     style: "Black Onyx & Tiger Eye",
     description:
       "This unisex beaded stretch bracelet features a sophisticated blend of natural gemstones and geometric metallic accents.",
@@ -62,39 +62,8 @@ export const BRACELETS: readonly Bracelet[] = [
     image: protectionImage,
   },
   {
-    slug: "wealth",
-    name: "VEDORA Wealth Bracelet",
-    style: "Citrine & Tiger Eye",
-    description:
-      "This unisex beaded stretch bracelet pairs a warm citrine centre with golden Tiger's Eye and naturally banded agate.",
-    details: [
-      {
-        label: "Design & Layout",
-        text: "Built on an elastic band, with a single focal bead at the centre and natural stone beads arranged symmetrically around it.",
-      },
-      {
-        label: "Focal Element",
-        text: "A smooth, honey-orange citrine bead with a soft, translucent glow in natural light.",
-      },
-      {
-        label: "Secondary Accent",
-        text: "Golden-brown Tiger's Eye beads placed evenly on both sides of the citrine, showing their silky, light-catching sheen.",
-      },
-      {
-        label: "Base Beads",
-        text: "Polished Sulemani Hakik (banded agate) beads in deep black with fine natural banding — no two beads are alike.",
-      },
-      {
-        label: "Style & Aesthetic",
-        text: "Warm, earthy and refined. An easy everyday piece that pairs well with both casual and formal wear.",
-      },
-    ],
-    stones: [{ name: "Citrine" }, { name: "Tiger Eye" }, { name: "Sulemani Hakik" }],
-    image: wealthImage,
-  },
-  {
     slug: "energy",
-    name: "VEDORA Energy Bracelet",
+    name: "VEDORA CITRINE LEGACY",
     style: "Banded Agate & Tiger Eye",
     description:
       "This unisex beaded stretch bracelet combines striking banded agate with Tiger's Eye and a faceted metallic centre.",
@@ -124,8 +93,39 @@ export const BRACELETS: readonly Bracelet[] = [
     image: energyImage,
   },
   {
+    slug: "wealth",
+    name: "VEDORA TIGER LEGACY",
+    style: "Citrine & Tiger Eye",
+    description:
+      "This unisex beaded stretch bracelet pairs a warm citrine centre with golden Tiger's Eye and naturally banded agate.",
+    details: [
+      {
+        label: "Design & Layout",
+        text: "Built on an elastic band, with a single focal bead at the centre and natural stone beads arranged symmetrically around it.",
+      },
+      {
+        label: "Focal Element",
+        text: "A smooth, honey-orange citrine bead with a soft, translucent glow in natural light.",
+      },
+      {
+        label: "Secondary Accent",
+        text: "Golden-brown Tiger's Eye beads placed evenly on both sides of the citrine, showing their silky, light-catching sheen.",
+      },
+      {
+        label: "Base Beads",
+        text: "Polished Sulemani Hakik (banded agate) beads in deep black with fine natural banding — no two beads are alike.",
+      },
+      {
+        label: "Style & Aesthetic",
+        text: "Warm, earthy and refined. An easy everyday piece that pairs well with both casual and formal wear.",
+      },
+    ],
+    stones: [{ name: "Citrine" }, { name: "Tiger Eye" }, { name: "Sulemani Hakik" }],
+    image: wealthImage,
+  },
+  {
     slug: "balance",
-    name: "VEDORA Balance Bracelet",
+    name: "VEDORA QUARTZ LEGACY",
     style: "Milky Quartz & Obsidian",
     description:
       "This unisex beaded stretch bracelet sets soft white quartz against glossy black stone around a faceted metallic centre.",
