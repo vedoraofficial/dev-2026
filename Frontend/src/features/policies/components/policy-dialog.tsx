@@ -10,7 +10,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog"
 import { downloadPolicy } from "@/features/policies/download"
-import type { Policy } from "@/features/policies/mock-data"
+import type { Policy } from "@/features/policies/policies"
 
 /**
  * Opens a policy over the current page (no navigation, so a half-filled form stays as it is).

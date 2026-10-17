@@ -33,8 +33,8 @@ function periodRange(period: Period): [Date, Date] {
 }
 
 export function AdminOverviewPage() {
-  const adminId = useSession((s) => s.user?.vedId) ?? "VED108"
-  const network = useNetwork(adminId)
+  const adminId = useSession((s) => s.user?.vedId) ?? ""
+  const network = useNetwork(adminId || undefined)
   const orders = useAllOrders()
   const withdrawals = useAllWithdrawals()
   const ledger = useCommissionLedger()
@@ -117,7 +117,7 @@ export function AdminOverviewPage() {
         title="Overview"
         subtitle={
           <>
-            Root Admin <MonoId tone="gold">{adminId}</MonoId> · network health,{" "}
+            Root Admin{adminId ? <> <MonoId tone="gold">{adminId}</MonoId></> : ""} · network health,{" "}
             {formatDate(new Date().toISOString())}
           </>
         }
@@ -141,7 +141,7 @@ export function AdminOverviewPage() {
             href={ROUTES.admin.partners}
             label="Total partners"
             value={network.data ? formatNumber(partners.length) : "—"}
-            hint={`Under ${founders.length || 3} Founders`}
+            hint={network.data ? `Under ${founders.length} Founder${founders.length === 1 ? "" : "s"}` : undefined}
           />
           <StatCard
             href={ROUTES.admin.products}

@@ -14,7 +14,6 @@ import { StatCard, StatGrid } from "@/components/common/stat-card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { useMe } from "@/features/account/queries"
-import { srpSummary } from "@/features/dashboard/mock-data"
 import { useMySlots } from "@/features/genealogy/queries"
 import { productArt } from "@/features/products/catalog"
 import { useProducts } from "@/features/products/queries"
@@ -27,6 +26,7 @@ import { cn } from "@/lib/utils"
 import { normalizeVedId } from "@/lib/ved-id"
 
 const levelShade = ["bg-chart-1", "bg-chart-2", "bg-chart-3", "bg-chart-4", "bg-chart-5"]
+const SRP_TIERS = ["10 · 1 mo", "20 · 2 mo", "30 · 3 mo", "40 · 4 mo", "50 · 5 mo"] as const
 
 export function PartnerDashboardPage() {
   const navigate = useNavigate()
@@ -209,18 +209,18 @@ export function PartnerDashboardPage() {
               <PanelHeader title="SRP wallet" aside="2 SRP per confirmed sale" />
               <div className="flex flex-wrap items-baseline justify-between gap-2">
                 <p className="font-display text-4xl">
-                  {srpSummary.balance} <span className="text-lg text-muted-foreground">SRP</span>
+                  0 <span className="text-lg text-muted-foreground">SRP</span>
                 </p>
-                <p className="text-xs font-medium text-muted-foreground">Sample — no SRP API yet</p>
+                <p className="text-xs text-muted-foreground">0 SRP balance</p>
               </div>
               <ProgressBar
-                value={srpSummary.balance}
-                max={srpSummary.max}
+                value={0}
+                max={50}
                 label="SRP progress"
                 className="mt-3"
               />
               <div className="mt-2 grid grid-cols-5 text-[0.5625rem] text-muted-foreground">
-                {srpSummary.tiers.map((t) => (
+                {SRP_TIERS.map((t) => (
                   <span key={t}>{t}</span>
                 ))}
               </div>

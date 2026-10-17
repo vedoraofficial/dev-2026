@@ -1,7 +1,7 @@
 import { PageBody, PageHeader } from "@/components/common/page-header"
 import { PolicyDialog } from "@/features/policies/components/policy-dialog"
 import { downloadPolicy } from "@/features/policies/download"
-import { policies } from "@/features/policies/mock-data"
+import { policies } from "@/features/policies/policies"
 
 export function PartnerPoliciesPage() {
   return (

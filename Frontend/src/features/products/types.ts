@@ -24,3 +24,23 @@ export type ProductInput = {
   bvAmount: number
   status?: ProductStatus
 }
+
+export type ProductSlug = "protection" | "energy" | "wealth" | "balance"
+
+export type Product = {
+  sku: string
+  slug: ProductSlug
+  name: string
+  shortName: string
+  image: string
+  price: number
+  /** MRP in rupees, when higher than the selling price it shows struck through */
+  mrp?: number
+  /** Units left; null / undefined = stock not tracked */
+  stock?: number | null
+  bv: number
+  description: string
+  gemstones: string[]
+  unitsSold: number
+  status: "live" | "draft"
+}

@@ -30,10 +30,10 @@ type Settings = {
 const initialSettings: Settings = {
   phonepeEnabled: true,
   maintenanceMode: false,
-  minPayout: "₹ 1,000",
-  fee: "2 %",
-  window: "24 hours",
-  pan: "Required before first payout",
+  minPayout: "₹ 100",
+  fee: "₹ 0 (Free)",
+  window: "Immediate lock / Admin review",
+  pan: "Verified bank account required",
 }
 
 function ToggleRow({

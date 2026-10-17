@@ -6,7 +6,7 @@ import { PriceTag } from "@/components/common/price-tag"
 import { StatusPill } from "@/components/common/status-pill"
 import { Input } from "@/components/ui/input"
 import { isOutOfStock } from "@/features/products/catalog"
-import type { Product } from "@/features/products/mock-data"
+import type { Product } from "@/features/products/types"
 import { formatBV } from "@/lib/format"
 import { truncateWords } from "@/lib/text"
 

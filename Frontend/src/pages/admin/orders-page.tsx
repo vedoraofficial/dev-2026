@@ -21,7 +21,7 @@ import {
   stagePill,
   type OrderStage,
 } from "@/features/orders/labels"
-import { deliverySla } from "@/features/orders/mock-data"
+import { deliverySla } from "@/features/orders/sla"
 import { useAllOrders } from "@/features/orders/queries"
 import type { ApiOrder } from "@/features/orders/types"
 import { useProducts } from "@/features/products/queries"

@@ -1,6 +1,6 @@
 import { Loader2 } from "lucide-react"
 import type { ComponentType } from "react"
-import { createBrowserRouter, Navigate, type RouteObject } from "react-router-dom"
+import { createBrowserRouter, Navigate, useSearchParams, type RouteObject } from "react-router-dom"
 
 import { ROUTES } from "@/app/routes"
 import { RouteError } from "@/components/common/route-error"
@@ -17,6 +17,24 @@ function RouteLoading() {
   )
 }
 
+function WalletRedirect() {
+  const [searchParams] = useSearchParams()
+  const merchantOrderId = searchParams.get("merchantOrderId") || searchParams.get("orderId")
+  if (merchantOrderId) {
+    return <Navigate to={`${ROUTES.paymentStatus}?${searchParams.toString()}`} replace />
+  }
+  return <Navigate to={ROUTES.partner.wallet} replace />
+}
+
+function OrdersRedirect() {
+  const [searchParams] = useSearchParams()
+  const merchantOrderId = searchParams.get("merchantOrderId") || searchParams.get("orderId")
+  if (merchantOrderId) {
+    return <Navigate to={`${ROUTES.paymentStatus}?${searchParams.toString()}`} replace />
+  }
+  return <Navigate to={ROUTES.partner.orders} replace />
+}
+
 /** Pages are lazy-loaded so each screen is its own chunk. `name` is the page's exported component. */
 const page = (load: () => Promise<Record<string, unknown>>, name: string): RouteObject => ({
   lazy: async () => ({ Component: (await load())[name] as ComponentType }),
@@ -25,6 +43,10 @@ const page = (load: () => Promise<Record<string, unknown>>, name: string): Route
 
 export const router = createBrowserRouter([
   { path: "/", element: <Navigate to={ROUTES.login} replace />, ErrorBoundary: RouteError },
+  { path: "/wallet", element: <WalletRedirect />, ErrorBoundary: RouteError },
+  { path: "/orders", element: <OrdersRedirect />, ErrorBoundary: RouteError },
+  { path: "/products", element: <Navigate to={ROUTES.partner.products} replace /> },
+  { path: "/dashboard", element: <Navigate to={ROUTES.partner.dashboard} replace /> },
   {
     element: <AuthLayout />,
     ErrorBoundary: RouteError,

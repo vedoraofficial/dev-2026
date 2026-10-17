@@ -1,4 +1,4 @@
-import type { Policy } from "@/features/policies/mock-data"
+import type { Policy } from "@/features/policies/policies"
 import { downloadPolicyPdf } from "@/lib/pdf"
 
 function slug(title: string): string {

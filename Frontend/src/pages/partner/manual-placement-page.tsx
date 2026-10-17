@@ -34,7 +34,7 @@ import {
   type PlacementValues,
 } from "@/features/placement/schemas"
 import { toCatalogProduct } from "@/features/products/catalog"
-import type { Product } from "@/features/products/mock-data"
+import type { Product } from "@/features/products/types"
 import { useProducts } from "@/features/products/queries"
 import { useSession } from "@/lib/session"
 import { cn } from "@/lib/utils"

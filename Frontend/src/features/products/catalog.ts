@@ -1,5 +1,5 @@
-import { products as artwork, type Product } from "@/features/products/mock-data"
-import type { ApiProduct } from "@/features/products/types"
+import { braceletArtwork } from "@/features/products/artwork"
+import type { ApiProduct, Product } from "@/features/products/types"
 import { paiseToRupees } from "@/lib/money"
 
 /**
@@ -8,7 +8,7 @@ import { paiseToRupees } from "@/lib/money"
  */
 export function productArt(name: string): Pick<Product, "image" | "gemstones" | "slug"> {
   const lower = name.toLowerCase()
-  const match = artwork.find((a) => lower.includes(a.slug)) ?? artwork[0]
+  const match = braceletArtwork.find((a) => lower.includes(a.slug)) ?? braceletArtwork[0]
   return { image: match.image, gemstones: match.gemstones, slug: match.slug }
 }
 

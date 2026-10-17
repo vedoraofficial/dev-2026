@@ -1,5 +1,5 @@
 import { useRef, useState } from "react"
-import { Link } from "react-router-dom"
+import { Link, Navigate, useSearchParams } from "react-router-dom"
 
 import { ROUTES } from "@/app/routes"
 import { DataTable, type Column } from "@/components/common/data-table"
@@ -21,6 +21,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { useBanks } from "@/features/account/queries"
+import { TopupDialog } from "@/features/wallet/components/topup-dialog"
 import { categoryLabel, maskedBank, withdrawalPill } from "@/features/wallet/labels"
 import {
   useMyWithdrawals,
@@ -117,11 +118,13 @@ const withdrawalColumns: Column<Withdrawal>[] = [
 ]
 
 export function PartnerWalletPage() {
+  const [searchParams] = useSearchParams()
   const me = useSession((s) => s.user)
   const [tab, setTab] = useState<"all" | TransactionType>("all")
   const [page, setPage] = useState(1)
   const [amount, setAmount] = useState("")
   const [bankId, setBankId] = useState<string>("")
+  const [topupOpen, setTopupOpen] = useState(false)
   const withdrawPanelRef = useRef<HTMLDivElement>(null)
   const amountInputRef = useRef<HTMLInputElement>(null)
 
@@ -134,6 +137,11 @@ export function PartnerWalletPage() {
   const withdrawals = useMyWithdrawals()
   const banks = useBanks()
   const requestWithdrawal = useRequestWithdrawal()
+
+  const merchantOrderId = searchParams.get("merchantOrderId") || searchParams.get("orderId")
+  if (merchantOrderId) {
+    return <Navigate to={`${ROUTES.paymentStatus}?${searchParams.toString()}`} replace />
+  }
 
   const balance = paiseToRupees(summary.data?.availableBalance)
   const verifiedBanks = (banks.data ?? []).filter((b) => b.verificationStatus === "VERIFIED")
@@ -169,7 +177,14 @@ export function PartnerWalletPage() {
       <PageHeader
         title="Wallet"
         subtitle="Every credit is posted automatically by the commission engine"
-        actions={<Button onClick={focusWithdrawPanel}>Request withdrawal</Button>}
+        actions={
+          <div className="flex flex-wrap items-center gap-2">
+            <Button variant="outline" onClick={() => setTopupOpen(true)}>
+              Add money
+            </Button>
+            <Button onClick={focusWithdrawPanel}>Request withdrawal</Button>
+          </div>
+        }
       />
       <PageBody>
         <div className="grid gap-4 md:gap-5 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
@@ -360,6 +375,7 @@ export function PartnerWalletPage() {
           </div>
         </div>
       </PageBody>
+      <TopupDialog open={topupOpen} onOpenChange={setTopupOpen} currentBalance={balance} />
     </>
   )
 }

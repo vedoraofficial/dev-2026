@@ -1,3 +1,4 @@
+import { useQueryClient } from "@tanstack/react-query"
 import { useState } from "react"
 import { Link } from "react-router-dom"
 import { toast } from "sonner"
@@ -13,6 +14,7 @@ import { usePayOrder } from "@/features/payments/queries"
 import { toCatalogProduct, unitsByProduct } from "@/features/products/catalog"
 import { ProductCard } from "@/features/products/components/product-card"
 import { useProducts } from "@/features/products/queries"
+import { useWalletSummary } from "@/features/wallet/queries"
 import { formatBV, formatINR, formatNumber } from "@/lib/format"
 import { paiseToRupees } from "@/lib/money"
 
@@ -25,16 +27,18 @@ type Cart = Record<number, number>
 
 /**
  * Same catalogue as Admin › Products (without the stat cards) — "sold" is this partner's own paid
- * orders — plus the order panel. Checkout creates one order per product (the backend takes one
- * product per order) and opens PhonePe for the first; the rest can be paid from My Orders.
+ * orders — plus the order panel. Checkout supports both PhonePe online gateway and Wallet Balance.
  */
 export function PartnerProductsPage() {
+  const queryClient = useQueryClient()
   const productsQuery = useProducts()
   const myOrders = useMyOrders()
+  const walletSummary = useWalletSummary()
   const createOrder = useCreateOrder()
   const payOrder = usePayOrder()
   const [cart, setCart] = useState<Cart>({})
   const [busy, setBusy] = useState(false)
+  const [paymentMethod, setPaymentMethod] = useState<"PHONEPE" | "WALLET">("PHONEPE")
 
   const sold = unitsByProduct(myOrders.data ?? [])
   const live = (productsQuery.data ?? []).filter((p) => p.status === "ACTIVE")
@@ -45,6 +49,9 @@ export function PartnerProductsPage() {
   const units = lines.reduce((sum, l) => sum + l.qty, 0)
   const bv = lines.reduce((sum, l) => sum + l.qty * l.product.bvAmount, 0)
   const total = lines.reduce((sum, l) => sum + l.qty * paiseToRupees(l.product.salePrice), 0)
+
+  const availableBalance = paiseToRupees(walletSummary.data?.availableBalance)
+  const canUseWallet = availableBalance >= total && total > 0
 
   // Can't put more in the order than is in stock.
   const stockOf = (id: number) => live.find((p) => p.id === id)?.stockAvailable ?? null
@@ -64,17 +71,30 @@ export function PartnerProductsPage() {
         const r = await createOrder.mutateAsync({
           productId: l.product.id,
           quantity: l.qty,
-          paymentMethod: "PHONEPE",
+          paymentMethod: paymentMethod,
         })
         created.push(Number(r.order.id))
       }
       setCart({})
-      if (created.length > 1) {
-        toast.success(`${created.length} orders created`, {
-          description: "Paying the first now — pay the others from My Orders.",
-        })
+
+      if (paymentMethod === "WALLET") {
+        toast.success(
+          `${created.length > 1 ? `${created.length} orders` : "Order"} confirmed!`,
+          {
+            description: "Paid directly from your wallet balance. Commissions have been distributed.",
+          },
+        )
+        // Refresh wallet balance and orders
+        void queryClient.invalidateQueries({ queryKey: ["wallet"] })
+        void queryClient.invalidateQueries({ queryKey: ["orders"] })
+      } else {
+        if (created.length > 1) {
+          toast.success(`${created.length} orders created`, {
+            description: "Paying the first now — pay the others from My Orders.",
+          })
+        }
+        payOrder.mutate(created[0])
       }
-      payOrder.mutate(created[0])
     } catch {
       // The failed call already showed its error; orders created so far are in My Orders.
     } finally {
@@ -185,6 +205,76 @@ export function PartnerProductsPage() {
                   <dd className="font-mono text-muted-foreground">Incl. as per Indian law</dd>
                 </div>
               </dl>
+              {/* Payment Method Selector */}
+              {units > 0 && (
+                <div className="space-y-2 border-t border-border/70 pt-3">
+                  <p className="eyebrow text-[0.625rem]">Payment Method</p>
+                  <div className="space-y-2">
+                    <label
+                      className={`flex cursor-pointer items-start justify-between rounded-lg border p-2.5 text-xs transition-colors ${
+                        paymentMethod === "PHONEPE"
+                          ? "border-gold bg-gold/10"
+                          : "border-border hover:bg-muted"
+                      }`}
+                    >
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="radio"
+                          name="paymentMethod"
+                          value="PHONEPE"
+                          checked={paymentMethod === "PHONEPE"}
+                          onChange={() => setPaymentMethod("PHONEPE")}
+                          className="accent-gold"
+                        />
+                        <div>
+                          <p className="font-medium text-foreground">PhonePe Online</p>
+                          <p className="text-[0.6875rem] text-muted-foreground">
+                            UPI, Credit/Debit Cards, Net Banking
+                          </p>
+                        </div>
+                      </div>
+                    </label>
+
+                    <label
+                      className={`flex cursor-pointer items-start justify-between rounded-lg border p-2.5 text-xs transition-colors ${
+                        paymentMethod === "WALLET"
+                          ? "border-gold bg-gold/10"
+                          : "border-border hover:bg-muted"
+                      } ${!canUseWallet ? "opacity-60 cursor-not-allowed" : ""}`}
+                    >
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="radio"
+                          name="paymentMethod"
+                          value="WALLET"
+                          checked={paymentMethod === "WALLET"}
+                          disabled={!canUseWallet}
+                          onChange={() => setPaymentMethod("WALLET")}
+                          className="accent-gold"
+                        />
+                        <div>
+                          <div className="flex items-center gap-1.5">
+                            <p className="font-medium text-foreground">Wallet Balance</p>
+                            <span className="font-mono text-[0.6875rem] text-muted-foreground">
+                              ({formatINR(availableBalance)})
+                            </span>
+                          </div>
+                          {!canUseWallet ? (
+                            <p className="text-[0.6875rem] text-gold-light">
+                              Insufficient balance (need {formatINR(total - availableBalance)} more)
+                            </p>
+                          ) : (
+                            <p className="text-[0.6875rem] text-success">
+                              Instant checkout · No gateway redirect
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    </label>
+                  </div>
+                </div>
+              )}
+
               <div className="flex items-baseline justify-between border-t border-border/70 pt-4">
                 <span className="text-[0.8125rem] font-medium">Total payable</span>
                 <span className="font-display text-3xl">{formatINR(total)}</span>
@@ -193,13 +283,21 @@ export function PartnerProductsPage() {
               <Button
                 size="lg"
                 className="mt-4 w-full"
-                disabled={units === 0 || working}
+                disabled={units === 0 || working || (paymentMethod === "WALLET" && !canUseWallet)}
                 onClick={() => void checkout()}
               >
-                {working ? "Opening PhonePe…" : "Checkout with PhonePe"}
+                {working
+                  ? paymentMethod === "PHONEPE"
+                    ? "Opening PhonePe…"
+                    : "Processing order…"
+                  : paymentMethod === "PHONEPE"
+                    ? `Checkout with PhonePe (${formatINR(total)})`
+                    : `Pay ${formatINR(total)} from Wallet`}
               </Button>
               <p className="mt-3 text-center text-[0.625rem] text-muted-foreground">
-                Prepaid only · UPI, cards, net banking on PhonePe. No COD.
+                {paymentMethod === "PHONEPE"
+                  ? "Prepaid only · UPI, cards, net banking on PhonePe. No COD."
+                  : "Debited instantly from your available wallet balance."}
                 {lines.length > 1 ? (
                   <>
                     <br />

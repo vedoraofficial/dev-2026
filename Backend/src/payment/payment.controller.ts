@@ -82,6 +82,12 @@ export class PaymentController {
 
   // ─── PhonePe Webhook (Server-to-Server) ────────────────────────────
 
+  @Get('webhook')
+  @ApiOperation({ summary: 'Health check / validation for PhonePe webhook' })
+  async verifyWebhookEndpoint() {
+    return { status: 'SUCCESS', message: 'PhonePe webhook endpoint is active' };
+  }
+
   @Post('webhook')
   @ApiOperation({ summary: 'Handle PhonePe server-to-server webhook' })
   async handleWebhook(@Body() payload: any, @Request() req: any) {

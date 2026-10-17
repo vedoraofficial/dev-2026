@@ -3,12 +3,26 @@ import { MonoId } from "@/components/common/mono-id"
 import { PageBody, PageHeader } from "@/components/common/page-header"
 import { Panel, PanelHeader } from "@/components/common/panel"
 import { ProgressBar } from "@/components/common/progress-bar"
-import { activationTimeline, srpLedger, srpWallet } from "@/features/wallet/mock-data"
 import { cn } from "@/lib/utils"
 
-type LedgerRow = (typeof srpLedger)[number]
+export type SrpLedgerRow = {
+  id: string
+  date: string
+  event: string
+  reference: string
+  change: number
+  balance: number
+}
 
-const columns: Column<LedgerRow>[] = [
+const SRP_TIERS = [
+  { points: 10, label: "1 month" },
+  { points: 20, label: "2 months" },
+  { points: 30, label: "3 months" },
+  { points: 40, label: "4 months" },
+  { points: 50, label: "5 months" },
+] as const
+
+const columns: Column<SrpLedgerRow>[] = [
   {
     key: "date",
     header: "Date",
@@ -40,7 +54,13 @@ const columns: Column<LedgerRow>[] = [
 ]
 
 export function PartnerSrpWalletPage() {
-  const monthsRedeemable = Math.floor(srpWallet.balance / 10)
+  const balance = 0
+  const maxSrp = 50
+  const earned = 0
+  const redeemed = 0
+  const monthsRedeemable = Math.floor(balance / 10)
+  const ledgerRows: SrpLedgerRow[] = []
+  const activationTimeline: { month: string; note: string; status: string; tone: "neutral" | "success" | "pending" }[] = []
 
   return (
     <>
@@ -52,7 +72,7 @@ export function PartnerSrpWalletPage() {
               <div>
                 <p className="eyebrow text-gold">SRP balance</p>
                 <p className="mt-2 font-display text-5xl leading-none md:text-6xl">
-                  {srpWallet.balance} <span className="text-2xl text-muted-foreground">SRP</span>
+                  {balance} <span className="text-2xl text-muted-foreground">SRP</span>
                 </p>
               </div>
               <div className="sm:text-right">
@@ -66,15 +86,15 @@ export function PartnerSrpWalletPage() {
             </div>
 
             <ProgressBar
-              value={srpWallet.balance}
-              max={srpWallet.max}
+              value={balance}
+              max={maxSrp}
               label="SRP progress towards 50"
               className="mt-6 h-2.5"
             />
 
             <div className="mt-5 grid grid-cols-5 gap-2">
-              {srpWallet.tiers.map((t) => {
-                const reached = srpWallet.balance >= t.points
+              {SRP_TIERS.map((t) => {
+                const reached = balance >= t.points
                 return (
                   <div
                     key={t.points}
@@ -103,31 +123,37 @@ export function PartnerSrpWalletPage() {
 
           <Panel>
             <PanelHeader title="Activation timeline" />
-            <ul>
-              {activationTimeline.map((m) => (
-                <li
-                  key={m.month}
-                  className="flex items-center justify-between gap-3 border-b border-border/70 py-3.5 first:pt-0 last:border-b-0 last:pb-0"
-                >
-                  <div>
-                    <p className="text-[0.875rem] font-medium">{m.month}</p>
-                    <p className="text-[0.6875rem] text-muted-foreground">{m.note}</p>
-                  </div>
-                  {m.tone === "neutral" ? (
-                    <span className="text-xs text-muted-foreground">{m.status}</span>
-                  ) : (
-                    <span
-                      className={cn(
-                        "text-xs font-medium",
-                        m.tone === "success" ? "text-success" : "text-warning",
-                      )}
-                    >
-                      {m.status}
-                    </span>
-                  )}
-                </li>
-              ))}
-            </ul>
+            {activationTimeline.length === 0 ? (
+              <p className="py-8 text-center text-xs text-muted-foreground">
+                No monthly activation records yet.
+              </p>
+            ) : (
+              <ul>
+                {activationTimeline.map((m) => (
+                  <li
+                    key={m.month}
+                    className="flex items-center justify-between gap-3 border-b border-border/70 py-3.5 first:pt-0 last:border-b-0 last:pb-0"
+                  >
+                    <div>
+                      <p className="text-[0.875rem] font-medium">{m.month}</p>
+                      <p className="text-[0.6875rem] text-muted-foreground">{m.note}</p>
+                    </div>
+                    {m.tone === "neutral" ? (
+                      <span className="text-xs text-muted-foreground">{m.status}</span>
+                    ) : (
+                      <span
+                        className={cn(
+                          "text-xs font-medium",
+                          m.tone === "success" ? "text-success" : "text-warning",
+                        )}
+                      >
+                        {m.status}
+                      </span>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
           </Panel>
         </div>
 
@@ -136,11 +162,16 @@ export function PartnerSrpWalletPage() {
             title="SRP ledger"
             aside={
               <span className="font-mono text-gold">
-                +{srpWallet.earned} earned · -{srpWallet.redeemed} redeemed
+                +{earned} earned · -{redeemed} redeemed
               </span>
             }
           />
-          <DataTable columns={columns} rows={srpLedger} getRowKey={(r) => r.id} />
+          <DataTable
+            columns={columns}
+            rows={ledgerRows}
+            getRowKey={(r) => r.id}
+            emptyMessage="No SRP transactions recorded yet."
+          />
         </Panel>
       </PageBody>
     </>

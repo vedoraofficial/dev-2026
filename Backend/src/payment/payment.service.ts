@@ -95,7 +95,11 @@ export class PaymentService implements OnModuleInit {
     const { StandardCheckoutPayRequest } = await import('@phonepe-pg/pg-sdk-node');
 
     const merchantOrderId = `VEDORA_${order.id}_${Date.now()}`;
-    const redirectUrl = this.configService.get<string>('PHONEPE_REDIRECT_URL') || 'http://localhost:5173/payment/status';
+    const baseRedirectUrl =
+      this.configService.get<string>('PHONEPE_REDIRECT_URL') ||
+      'http://localhost:5173/payment/status';
+    const separator = baseRedirectUrl.includes('?') ? '&' : '?';
+    const redirectUrl = `${baseRedirectUrl}${separator}merchantOrderId=${encodeURIComponent(merchantOrderId)}`;
 
     const request = StandardCheckoutPayRequest.builder()
       .merchantOrderId(merchantOrderId)
@@ -143,10 +147,12 @@ export class PaymentService implements OnModuleInit {
     const { StandardCheckoutPayRequest } = await import('@phonepe-pg/pg-sdk-node');
 
     const merchantOrderId = `TOPUP_${userId}_${Date.now()}`;
-    const redirectUrl =
+    const baseRedirectUrl =
       this.configService.get<string>('PHONEPE_TOPUP_REDIRECT_URL') ||
       this.configService.get<string>('PHONEPE_REDIRECT_URL') ||
-      'http://localhost:5173/wallet';
+      'http://localhost:5173/payment/status';
+    const separator = baseRedirectUrl.includes('?') ? '&' : '?';
+    const redirectUrl = `${baseRedirectUrl}${separator}merchantOrderId=${encodeURIComponent(merchantOrderId)}`;
 
     const request = StandardCheckoutPayRequest.builder()
       .merchantOrderId(merchantOrderId)
@@ -207,6 +213,7 @@ export class PaymentService implements OnModuleInit {
         message: 'Top-up already completed.',
         topupId: Number(topup.id),
         status: topup.status,
+        amount: Number(topup.amount),
       };
     }
 
@@ -261,6 +268,7 @@ export class PaymentService implements OnModuleInit {
         message: 'Top-up completed successfully. Wallet has been credited.',
         topupId: Number(topup.id),
         status: 'COMPLETED',
+        amount: Number(topup.amount),
       };
     } else if (state === 'FAILED' || state === 'DECLINED') {
       topup.status = WalletTopupStatus.FAILED;
@@ -452,8 +460,8 @@ export class PaymentService implements OnModuleInit {
     const merchantOrderId = payload?.merchantOrderId || payload?.data?.merchantOrderId;
 
     if (!merchantOrderId) {
-      this.logger.warn('Webhook received without merchantOrderId');
-      return { message: 'Invalid webhook payload' };
+      this.logger.log('Webhook test/verification event received (no merchantOrderId). Acknowledging successfully.');
+      return { status: 'SUCCESS', message: 'Webhook endpoint verified successfully' };
     }
 
     // Log raw webhook event regardless
