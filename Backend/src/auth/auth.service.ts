@@ -1,4 +1,4 @@
-import { Injectable, UnauthorizedException, ForbiddenException, BadRequestException, Logger } from '@nestjs/common';
+import { Injectable, UnauthorizedException, ForbiddenException, BadRequestException, Logger, Optional } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 import { randomInt, createHash } from 'crypto';
@@ -12,6 +12,7 @@ import { Repository } from 'typeorm';
 import { InjectRepository } from '@nestjs/typeorm';
 import { NotificationService } from '../notification/notification.service';
 import { NotificationKey } from '../notification/notification.constants';
+import { OtpSenderService } from '../notification/otp-sender.service';
 
 @Injectable()
 export class AuthService {
@@ -22,6 +23,8 @@ export class AuthService {
     @InjectRepository(Otp)
     private readonly otpRepo: Repository<Otp>,
     private readonly notificationService: NotificationService,
+    @Optional()
+    private readonly otpSenderService?: OtpSenderService,
   ) {}
 
   async login(dto: LoginDto) {
@@ -77,6 +80,20 @@ export class AuthService {
     });
 
     await this.otpRepo.save(otp);
+
+    // Dispatch real OTP via apitxt gateway if user has mobile registered
+    if (user.mobile && this.otpSenderService) {
+      try {
+        await this.otpSenderService.sendOtp({
+          mobile: user.mobile,
+          otp: otpCode,
+        });
+      } catch (err: any) {
+        this.logger.error(
+          `Failed to send password reset OTP to ${user.mobile}: ${err?.message || err}`,
+        );
+      }
+    }
 
     const response: { message: string; resetToken?: string } = {
       message: 'If the account exists, a password reset code has been sent.',

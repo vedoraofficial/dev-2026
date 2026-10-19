@@ -76,6 +76,35 @@ describe('AuthService Security Remediation', () => {
       expect(res.message).toContain('If the account exists');
       expect(mockOtpRepo.save).not.toHaveBeenCalled();
     });
+
+    it('should dispatch OTP via OtpSenderService when user mobile is present', async () => {
+      const mockOtpSenderService = {
+        sendOtp: vi.fn().mockResolvedValue({ success: true }),
+      };
+      const serviceWithOtp = new AuthService(
+        mockUserService,
+        mockJwtService,
+        mockOtpRepo,
+        mockNotificationService,
+        mockOtpSenderService as any,
+      );
+
+      mockUserService.findByVedId.mockResolvedValue({
+        id: 10,
+        vedId: 'VED100',
+        mobile: '9876543210',
+      });
+
+      await serviceWithOtp.forgotPassword({ vedId: 'VED100' });
+
+      expect(mockOtpSenderService.sendOtp).toHaveBeenCalledTimes(1);
+      expect(mockOtpSenderService.sendOtp).toHaveBeenCalledWith(
+        expect.objectContaining({
+          mobile: '9876543210',
+          otp: expect.stringMatching(/^\d{6}$/),
+        }),
+      );
+    });
   });
 
   describe('resetPassword', () => {

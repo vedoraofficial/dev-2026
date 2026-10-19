@@ -18,19 +18,40 @@ async function bootstrap() {
     }
   }
 
+  const port = process.env.PORT ?? 3000;
+
   // Restrict CORS origins (support custom frontend domains via CORS_ORIGIN or default to local dev)
-  const allowedOrigins = process.env.CORS_ORIGIN
-    ? process.env.CORS_ORIGIN.split(',').map((o) => o.trim())
-    : ['http://localhost:5173', 'http://127.0.0.1:5173'];
+  const defaultLocalOrigins = [
+    'http://localhost:5173',
+    'http://127.0.0.1:5173',
+    'http://localhost:3000',
+    'http://127.0.0.1:3000',
+    'http://localhost:8000',
+    'http://127.0.0.1:8000',
+    `http://localhost:${port}`,
+    `http://127.0.0.1:${port}`,
+  ];
+
+  const envOrigins = process.env.CORS_ORIGIN
+    ? process.env.CORS_ORIGIN.split(',').map((o) => o.trim()).filter(Boolean)
+    : [];
+
+  const allowedOrigins = Array.from(new Set([...defaultLocalOrigins, ...envOrigins]));
 
   app.enableCors({
     origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
       // Allow non-browser requests (supertest, mobile apps, curl, webhooks)
       if (!origin || allowedOrigins.includes(origin) || allowedOrigins.includes('*')) {
-        callback(null, true);
-      } else {
-        callback(new Error(`Origin ${origin} not allowed by CORS policy`));
+        return callback(null, true);
       }
+
+      // In non-production environments, allow any localhost or 127.0.0.1 port (e.g. Swagger UI, Vite dynamic ports)
+      const isLocalhost = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin);
+      if (process.env.NODE_ENV !== 'production' && isLocalhost) {
+        return callback(null, true);
+      }
+
+      callback(new Error(`Origin ${origin} not allowed by CORS policy`));
     },
     credentials: true,
   });
@@ -54,6 +75,6 @@ async function bootstrap() {
   const document = SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('api/docs', app, document);
 
-  await app.listen(process.env.PORT ?? 3000);
+  await app.listen(port);
 }
 void bootstrap();
