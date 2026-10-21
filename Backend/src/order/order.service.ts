@@ -12,7 +12,7 @@ import { DataSource, Repository, EntityManager } from 'typeorm';
 import { Order, PaymentMethod, PaymentStatus, OrderStatus } from './entity/order.entity';
 import { CommissionDistribution } from './entity/commission-distribution.entity';
 import { Product, ProductStatus } from '../product/entity/product.entity';
-import { User, UserStatus } from '../user/entity/user.entity';
+import { User, UserRole, UserStatus } from '../user/entity/user.entity';
 import { CommissionUpline } from '../genealogy/entity/commission-upline.entity';
 import { GenealogyNode } from '../genealogy/entity/genealogy-node.entity';
 import { getAvailableStock } from '../stock/stock-levels';
@@ -176,7 +176,7 @@ export class OrderService {
       });
     }
 
-    // For PHONEPE, create pending order and return details so caller can initiate payment
+    // For RAZORPAY, create pending order and return details so caller can initiate payment
     const order = this.orderRepo.create({
       userId,
       productId: product.id,
@@ -197,11 +197,11 @@ export class OrderService {
       userId,
       NotificationKey.ORDER_AWAITING_PAYMENT,
       `Complete payment for #${order.id}`,
-      `${product.name} × ${quantity} · ${formattedAmount}. Pay with PhonePe from My Orders.`,
+      `${product.name} × ${quantity} · ${formattedAmount}. Pay online via Razorpay from My Orders.`,
       { orderId: Number(order.id), amountPaise: totalAmount },
     );
 
-    // For PHONEPE, the PhonePe payment flow will be handled by PaymentService
+    // For RAZORPAY, the Razorpay payment flow will be handled by PaymentService
     // Return order details so the caller can initiate payment
     return {
       message: 'Order created. Proceed with payment.',
@@ -442,6 +442,77 @@ export class OrderService {
       earnedByBeneficiary.set(beneficiaryUserId, earned);
     }
 
+    // ─── Task 3: Admin Direct Commission (₹200 on every product purchase) ───
+    const rootAdmin = await manager.getRepository(User).findOne({
+      where: [{ role: UserRole.ADMIN }, { vedId: 'VED108' }],
+    });
+    if (rootAdmin) {
+      await this.walletService.createWallet(rootAdmin.id, manager);
+      const adminCommissionPaise = 20000; // ₹200 flat = 20,000 paise
+      const adminTxn = await this.walletService.credit(
+        rootAdmin.id,
+        adminCommissionPaise,
+        TransactionCategory.COMMISSION_DIRECT,
+        `Admin direct commission for product purchase - Order #${orderId}`,
+        'ORDER',
+        String(orderId),
+        manager,
+      );
+
+      const adminDist = commissionRepo.create({
+        orderId,
+        beneficiaryUserId: rootAdmin.id,
+        level: 0,
+        commissionRate: 0,
+        amount: adminCommissionPaise,
+        walletTransactionId: adminTxn ? Number(adminTxn.id) : null,
+      });
+      await commissionRepo.save(adminDist);
+
+      await this.notificationService.create(
+        rootAdmin.id,
+        NotificationKey.COMMISSION_CREDITED,
+        '₹200 Admin commission credited',
+        `Direct commission of ₹200 credited to Admin wallet for Order #${orderId}.`,
+        { orderId, totalPaise: adminCommissionPaise },
+        manager,
+      );
+    }
+
+    // ─── Task 5: 1 BV = ₹1 credited to purchasing user's wallet ────────────
+    const bvTotalNum = Number(order.bvTotal);
+    if (bvTotalNum > 0) {
+      const bvPaise = bvTotalNum * 100; // 1 BV = 100 paise (₹1)
+      const bvTxn = await this.walletService.credit(
+        order.userId,
+        bvPaise,
+        TransactionCategory.COMMISSION_LEVEL_1,
+        `BV Earnings: ${bvTotalNum} BV credited as ₹${bvTotalNum} for Order #${orderId}`,
+        'ORDER',
+        String(orderId),
+        manager,
+      );
+
+      const bvDist = commissionRepo.create({
+        orderId,
+        beneficiaryUserId: order.userId,
+        level: 0,
+        commissionRate: 10000, // 100% (1 BV = ₹1)
+        amount: bvPaise,
+        walletTransactionId: bvTxn ? Number(bvTxn.id) : null,
+      });
+      await commissionRepo.save(bvDist);
+
+      await this.notificationService.create(
+        order.userId,
+        NotificationKey.COMMISSION_CREDITED,
+        `₹${bvTotalNum} BV earnings credited`,
+        `Your order #${orderId} generated ${bvTotalNum} BV, credited as ₹${bvTotalNum} to your wallet.`,
+        { orderId: Number(order.id), totalPaise: bvPaise, bv: bvTotalNum },
+        manager,
+      );
+    }
+
     // Mark order as commissions distributed
     order.commissionsDistributed = true;
     await orderRepo.save(order);
@@ -482,7 +553,7 @@ export class OrderService {
   // ─── Confirm Payment (called by PaymentService) ─────────────────────
   async confirmOrderPayment(
     orderId: number,
-    phonepeTransactionId?: string,
+    razorpayPaymentId?: string,
   ): Promise<void> {
     await this.dataSource.transaction(async (manager) => {
       const orderRepo = manager.getRepository(Order);
@@ -497,15 +568,15 @@ export class OrderService {
         return;
       }
 
-      if (phonepeTransactionId) {
-        order.phonepeTransactionId = phonepeTransactionId;
+      if (razorpayPaymentId) {
+        order.razorpayPaymentId = razorpayPaymentId;
       }
 
       // Re-verify stock inside transaction to prevent oversell race condition
       const inStock = await getAvailableStock(manager, Number(order.productId));
       if (inStock < order.quantity) {
         this.logger.error(
-          `Oversell detected: Order #${orderId} (Product #${order.productId}) paid via PhonePe, but only ${inStock} items in stock (ordered: ${order.quantity}).`,
+          `Oversell detected: Order #${orderId} (Product #${order.productId}) paid via Razorpay, but only ${inStock} items in stock (ordered: ${order.quantity}).`,
         );
         order.paymentStatus = PaymentStatus.PAID;
         order.orderStatus = OrderStatus.CANCELLED;
@@ -515,7 +586,7 @@ export class OrderService {
         await this.notificationService.notifyAllAdmins(
           NotificationKey.ADMIN_ORDER_CANCELLED,
           `Oversell alert: Order #${order.id} cancelled`,
-          `Order #${order.id} was paid via PhonePe (${phonepeTransactionId || 'TXN'}) but product is out of stock. Automatic refund credited to wallet.`,
+          `Order #${order.id} was paid via Razorpay (${razorpayPaymentId || 'TXN'}) but product is out of stock. Automatic refund credited to wallet.`,
           { orderId: Number(order.id), productId: Number(order.productId), quantity: order.quantity },
           manager,
         );
@@ -538,13 +609,13 @@ export class OrderService {
       order.orderStatus = OrderStatus.CONFIRMED;
       await orderRepo.save(order);
 
-      // Record stock movement OUT for paid PhonePe order
+      // Record stock movement OUT for paid Razorpay order
       await manager.getRepository(StockMovement).save(
         manager.getRepository(StockMovement).create({
           productId: Number(order.productId),
           type: StockMovementType.OUT,
           quantity: order.quantity,
-          note: `PhonePe order #${order.id} confirmed`,
+          note: `Razorpay order #${order.id} confirmed`,
           createdBy: order.userId,
         }),
       );
@@ -561,7 +632,7 @@ export class OrderService {
         NotificationKey.PAYMENT_SUCCESS,
         `Payment received — #${order.id} confirmed`,
         `We received ${formattedAmount} for ${productName} × ${order.quantity} (${order.bvTotal} BV). Ships in 24–48 business hours.`,
-        { orderId: Number(order.id), phonepeTransactionId },
+        { orderId: Number(order.id), razorpayPaymentId },
         manager,
       );
     });
@@ -658,7 +729,7 @@ export class OrderService {
       paymentMethod: order.paymentMethod,
       paymentStatus: order.paymentStatus,
       orderStatus: order.orderStatus,
-      phonepeMerchantOrderId: order.phonepeMerchantOrderId,
+      razorpayOrderId: order.razorpayOrderId,
       commissionsDistributed: order.commissionsDistributed,
       commissions: commissions.map((c) => ({
         level: c.level,

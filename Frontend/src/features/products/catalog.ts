@@ -20,6 +20,7 @@ export function toCatalogProduct(p: ApiProduct, unitsSold = 0): Product {
   const art = productArt(p.name)
   return {
     ...art,
+    id: p.id,
     sku: productCode(p.id),
     name: p.name,
     shortName: p.name.replace(/^VEDORA\s+/i, ""),

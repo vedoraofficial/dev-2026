@@ -70,3 +70,24 @@ export async function rejectWithdrawal({
   })
   return data
 }
+
+/** POST /api/wallet/admin/withdrawal/:id/sync — [Admin] Sync payout status from RazorpayX */
+export async function syncWithdrawalPayout(
+  id: number,
+): Promise<{ synced: boolean; actionTaken: string; message: string }> {
+  const { data } = await api.post<{ synced: boolean; actionTaken: string; message: string }>(
+    `/wallet/admin/withdrawal/${id}/sync`,
+  )
+  return data
+}
+
+/** POST /api/wallet/admin/withdrawals/sync — [Admin] Sync all active/approved payouts */
+export async function syncAllWithdrawals(): Promise<{
+  totalChecked: number
+  results: any[]
+}> {
+  const { data } = await api.post<{ totalChecked: number; results: any[] }>(
+    "/wallet/admin/withdrawals/sync",
+  )
+  return data
+}

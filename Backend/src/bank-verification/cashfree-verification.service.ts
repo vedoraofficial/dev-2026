@@ -252,6 +252,20 @@ export class CashfreeVerificationService {
       };
     }
 
+    // Cashfree official test account (always valid in sandbox/testing)
+    if (accountNumber === '000123456789') {
+      return {
+        isValid: true,
+        accountStatus: 'VALID',
+        accountStatusCode: 'ACCOUNT_IS_VALID',
+        registeredName: userName.toUpperCase(),
+        nameMatchScore: 100,
+        nameMatchResult: 'DIRECT',
+        utr: `TEST_UTR_${Date.now().toString().slice(-10)}`,
+        referenceId: `CF_TEST_${Date.now()}`,
+      };
+    }
+
     const threshold = Number(this.configService.get<number>('CASHFREE_NAME_MATCH_THRESHOLD')) || 60;
 
     // Simulate registered name at bank (e.g. UPPERCASE of what user entered as account holder name)

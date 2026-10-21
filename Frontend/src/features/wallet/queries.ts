@@ -8,6 +8,8 @@ import {
   getWalletTransactions,
   rejectWithdrawal,
   requestWithdrawal,
+  syncWithdrawalPayout,
+  syncAllWithdrawals,
 } from "@/features/wallet/api"
 import type {
   TransactionsQuery,
@@ -59,6 +61,18 @@ export const useApproveWithdrawal = () =>
 export const useRejectWithdrawal = () =>
   useApiMutation(rejectWithdrawal, {
     success: "Withdrawal rejected — amount returned to the wallet",
+    invalidate: [walletKeys.all],
+  })
+
+export const useSyncWithdrawalPayout = () =>
+  useApiMutation(syncWithdrawalPayout, {
+    success: (data) => data.message || "Payout status synced with RazorpayX",
+    invalidate: [walletKeys.all],
+  })
+
+export const useSyncAllWithdrawals = () =>
+  useApiMutation(syncAllWithdrawals, {
+    success: (data) => `Synced ${data.totalChecked} withdrawals with RazorpayX`,
     invalidate: [walletKeys.all],
   })
 

@@ -2,8 +2,9 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { PaymentService } from './payment.service';
 import { PaymentStatus, OrderStatus } from '../order/entity/order.entity';
 import { ForbiddenException, BadRequestException, UnauthorizedException } from '@nestjs/common';
+import * as crypto from 'crypto';
 
-describe('PaymentService Security Remediation', () => {
+describe('PaymentService Razorpay Security & Verification', () => {
   let paymentService: PaymentService;
   let mockConfigService: any;
   let mockOrderRepo: any;
@@ -12,15 +13,15 @@ describe('PaymentService Security Remediation', () => {
   let mockTopupRepo: any;
   let mockOrderService: any;
   let mockWalletService: any;
-  let mockPhonePeClient: any;
+
+  const testKeySecret = 'test_secret_12345';
 
   beforeEach(() => {
     mockConfigService = {
       get: vi.fn((key: string) => {
-        if (key === 'PHONEPE_CLIENT_ID') return 'test_client_id';
-        if (key === 'PHONEPE_CLIENT_SECRET') return 'test_client_secret';
-        if (key === 'PHONEPE_CALLBACK_USERNAME') return 'test_cb_user';
-        if (key === 'PHONEPE_CALLBACK_PASSWORD') return 'test_cb_pass';
+        if (key === 'RAZORPAY_KEY_ID') return 'rzp_test_12345';
+        if (key === 'RAZORPAY_KEY_SECRET') return testKeySecret;
+        if (key === 'RAZORPAY_WEBHOOK_SECRET') return 'test_webhook_secret';
         return null;
       }),
     };
@@ -28,9 +29,7 @@ describe('PaymentService Security Remediation', () => {
     mockOrderRepo = {
       findOne: vi.fn(),
       save: vi.fn(),
-      manager: {
-        transaction: vi.fn(async (cb) => cb({ getRepository: vi.fn() })),
-      },
+      create: vi.fn((data) => data),
     };
 
     mockEventRepo = {
@@ -60,13 +59,6 @@ describe('PaymentService Security Remediation', () => {
       debit: vi.fn(),
     };
 
-    mockPhonePeClient = {
-      pay: vi.fn(),
-      getOrderStatus: vi.fn(),
-      validateCallback: vi.fn(),
-      refund: vi.fn(),
-    };
-
     paymentService = new PaymentService(
       mockConfigService,
       mockOrderRepo,
@@ -76,57 +68,50 @@ describe('PaymentService Security Remediation', () => {
       mockOrderService,
       mockWalletService,
     );
-
-    // Attach mock client
-    (paymentService as any).client = mockPhonePeClient;
   });
 
-  describe('Underpayment Fraud Prevention', () => {
-    it('should throw BadRequestException if PhonePe paid amount does not match order amount', async () => {
-      const order = {
-        id: 101,
-        userId: 5,
-        totalAmount: 120000, // Expected: 120000 paise (₹1200)
-        paymentStatus: PaymentStatus.PENDING,
-        orderStatus: OrderStatus.PENDING,
-        phonepeMerchantOrderId: 'VEDORA_101_12345',
-      };
-
-      mockOrderRepo.findOne.mockResolvedValue(order);
-      mockPhonePeClient.getOrderStatus.mockResolvedValue({
-        state: 'COMPLETED',
-        amount: 10000, // Attacker manipulated payment to pay only 10000 paise (₹100)
-        paymentDetails: [{ transactionId: 'TXN_UNDERPAID' }],
-      });
-
+  describe('Signature Verification', () => {
+    it('should throw BadRequestException if Razorpay signature is invalid', async () => {
       await expect(
-        paymentService.checkAndProcessPayment('VEDORA_101_12345', 'STATUS_CHECK'),
+        paymentService.verifyPayment({
+          razorpayOrderId: 'order_12345',
+          razorpayPaymentId: 'pay_12345',
+          razorpaySignature: 'invalid_tampered_signature',
+        }),
       ).rejects.toThrow(BadRequestException);
 
       expect(mockOrderService.confirmOrderPayment).not.toHaveBeenCalled();
     });
 
-    it('should confirm payment if reported amount matches order amount', async () => {
-      const order = {
+    it('should confirm payment if Razorpay signature is valid for an order', async () => {
+      const orderId = 'order_valid_123';
+      const paymentId = 'pay_valid_456';
+      const validSignature = crypto
+        .createHmac('sha256', testKeySecret)
+        .update(`${orderId}|${paymentId}`)
+        .digest('hex');
+
+      const mockOrder = {
         id: 101,
         userId: 5,
         totalAmount: 120000,
         paymentStatus: PaymentStatus.PENDING,
         orderStatus: OrderStatus.PENDING,
-        phonepeMerchantOrderId: 'VEDORA_101_12345',
+        razorpayOrderId: orderId,
       };
 
-      mockOrderRepo.findOne.mockResolvedValue(order);
-      mockPhonePeClient.getOrderStatus.mockResolvedValue({
-        state: 'COMPLETED',
-        amount: 120000,
-        paymentDetails: [{ transactionId: 'TXN_MATCHED' }],
+      mockTopupRepo.findOne.mockResolvedValue(null);
+      mockOrderRepo.findOne.mockResolvedValue(mockOrder);
+      mockAttemptRepo.findOne.mockResolvedValue(null);
+
+      const res = await paymentService.verifyPayment({
+        razorpayOrderId: orderId,
+        razorpayPaymentId: paymentId,
+        razorpaySignature: validSignature,
       });
 
-      const res = await paymentService.checkAndProcessPayment('VEDORA_101_12345', 'STATUS_CHECK');
-
       expect(res.paymentStatus).toBe('PAID');
-      expect(mockOrderService.confirmOrderPayment).toHaveBeenCalledWith(101, 'TXN_MATCHED');
+      expect(mockOrderService.confirmOrderPayment).toHaveBeenCalledWith(101, paymentId);
     });
   });
 
@@ -137,15 +122,16 @@ describe('PaymentService Security Remediation', () => {
         userId: 5, // Order belongs to user #5
         totalAmount: 120000,
         paymentStatus: PaymentStatus.PENDING,
-        phonepeMerchantOrderId: 'VEDORA_101_12345',
+        razorpayOrderId: 'order_101_12345',
       };
 
+      mockTopupRepo.findOne.mockResolvedValue(null);
       mockOrderRepo.findOne.mockResolvedValue(order);
 
       // User #9 attempts to check status of user #5's order
       await expect(
         paymentService.checkAndProcessPayment(
-          'VEDORA_101_12345',
+          'order_101_12345',
           'STATUS_CHECK',
           { sub: 9, role: 'PARTNER' },
         ),
@@ -159,13 +145,14 @@ describe('PaymentService Security Remediation', () => {
         totalAmount: 120000,
         paymentStatus: PaymentStatus.PAID,
         orderStatus: OrderStatus.CONFIRMED,
-        phonepeMerchantOrderId: 'VEDORA_101_12345',
+        razorpayOrderId: 'order_101_12345',
       };
 
+      mockTopupRepo.findOne.mockResolvedValue(null);
       mockOrderRepo.findOne.mockResolvedValue(order);
 
       const res = await paymentService.checkAndProcessPayment(
-        'VEDORA_101_12345',
+        'order_101_12345',
         'STATUS_CHECK',
         { sub: 1, role: 'ADMIN' },
       );
@@ -175,22 +162,18 @@ describe('PaymentService Security Remediation', () => {
   });
 
   describe('Webhook Authentication Validation', () => {
-    it('should reject webhook with missing authorization header when callback credentials are set', async () => {
+    it('should reject webhook with missing signature header when webhook secret is configured', async () => {
       await expect(
-        paymentService.handleWebhook({ merchantOrderId: 'VEDORA_101_123' }, undefined, undefined),
+        paymentService.handleWebhook({ event: 'payment.captured' }, undefined, undefined),
       ).rejects.toThrow(UnauthorizedException);
     });
 
-    it('should reject webhook when callback signature validation fails', async () => {
-      mockPhonePeClient.validateCallback.mockImplementation(() => {
-        throw new Error('Invalid signature');
-      });
-
+    it('should reject webhook when signature header does not match computed HMAC', async () => {
       await expect(
         paymentService.handleWebhook(
-          { merchantOrderId: 'VEDORA_101_123' },
-          'rawbody',
-          'invalid_auth_header',
+          { event: 'payment.captured' },
+          JSON.stringify({ event: 'payment.captured' }),
+          'invalid_webhook_signature',
         ),
       ).rejects.toThrow(UnauthorizedException);
     });

@@ -110,12 +110,15 @@ function AddBankForm({ first, onDone }: { first: boolean; onDone: () => void }) 
           </label>
         )}
       />
+      <p className="text-[0.6875rem] text-muted-foreground">
+        * RazorpayX penny drop verification (₹1 transfer) will be performed to verify this account before saving.
+      </p>
       <div className="flex justify-end gap-2">
         <Button type="button" variant="quiet" onClick={onDone}>
           Cancel
         </Button>
         <Button type="submit" disabled={addBank.isPending}>
-          {addBank.isPending ? "Adding…" : "Add account"}
+          {addBank.isPending ? "Verifying with Penny Drop…" : "Verify & Save Account"}
         </Button>
       </div>
     </form>

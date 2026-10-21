@@ -178,6 +178,6 @@ export const NATURAL_VARIATION_NOTE =
 
 export const WARRANTY_AND_ORDERING = [
   "7-day warranty against manufacturing defects from the date of delivery. Report damaged packages within 48 hours with photos and an unboxing video.",
-  "Prepaid orders only — UPI, cards and net banking via Razorpay or PhonePe. GST invoice with every order.",
+  "Prepaid orders only — UPI, cards and net banking via Razorpay. GST invoice with every order.",
   "Dispatch within 24–48 business hours. Delivery up to 7 days in Maharashtra, up to 14 days elsewhere.",
 ] as const

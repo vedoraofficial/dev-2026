@@ -31,82 +31,84 @@ export class PaymentController {
     private readonly reconciliationService: PaymentReconciliationService,
   ) {}
 
-  // ─── Initiate Payment for an Order ─────────────────────────────────
+  // ─── 1. Initiate Razorpay Payment for an Order ─────────────────────
 
   @Post('initiate/:orderId')
   @UseGuards(AuthGuard('jwt'), RateLimitGuard)
   @RateLimit({ windowMs: 60000, max: 10, message: 'Too many payment initiation requests. Please wait a moment.' })
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Initiate PhonePe payment for a pending order' })
+  @ApiOperation({ summary: 'Initiate Razorpay checkout for a pending order' })
   async initiatePayment(@Param('orderId', ParseIntPipe) orderId: number, @Request() req: any) {
     // Verify the order belongs to this user
     const order = await this.orderService.getOrderById(orderId, req.user.sub);
     const result = await this.paymentService.initiatePayment(orderId);
 
     return {
-      message: 'Payment initiated. Redirect the user to the provided URL.',
-      redirectUrl: result.redirectUrl,
-      merchantOrderId: result.merchantOrderId,
+      message: 'Payment initiated. Open Razorpay checkout modal.',
+      ...result,
       orderId: Number(order.id),
+      merchantOrderId: result.orderId,
+      redirectUrl: `/payment/status?merchantOrderId=${encodeURIComponent(result.orderId)}`,
     };
   }
 
-  // ─── Initiate Wallet Top-up (Add-Money) ─────────────────────────────
+  // ─── 2. Initiate Wallet Top-up (Add-Money) ─────────────────────────
 
   @Post('topup')
   @UseGuards(AuthGuard('jwt'), RateLimitGuard)
   @RateLimit({ windowMs: 60000, max: 10, message: 'Too many top-up initiation requests. Please wait a moment.' })
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Initiate wallet add-money (top-up) via PhonePe' })
+  @ApiOperation({ summary: 'Initiate wallet add-money (top-up) via Razorpay' })
   async initiateTopup(@Request() req: any, @Body() dto: TopupWalletDto) {
     const result = await this.paymentService.initiateTopup(req.user.sub, dto.amount);
     return {
-      message: 'Top-up initiated. Redirect the user to the provided URL.',
-      redirectUrl: result.redirectUrl,
-      merchantOrderId: result.merchantOrderId,
-      amount: result.amount,
+      message: 'Top-up initiated. Open Razorpay checkout modal.',
+      ...result,
+      merchantOrderId: result.orderId,
+      redirectUrl: `/payment/status?merchantOrderId=${encodeURIComponent(result.orderId)}`,
     };
   }
 
-  // ─── PhonePe Callback (Redirect from PhonePe) ─────────────────────
+  // ─── 3. Verify Razorpay Payment Signature ──────────────────────────
 
-  @Get('callback')
-  @UseGuards(RateLimitGuard)
-  @RateLimit({ windowMs: 60000, max: 30, message: 'Too many callback requests. Please wait a moment.' })
-  @ApiOperation({ summary: 'Handle PhonePe redirect callback (after user completes payment)' })
-  @ApiQuery({ name: 'merchantOrderId', required: true })
-  async handleCallback(@Query('merchantOrderId') merchantOrderId: string) {
-    this.logger.log(`PhonePe callback received for merchantOrderId: ${merchantOrderId}`);
-    return this.paymentService.handleCallback(merchantOrderId);
+  @Post('verify')
+  @UseGuards(AuthGuard('jwt'), RateLimitGuard)
+  @RateLimit({ windowMs: 60000, max: 20, message: 'Too many payment verification requests.' })
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Verify Razorpay payment signature for order or wallet top-up' })
+  async verifyPayment(
+    @Body() dto: { razorpayOrderId: string; razorpayPaymentId: string; razorpaySignature: string },
+  ) {
+    return this.paymentService.verifyPayment(dto);
   }
 
-  // ─── PhonePe Webhook (Server-to-Server) ────────────────────────────
+  // ─── 4. Razorpay Webhook (Server-to-Server) ────────────────────────
 
   @Get('webhook')
-  @ApiOperation({ summary: 'Health check / validation for PhonePe webhook' })
+  @ApiOperation({ summary: 'Health check / validation for Razorpay webhook' })
   async verifyWebhookEndpoint() {
-    return { status: 'SUCCESS', message: 'PhonePe webhook endpoint is active' };
+    return { status: 'SUCCESS', message: 'Razorpay webhook endpoint is active' };
   }
 
   @Post('webhook')
-  @ApiOperation({ summary: 'Handle PhonePe server-to-server webhook' })
+  @ApiOperation({ summary: 'Handle Razorpay server-to-server webhook' })
   async handleWebhook(@Body() payload: any, @Request() req: any) {
-    this.logger.log('PhonePe webhook received');
-    const authHeader = req.headers?.['authorization'] || req.headers?.['x-verify'];
-    return this.paymentService.handleWebhook(payload, req.rawBody, authHeader);
+    this.logger.log('Razorpay webhook received');
+    const signature = req.headers?.['x-razorpay-signature'];
+    return this.paymentService.handleWebhook(payload, req.rawBody, signature);
   }
 
-  // ─── Manual Status Check ───────────────────────────────────────────
+  // ─── 5. Manual Status Check ────────────────────────────────────────
 
   @Get('status/:merchantOrderId')
   @UseGuards(AuthGuard('jwt'))
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Manually check payment status for an order' })
+  @ApiOperation({ summary: 'Manually check payment status for an order or top-up' })
   async checkStatus(@Param('merchantOrderId') merchantOrderId: string, @Request() req: any) {
     return this.paymentService.checkAndProcessPayment(merchantOrderId, 'STATUS_CHECK', req.user);
   }
 
-  // ─── Payment Reconciliation (Admin Only) ──────────────────────────
+  // ─── 6. Payment Reconciliation (Admin Only) ───────────────────────
 
   @Post('reconcile')
   @Roles('ADMIN')

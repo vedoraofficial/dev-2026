@@ -19,13 +19,13 @@ import { apiErrorMessage } from "@/lib/api"
 import { formatINR } from "@/lib/format"
 import { paiseToRupees } from "@/lib/money"
 
-/** Where PhonePe returns the buyer. Polls the backend until the payment is PAID/COMPLETED or FAILED. */
+/** Where payment status is checked. Polls the backend until the payment is PAID/COMPLETED or FAILED. */
 export function PaymentStatusPage() {
   const [searchParams] = useSearchParams()
   const merchantOrderIdFromUrl =
     searchParams.get("merchantOrderId") || searchParams.get("orderId") || null
 
-  // PhonePe's redirect carries no ID in some flows — read saved pending payment from sessionStorage
+  // Read saved pending payment from sessionStorage
   const [pending] = useState(readPendingPayment)
   const activeMerchantOrderId = merchantOrderIdFromUrl || pending?.merchantOrderId || null
 
@@ -99,7 +99,7 @@ export function PaymentStatusPage() {
                 <span className="font-mono font-medium text-foreground">{formatINR(topupRupees)}</span> has been credited to your available wallet balance.
               </>
             ) : (
-              "Your wallet balance has been updated successfully via PhonePe."
+              "Your wallet balance has been updated successfully via Razorpay."
             )}
           </p>
           <div className="flex flex-wrap justify-center gap-2">
@@ -173,7 +173,7 @@ export function PaymentStatusPage() {
           <div className="flex flex-wrap justify-center gap-2">
             {resolvedOrderId ? (
               <Button disabled={payOrder.isPending} onClick={() => payOrder.mutate(resolvedOrderId)}>
-                {payOrder.isPending ? "Opening PhonePe…" : "Retry payment"}
+                {payOrder.isPending ? "Opening Razorpay…" : "Retry payment"}
               </Button>
             ) : null}
             {ordersLink}
@@ -190,13 +190,13 @@ export function PaymentStatusPage() {
         <h2 className="font-display text-2xl">Confirming your payment…</h2>
         <p className="text-sm text-muted-foreground">
           {isTopup ? (
-            "Waiting for PhonePe confirmation for your wallet top-up. This page updates automatically."
+            "Waiting for Razorpay confirmation for your wallet top-up. This page updates automatically."
           ) : resolvedOrderId ? (
             <>
-              Waiting for PhonePe for <MonoId tone="gold">{orderNo(resolvedOrderId)}</MonoId>. This page updates automatically.
+              Waiting for Razorpay for <MonoId tone="gold">{orderNo(resolvedOrderId)}</MonoId>. This page updates automatically.
             </>
           ) : (
-            "Waiting for PhonePe transaction confirmation. This page updates automatically."
+            "Waiting for Razorpay transaction confirmation. This page updates automatically."
           )}
         </p>
         <div className="flex flex-wrap justify-center gap-2">
@@ -208,7 +208,7 @@ export function PaymentStatusPage() {
 
   return (
     <>
-      <PageHeader title="Payment" subtitle="PhonePe checkout status" />
+      <PageHeader title="Payment" subtitle="Razorpay checkout status" />
       <PageBody>
         <Panel
           className="mx-auto flex max-w-lg flex-col items-center gap-4 py-10 text-center"

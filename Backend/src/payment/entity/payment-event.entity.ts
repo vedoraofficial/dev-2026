@@ -10,14 +10,14 @@ export class PaymentEvent {
   @PrimaryGeneratedColumn('increment', { type: 'bigint' })
   id: number;
 
-  @Column({ name: 'phonepe_merchant_order_id', type: 'varchar', length: 100 })
-  phonepeMerchantOrderId: string;
+  @Column({ name: 'razorpay_order_id', type: 'varchar', length: 100, nullable: true })
+  razorpayOrderId: string | null;
 
   /** CALLBACK, WEBHOOK, or STATUS_CHECK */
   @Column({ name: 'event_type', type: 'varchar', length: 50 })
   eventType: string;
 
-  /** Raw PhonePe response payload for debugging & dispute resolution */
+  /** Raw Razorpay response payload for debugging & dispute resolution */
   @Column({ type: 'jsonb' })
   payload: any;
 

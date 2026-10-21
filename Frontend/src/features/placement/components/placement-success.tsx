@@ -160,7 +160,7 @@ export function PlacementSuccess({ partner, values, product, onPlaceAnother }: P
           </div>
           <p className="mt-4 text-[0.6875rem] leading-relaxed text-muted-foreground">
             The backend has no joining-order API yet, so this order was not created. The new partner
-            can sign in and order from Products, which goes through PhonePe.
+            can sign in and order from Products, which goes through Razorpay.
           </p>
         </Panel>
       </div>

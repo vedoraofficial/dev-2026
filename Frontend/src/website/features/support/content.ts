@@ -31,7 +31,7 @@ export const FAQS = [
   },
   {
     q: "Do you offer Cash on Delivery?",
-    a: "No. VEDORA accepts prepaid orders only — UPI, cards and net banking via Razorpay or PhonePe. A GST invoice is issued with every order.",
+    a: "No. VEDORA accepts prepaid orders only — UPI, cards and net banking via Razorpay. A GST invoice is issued with every order.",
   },
   {
     q: "How long does delivery take?",

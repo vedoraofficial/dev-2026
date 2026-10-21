@@ -4,6 +4,8 @@ import {
   NotFoundException,
   BadRequestException,
   ForbiddenException,
+  Inject,
+  forwardRef,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, EntityManager, Repository } from 'typeorm';
@@ -12,12 +14,19 @@ import { User, UserRole, UserStatus } from '../user/entity/user.entity';
 import { UserProfile } from '../user/entity/user-profile.entity';
 import { GenealogyNode, PlacementStatus } from './entity/genealogy-node.entity';
 import { CommissionUpline } from './entity/commission-upline.entity';
+import { Product, ProductStatus } from '../product/entity/product.entity';
+import { Order, PaymentMethod, PaymentStatus, OrderStatus } from '../order/entity/order.entity';
+import { StockMovement, StockMovementType } from '../stock/entity/stock-movement.entity';
+import { getAvailableStock } from '../stock/stock-levels';
+import { Wallet } from '../wallet/entity/wallet.entity';
+import { WalletTransaction, TransactionCategory } from '../wallet/entity/wallet-transaction.entity';
 import { JoinPartnerDto } from './dto/join-partner.dto';
 import { RegisterPartnerBySponsorDto } from './dto/register-partner-by-sponsor.dto';
 import { generateNextVedId } from '../common/utils/ved-id.generator';
 import { WalletService } from '../wallet/wallet.service';
 import { NotificationService } from '../notification/notification.service';
 import { NotificationKey } from '../notification/notification.constants';
+import { OrderService } from '../order/order.service';
 
 @Injectable()
 export class GenealogyService {
@@ -31,6 +40,8 @@ export class GenealogyService {
     private readonly uplineRepo: Repository<CommissionUpline>,
     private readonly walletService: WalletService,
     private readonly notificationService: NotificationService,
+    @Inject(forwardRef(() => OrderService))
+    private readonly orderService: OrderService,
   ) {}
 
   async joinPartner(dto: JoinPartnerDto) {
@@ -525,8 +536,66 @@ export class GenealogyService {
         chosenSlot = slot;
       }
 
-      // 5. Calculate tree depth and 5-level uplines
-      // (BV level income follows the tree, so the uplines start from the placement parent.)
+      // 4b. Identify joining product & verify sponsor wallet balance
+      const productRepo = manager.getRepository(Product);
+        let product: Product | null = null;
+        if (dto.productId) {
+          product = await productRepo.findOne({ where: { id: dto.productId } });
+        } else if (dto.productSku) {
+          const numericId = parseInt(dto.productSku.replace(/\D/g, ''), 10);
+          if (!isNaN(numericId)) {
+            product = await productRepo.findOne({ where: { id: numericId } });
+          }
+        }
+        if (!product) {
+          product = await productRepo.findOne({ where: { status: ProductStatus.ACTIVE }, order: { id: 'ASC' } });
+        }
+        if (!product || product.status !== ProductStatus.ACTIVE) {
+          throw new BadRequestException('A valid active joining product must be selected to register a partner.');
+        }
+
+        const productCost = Number(product.salePrice);
+
+        // Verify stock availability
+        const inStock = await getAvailableStock(manager, Number(product.id));
+        if (inStock < 1) {
+          throw new BadRequestException(`Selected product "${product.name}" is currently out of stock.`);
+        }
+
+        // Lock sponsor wallet and verify sufficient balance
+        const walletRepo = manager.getRepository(Wallet);
+        let sponsorWallet = await walletRepo
+          .createQueryBuilder('wallet')
+          .setLock('pessimistic_write')
+          .where('wallet.user_id = :userId', { userId: sponsor.id })
+          .getOne();
+
+        if (!sponsorWallet) {
+          sponsorWallet = await this.walletService.createWallet(sponsor.id, manager);
+        }
+
+        const availableBalance = Number(sponsorWallet.availableBalance);
+        if (availableBalance < productCost) {
+          const reqRs = (productCost / 100).toFixed(2);
+          const availRs = (availableBalance / 100).toFixed(2);
+          throw new BadRequestException(
+            `Insufficient wallet balance to register partner. Required: ₹${reqRs}, Available: ₹${availRs}. Please top up your wallet first.`,
+          );
+        }
+
+        // Atomically debit product cost from sponsor's wallet
+        const debitTxn = await this.walletService.debit(
+          sponsor.id,
+          productCost,
+          TransactionCategory.PRODUCT_PURCHASE,
+          `Partner onboarding purchase: ${product.name} for ${dto.name}`,
+          'ORDER',
+          undefined,
+          manager,
+        );
+
+        // 5. Calculate tree depth and 5-level uplines
+        // (BV level income follows the tree, so the uplines start from the placement parent.)
       let calculatedDepth = 1;
       let uplineLevel1: number | null = parent.id;
       let uplineLevel2: number | null = null;
@@ -623,6 +692,42 @@ export class GenealogyService {
       // 11. Create Wallet for the new partner
       await this.walletService.createWallet(newUser.id, manager);
 
+      // 12. Create joining product Order for the new partner paid via sponsor wallet
+      const orderRepo = manager.getRepository(Order);
+      const newOrder = orderRepo.create({
+        userId: newUser.id,
+        productId: product.id,
+        quantity: 1,
+        unitPrice: productCost,
+        totalAmount: productCost,
+        bvTotal: Number(product.bvAmount),
+        paymentMethod: PaymentMethod.WALLET,
+        paymentStatus: PaymentStatus.PAID,
+        orderStatus: OrderStatus.CONFIRMED,
+      });
+      const savedOrder = await orderRepo.save(newOrder);
+
+      // Link sponsor's debit transaction to this order
+      if (debitTxn) {
+        await manager.getRepository(WalletTransaction).update(debitTxn.id, {
+          referenceId: String(savedOrder.id),
+        });
+      }
+
+      // Record Stock Movement OUT
+      await manager.getRepository(StockMovement).save(
+        manager.getRepository(StockMovement).create({
+          productId: Number(product.id),
+          type: StockMovementType.OUT,
+          quantity: 1,
+          note: `Joining product order #${savedOrder.id} for ${newUser.name} (${newUser.vedId})`,
+          createdBy: sponsor.id,
+        }),
+      );
+
+      // Distribute Commissions (Direct ₹200 to sponsor & Admin, Uplines, and BV earnings)
+      await this.orderService.distributeCommissions(Number(savedOrder.id), manager);
+
       // In-app Notifications:
       // 1. PARTNER_WELCOME (to new partner)
       await this.notificationService.create(
@@ -704,6 +809,9 @@ export class GenealogyService {
           sponsorName: sponsor.name,
           placedUnderVedId: parent.vedId,
           placedUnderName: parent.name,
+          orderId: Number(savedOrder.id),
+          productName: product.name,
+          amountPaidFormatted: `₹${(productCost / 100).toFixed(2)}`,
         },
       };
     });

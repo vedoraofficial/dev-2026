@@ -145,7 +145,7 @@ export function AdminTransactionsPage() {
       partnerId: o.user?.vedId ?? "—",
       partnerName: o.user?.name ?? "",
       touchpoint: "Purchase",
-      gateway: o.paymentMethod === "PHONEPE" ? "PhonePe" : paymentMethodLabel[o.paymentMethod],
+      gateway: o.paymentMethod === "RAZORPAY" ? "Razorpay" : paymentMethodLabel[o.paymentMethod],
       method: `${o.product.name} × ${o.quantity}`,
       status:
         o.paymentStatus === "PAID" || o.paymentStatus === "REFUNDED"
@@ -190,7 +190,7 @@ export function AdminTransactionsPage() {
     <>
       <PageHeader
         title="Transactions"
-        subtitle="Purchases (PhonePe · cash) and withdrawal payouts"
+        subtitle="Purchases (Razorpay · cash) and withdrawal payouts"
         actions={
           <Input
             type="search"

@@ -18,7 +18,7 @@ export class CreateOrderDto {
   @Max(1000, { message: 'Maximum purchase quantity is 1,000 units per order.' })
   quantity?: number = 1;
 
-  @ApiProperty({ description: 'Payment method', enum: PaymentMethod, example: PaymentMethod.PHONEPE })
+  @ApiProperty({ description: 'Payment method', enum: PaymentMethod, example: PaymentMethod.RAZORPAY })
   @IsNotEmpty()
   @IsEnum(PaymentMethod)
   paymentMethod: PaymentMethod;

@@ -13,10 +13,11 @@ import { Product } from '../../product/entity/product.entity';
 import { Shipment } from '../../shiprocket/entity/shipment.entity';
 
 export enum PaymentMethod {
-  PHONEPE = 'PHONEPE',
+  RAZORPAY = 'RAZORPAY',
   WALLET = 'WALLET',
   CASH = 'CASH',
 }
+
 
 export enum PaymentStatus {
   PENDING = 'PENDING',
@@ -75,17 +76,18 @@ export class Order {
   @Column({ name: 'payment_status', type: 'varchar', length: 20, default: PaymentStatus.PENDING })
   paymentStatus: PaymentStatus;
 
-  /** Unique merchant order ID sent to PhonePe */
-  @Column({ name: 'phonepe_merchant_order_id', type: 'varchar', length: 100, nullable: true, unique: true })
-  phonepeMerchantOrderId: string | null;
+  /** Razorpay Order ID (e.g. order_xxxx) */
+  @Column({ name: 'razorpay_order_id', type: 'varchar', length: 100, nullable: true })
+  razorpayOrderId: string | null;
 
-  /** PhonePe's transaction ID returned after payment */
-  @Column({ name: 'phonepe_transaction_id', type: 'varchar', length: 100, nullable: true })
-  phonepeTransactionId: string | null;
+  /** Razorpay Payment ID returned after payment (e.g. pay_xxxx) */
+  @Column({ name: 'razorpay_payment_id', type: 'varchar', length: 100, nullable: true })
+  razorpayPaymentId: string | null;
 
-  /** PhonePe checkout redirect URL (for client redirect) */
-  @Column({ name: 'phonepe_redirect_url', type: 'text', nullable: true })
-  phonepeRedirectUrl: string | null;
+  /** Razorpay signature for cryptographic verification */
+  @Column({ name: 'razorpay_signature', type: 'varchar', length: 255, nullable: true })
+  razorpaySignature: string | null;
+
 
   @Column({ name: 'order_status', type: 'varchar', length: 20, default: OrderStatus.PENDING })
   orderStatus: OrderStatus;

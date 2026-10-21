@@ -187,7 +187,7 @@ export const router = createBrowserRouter([
     ],
   },
   {
-    // Outside /partner because PhonePe's return URL is fixed, but inside the partner shell.
+    // Outside /partner for standalone payment return verification, but inside the partner shell.
     element: <PartnerLayout />,
     ErrorBoundary: RouteError,
     children: [

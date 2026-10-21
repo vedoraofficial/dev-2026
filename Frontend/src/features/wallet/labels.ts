@@ -32,6 +32,7 @@ export const withdrawalPill: Record<WithdrawalStatus, { label: string; variant: 
   PROCESSING: { label: "Processing", variant: "gold" },
   COMPLETED: { label: "Completed", variant: "success" },
   REJECTED: { label: "Rejected", variant: "danger" },
+  REVERSED: { label: "Reversed", variant: "danger" },
 }
 
 /** "HDFC Bank ****4821" */

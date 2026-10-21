@@ -47,6 +47,16 @@ export class RegisterPartnerBySponsorDto {
   @IsOptional()
   parentVedId?: string;
 
+  @ApiProperty({ example: 1, description: 'ID of the initial joining product', required: false })
+  @IsInt()
+  @IsOptional()
+  productId?: number;
+
+  @ApiProperty({ example: 'SKU-01', description: 'SKU of the initial joining product', required: false })
+  @IsString()
+  @IsOptional()
+  productSku?: string;
+
   // Extended profile details
   @ApiProperty({ example: '1996-07-15', description: 'Date of Birth (YYYY-MM-DD)', required: false })
   @IsDateString()

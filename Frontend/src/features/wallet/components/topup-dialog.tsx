@@ -51,7 +51,7 @@ export function TopupDialog({ open, onOpenChange, currentBalance = 0 }: Props) {
             <div>
               <DialogTitle>Add Money to Wallet</DialogTitle>
               <DialogDescription>
-                Top up your wallet balance online via PhonePe (UPI, Cards, Net Banking).
+                Top up your wallet balance online via Razorpay (UPI, Cards, Net Banking).
               </DialogDescription>
             </div>
           </div>
@@ -137,7 +137,7 @@ export function TopupDialog({ open, onOpenChange, currentBalance = 0 }: Props) {
           {/* Trust badge */}
           <div className="flex items-center gap-1.5 text-[0.6875rem] text-muted-foreground">
             <ShieldCheck className="size-3.5 text-success shrink-0" />
-            <span>256-bit encrypted checkout powered by PhonePe. Instant credit.</span>
+            <span>256-bit encrypted checkout powered by Razorpay. Instant credit.</span>
           </div>
         </div>
 
@@ -159,10 +159,10 @@ export function TopupDialog({ open, onOpenChange, currentBalance = 0 }: Props) {
             {topupWallet.isPending ? (
               <>
                 <Loader2 className="mr-2 size-4 animate-spin" />
-                Opening PhonePe…
+                Opening Razorpay…
               </>
             ) : (
-              `Pay ${formatINR(amount)} with PhonePe`
+              `Pay ${formatINR(amount)} with Razorpay`
             )}
           </Button>
         </DialogFooter>

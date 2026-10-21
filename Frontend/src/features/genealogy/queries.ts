@@ -7,6 +7,7 @@ import {
   joinPartner,
   registerDownline,
 } from "@/features/genealogy/api"
+import { walletKeys } from "@/features/wallet/queries"
 import { useApiMutation } from "@/lib/mutation"
 
 export const genealogyKeys = {
@@ -38,7 +39,7 @@ export const useRegisterDownline = () =>
   useApiMutation(registerDownline, {
     success: (r) =>
       `${r.partner.name} placed as ${r.partner.vedId} in slot ${r.partner.slotNumber}`,
-    invalidate: [genealogyKeys.all],
+    invalidate: [genealogyKeys.all, walletKeys.all],
   })
 
 export const useJoinPartner = () =>

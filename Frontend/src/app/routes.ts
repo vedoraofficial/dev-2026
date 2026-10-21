@@ -5,7 +5,7 @@ export const ROUTES = {
   join: "/join",
   /** Old admin sign-in URL — only redirects to `login` now. */
   adminLogin: "/admin-login",
-  /** PhonePe sends the buyer back here after paying (set in the backend's PHONEPE_REDIRECT_URL). */
+  /** Payment status verification page. */
   paymentStatus: "/payment/status",
   admin: {
     root: "/admin",

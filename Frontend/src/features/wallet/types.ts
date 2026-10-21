@@ -58,7 +58,7 @@ export type Paginated<T> = {
   pagination: { page: number; limit: number; total: number; totalPages: number }
 }
 
-export type WithdrawalStatus = "PENDING" | "APPROVED" | "PROCESSING" | "COMPLETED" | "REJECTED"
+export type WithdrawalStatus = "PENDING" | "APPROVED" | "PROCESSING" | "COMPLETED" | "REJECTED" | "REVERSED"
 
 type WithdrawalBank = { id?: number; bankName: string; accountNumber: string; ifscCode: string }
 

@@ -41,8 +41,8 @@ export class OrderRefund {
   @Column({ type: 'text', nullable: true })
   reason: string | null;
 
-  @Column({ name: 'phonepe_refund_id', type: 'varchar', length: 100, nullable: true })
-  phonepeRefundId: string | null;
+  @Column({ name: 'razorpay_refund_id', type: 'varchar', length: 100, nullable: true })
+  razorpayRefundId: string | null;
 
   @Column({ name: 'wallet_transaction_id', type: 'bigint', nullable: true })
   walletTransactionId: number | null;

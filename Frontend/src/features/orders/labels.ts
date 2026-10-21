@@ -34,14 +34,14 @@ export const STAGE_TABS: { value: "all" | OrderStage; label: string }[] = [
 ]
 
 export const paymentMethodLabel: Record<PaymentMethod, string> = {
-  PHONEPE: "PhonePe",
+  RAZORPAY: "Razorpay",
   WALLET: "Wallet",
   CASH: "Cash",
 }
 
 /** Orders that can still be paid online. */
 export const canPay = (o: Pick<ApiOrder, "paymentStatus" | "orderStatus" | "paymentMethod">) =>
-  o.paymentMethod === "PHONEPE" &&
+  o.paymentMethod === "RAZORPAY" &&
   (o.paymentStatus === "PENDING" || o.paymentStatus === "FAILED") &&
   o.orderStatus !== "CANCELLED"
 

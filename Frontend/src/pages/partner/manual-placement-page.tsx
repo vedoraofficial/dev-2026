@@ -12,6 +12,7 @@ import { ProgressBar } from "@/components/common/progress-bar"
 import { QueryState } from "@/components/common/query-state"
 import { Input } from "@/components/ui/input"
 import { useGenealogyOf, useMySlots, useRegisterDownline } from "@/features/genealogy/queries"
+import { useWalletSummary } from "@/features/wallet/queries"
 import { PartnerDetailsFields } from "@/features/placement/components/partner-details-fields"
 import {
   PlacementSuccess,
@@ -86,6 +87,7 @@ export function PartnerManualPlacementPage() {
   // placed under them, or under a team member whose VEDORA ID is typed in "Place under".
   const me = useSession((s) => s.user)
   const slotsQuery = useMySlots()
+  const walletQuery = useWalletSummary()
   // The joining product is picked from what Admin has put live in Products.
   const productsQuery = useProducts()
   const products = (productsQuery.data ?? [])
@@ -165,11 +167,21 @@ export function PartnerManualPlacementPage() {
   }, [placementData, upline])
 
   const product = products.find((p) => p.sku === productSku)
+  const availableBalancePaise = walletQuery.data?.availableBalance ?? 0
+  const productPricePaise = product ? product.price * 100 : 0
+  const hasInsufficientBalance = !!product && availableBalancePaise < productPricePaise
 
   const onValid = (values: PlacementValues) => {
     const chosen = products.find((p) => p.sku === values.productSku)
     if (!chosen) {
       setError("productSku", { message: "Choose a product" })
+      return
+    }
+    const neededPaise = chosen.price * 100
+    if (availableBalancePaise < neededPaise) {
+      toast.error(
+        `Insufficient wallet balance (₹${(availableBalancePaise / 100).toFixed(2)} available, ₹${chosen.price} required). Please top up your wallet.`,
+      )
       return
     }
     if (uplineProblem) {
@@ -185,6 +197,8 @@ export function PartnerManualPlacementPage() {
         ...partnerDetailsPayload(values),
         slotNumber: values.slot,
         parentVedId: underMe ? undefined : upline,
+        productId: chosen.id,
+        productSku: chosen.sku,
       },
       {
         onSuccess: ({ partner }) => {
@@ -422,6 +436,25 @@ export function PartnerManualPlacementPage() {
                       You · <MonoId tone="gold">{me?.vedId}</MonoId>
                     </ConfirmRow>
                   )}
+                  <ConfirmRow label="Your Wallet">
+                    <span
+                      className={cn(
+                        "font-medium",
+                        hasInsufficientBalance ? "text-danger" : "text-success",
+                      )}
+                    >
+                      ₹{(availableBalancePaise / 100).toFixed(2)}
+                    </span>
+                  </ConfirmRow>
+                  {hasInsufficientBalance ? (
+                    <div className="rounded-lg border border-danger/40 bg-danger/10 p-2 text-xs text-danger">
+                      Insufficient wallet balance. You need ₹{product?.price} to register this
+                      partner.{" "}
+                      <Link to={ROUTES.partner.wallet} className="font-semibold underline">
+                        Top up wallet
+                      </Link>
+                    </div>
+                  ) : null}
                 </>
               }
               agreement={
@@ -441,8 +474,8 @@ export function PartnerManualPlacementPage() {
               submitLabel="Register partner"
               pendingLabel="Registering…"
               pending={registerDownline.isPending}
-              disabled={allSlotsFull || !placementData || !!uplineProblem}
-              footnote="Registers the partner in the backend. The joining order and its payment are not in the backend yet — the partner can order from Products after signing in."
+              disabled={allSlotsFull || !placementData || !!uplineProblem || hasInsufficientBalance}
+              footnote="The joining product price will be automatically debited from your wallet. An order will be placed and commissions will be distributed."
             />
           </div>
         </form>

@@ -16,6 +16,7 @@ export enum WithdrawalStatus {
   PROCESSING = 'PROCESSING',
   COMPLETED = 'COMPLETED',
   REJECTED = 'REJECTED',
+  REVERSED = 'REVERSED',
 }
 
 @Entity('withdrawals')

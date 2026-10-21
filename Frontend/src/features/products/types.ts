@@ -28,6 +28,7 @@ export type ProductInput = {
 export type ProductSlug = "protection" | "energy" | "wealth" | "balance"
 
 export type Product = {
+  id?: number
   sku: string
   slug: ProductSlug
   name: string

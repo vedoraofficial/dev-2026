@@ -40,7 +40,7 @@ export class WalletController {
   @UseGuards(AuthGuard('jwt'), RateLimitGuard)
   @RateLimit({ windowMs: 60000, max: 10, message: 'Too many topup requests. Please try again later.' })
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Initiate wallet add-money (top-up) via PhonePe gateway' })
+  @ApiOperation({ summary: 'Initiate wallet add-money (top-up) via Razorpay gateway' })
   async initiateTopup(@Request() req: any, @Body() dto: TopupWalletDto) {
     return this.paymentService.initiateTopup(req.user.sub, dto.amount);
   }
@@ -110,5 +110,23 @@ export class WalletController {
     @Body() dto: AdminWithdrawalActionDto,
   ) {
     return this.walletService.rejectWithdrawal(id, req.user.sub, dto.remarks);
+  }
+
+  @Post('admin/withdrawal/:id/sync')
+  @Roles('ADMIN')
+  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: '[Admin] Sync payout status from RazorpayX for a withdrawal' })
+  async syncWithdrawalPayout(@Param('id', ParseIntPipe) id: number) {
+    return this.walletService.syncWithdrawalPayout(id);
+  }
+
+  @Post('admin/withdrawals/sync')
+  @Roles('ADMIN')
+  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: '[Admin] Sync all active/approved withdrawals with RazorpayX' })
+  async syncAllActiveWithdrawals() {
+    return this.walletService.syncAllActiveWithdrawals();
   }
 }

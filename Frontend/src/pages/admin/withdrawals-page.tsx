@@ -15,6 +15,7 @@ import { TablePagination } from "@/components/common/table-pagination"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
+import { RefreshCw } from "lucide-react"
 import { approveWithdrawal, rejectWithdrawal } from "@/features/wallet/api"
 import { RejectWithdrawalDialog } from "@/features/wallet/components/reject-withdrawal-dialog"
 import { maskedBank, withdrawalPill } from "@/features/wallet/labels"
@@ -22,6 +23,8 @@ import {
   useAllWithdrawals,
   useApproveWithdrawal,
   useRejectWithdrawal,
+  useSyncWithdrawalPayout,
+  useSyncAllWithdrawals,
   walletKeys,
 } from "@/features/wallet/queries"
 import type { AdminWithdrawal } from "@/features/wallet/types"
@@ -30,11 +33,12 @@ import { formatDateTime } from "@/lib/date"
 import { formatINR } from "@/lib/format"
 import { paiseToRupees } from "@/lib/money"
 
-type Tab = "PENDING" | "APPROVED" | "REJECTED"
+type Tab = "PENDING" | "APPROVED" | "REJECTED" | "REVERSED"
 const TABS: { value: Tab; label: string }[] = [
   { value: "PENDING", label: "Pending" },
   { value: "APPROVED", label: "Approved" },
   { value: "REJECTED", label: "Rejected" },
+  { value: "REVERSED", label: "Reversed" },
 ]
 
 const wdNo = (id: number) => `WD-${String(id).padStart(5, "0")}`
@@ -54,6 +58,8 @@ export function AdminWithdrawalsPage() {
   const withdrawals = useAllWithdrawals()
   const approve = useApproveWithdrawal()
   const reject = useRejectWithdrawal()
+  const sync = useSyncWithdrawalPayout()
+  const syncAll = useSyncAllWithdrawals()
   const queryClient = useQueryClient()
   const [tab, setTab] = useState<Tab>("PENDING")
   const [query, setQuery] = useState("")
@@ -181,11 +187,26 @@ export function AdminWithdrawalsPage() {
             />
           </>
         ) : (
-          <div className="md:text-right">
-            <StatusPill variant={withdrawalPill[r.status].variant}>
-              {withdrawalPill[r.status].label}
-            </StatusPill>
-            <p className="mt-1 text-[0.6875rem] text-muted-foreground">
+          <div className="flex flex-col md:items-end gap-1">
+            <div className="flex items-center gap-1.5">
+              <StatusPill variant={withdrawalPill[r.status].variant}>
+                {withdrawalPill[r.status].label}
+              </StatusPill>
+              {(r.status === "APPROVED" || r.status === "PROCESSING") && r.adminRemarks?.includes("pout_") && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-6 px-1.5 text-[0.6875rem] gap-1"
+                  disabled={sync.isPending}
+                  onClick={() => sync.mutate(r.id)}
+                  title="Sync live status from RazorpayX"
+                >
+                  <RefreshCw className={`h-2.5 w-2.5 ${sync.isPending ? "animate-spin" : ""}`} />
+                  Sync
+                </Button>
+              )}
+            </div>
+            <p className="mt-0.5 text-[0.6875rem] text-muted-foreground md:text-right">
               {r.adminRemarks ?? (r.adminUser ? `by ${r.adminUser.vedId}` : "")}
             </p>
           </div>
@@ -199,14 +220,26 @@ export function AdminWithdrawalsPage() {
         title="Withdrawal Requests"
         subtitle={`${pending.length} pending · ${formatINR(sum(pending))} awaiting approval`}
         actions={
-          <Input
-            type="search"
-            placeholder="Search request or ID…"
-            aria-label="Search withdrawals"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            className="w-full md:w-64"
-          />
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={syncAll.isPending}
+              onClick={() => syncAll.mutate()}
+              title="Sync all active payouts from RazorpayX"
+            >
+              <RefreshCw className={`h-3.5 w-3.5 mr-1.5 ${syncAll.isPending ? "animate-spin" : ""}`} />
+              Sync RazorpayX
+            </Button>
+            <Input
+              type="search"
+              placeholder="Search request or ID…"
+              aria-label="Search withdrawals"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              className="w-full md:w-64"
+            />
+          </div>
         }
       />
       <PageBody>
@@ -227,6 +260,11 @@ export function AdminWithdrawalsPage() {
             label="Rejected"
             value={byStatus("REJECTED").length}
             onClick={() => setTab("REJECTED")}
+          />
+          <StatCard
+            label="Reversed"
+            value={byStatus("REVERSED").length}
+            onClick={() => setTab("REVERSED")}
           />
         </StatGrid>
 

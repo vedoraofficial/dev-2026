@@ -1,5 +1,6 @@
 import {
   Injectable,
+  Logger,
   NotFoundException,
   BadRequestException,
   ConflictException,
@@ -13,9 +14,12 @@ import { UserBank, BankVerificationStatus } from '../user/entity/user-bank.entit
 import { WalletTransactionsQueryDto } from './dto/wallet-transactions-query.dto';
 import { NotificationService } from '../notification/notification.service';
 import { NotificationKey } from '../notification/notification.constants';
+import { RazorpayPayoutService } from '../payout/razorpay-payout.service';
 
 @Injectable()
 export class WalletService {
+  private readonly logger = new Logger(WalletService.name);
+
   constructor(
     private readonly dataSource: DataSource,
     @InjectRepository(Wallet)
@@ -27,6 +31,7 @@ export class WalletService {
     @InjectRepository(UserBank)
     private readonly bankRepo: Repository<UserBank>,
     private readonly notificationService: NotificationService,
+    private readonly razorpayPayoutService: RazorpayPayoutService,
   ) {}
 
   // ─── Helper: Convert paise to formatted rupee string ────────────────
@@ -444,7 +449,7 @@ export class WalletService {
 
       const withdrawal = await withdrawalRepo.findOne({
         where: { id: withdrawalId },
-        relations: { bank: true },
+        relations: { bank: true, user: true },
         lock: { mode: 'pessimistic_write' },
       });
 
@@ -453,9 +458,29 @@ export class WalletService {
         throw new ConflictException(`Withdrawal is already ${withdrawal.status}.`);
       }
 
-      // Update status
+      if (!withdrawal.bank) {
+        throw new BadRequestException('Withdrawal has no bank details associated.');
+      }
+
+      // Execute Payout Transfer via RazorpayX
+      const payoutResult = await this.razorpayPayoutService.executePayout({
+        withdrawalId: Number(withdrawal.id),
+        amountPaise: Number(withdrawal.amount),
+        accountNumber: withdrawal.bank.accountNumber,
+        ifscCode: withdrawal.bank.ifscCode,
+        accountHolderName: withdrawal.bank.accountHolderName,
+        phone: withdrawal.user?.mobile,
+        email: withdrawal.user?.email,
+      });
+
+      if (!payoutResult.success) {
+        throw new BadRequestException(`Payout failed: ${payoutResult.remarks}`);
+      }
+
+      // Update status & record payout remarks
       withdrawal.status = WithdrawalStatus.APPROVED;
       withdrawal.adminUserId = adminUserId;
+      withdrawal.adminRemarks = payoutResult.remarks;
       withdrawal.processedAt = new Date();
       await withdrawalRepo.save(withdrawal);
 
@@ -467,21 +492,25 @@ export class WalletService {
         ? `${withdrawal.bank.bankName} (****${withdrawal.bank.accountNumber.slice(-4)})`
         : 'bank account';
       const formattedAmount = this.formatPaise(withdrawal.amount);
+      const utrNote = payoutResult.utr ? ` UTR: ${payoutResult.utr}.` : '';
       await this.notificationService.create(
         withdrawal.userId,
         NotificationKey.WITHDRAWAL_APPROVED,
-        `Withdrawal #${withdrawal.id} approved`,
-        `${formattedAmount} is approved and will be credited to ${bankMasked}.`,
-        { withdrawalId: Number(withdrawal.id), amountPaise: Number(withdrawal.amount) },
+        `Withdrawal #${withdrawal.id} approved & paid`,
+        `${formattedAmount} has been transferred to ${bankMasked}.${utrNote}`,
+        { withdrawalId: Number(withdrawal.id), amountPaise: Number(withdrawal.amount), utr: payoutResult.utr },
         manager,
       );
 
       return {
-        message: 'Withdrawal approved successfully.',
+        message: 'Withdrawal approved and payout transfer initiated successfully.',
         withdrawal: {
           id: Number(withdrawal.id),
           amountFormatted: this.formatPaise(withdrawal.amount),
           status: withdrawal.status,
+          utr: payoutResult.utr,
+          referenceId: payoutResult.referenceId,
+          remarks: payoutResult.remarks,
         },
       };
     });
@@ -615,5 +644,251 @@ export class WalletService {
       processedAt: w.processedAt,
       createdAt: w.createdAt,
     }));
+  }
+
+  // ─── RazorpayX Payout Reversal & Status Synchronization ─────────────
+
+  /**
+   * Called when RazorpayX marks a payout as reversed or failed.
+   * Credits the amount back to partner's available balance,
+   * decrements totalWithdrawn, records a WITHDRAWAL_REVERSAL transaction,
+   * and updates withdrawal status to REVERSED.
+   */
+  async handlePayoutReversed(withdrawalId: number, reason?: string, rawPayoutData?: any) {
+    return this.dataSource.transaction(async (manager) => {
+      const withdrawalRepo = manager.getRepository(Withdrawal);
+      const withdrawal = await withdrawalRepo.findOne({
+        where: { id: withdrawalId },
+        relations: { user: true, bank: true },
+        lock: { mode: 'pessimistic_write' },
+      });
+
+      if (!withdrawal) {
+        this.logger.warn(`Withdrawal #${withdrawalId} not found for reversal`);
+        return null;
+      }
+
+      // Idempotency: If already REVERSED, do not credit twice
+      if (withdrawal.status === WithdrawalStatus.REVERSED) {
+        this.logger.log(`Withdrawal #${withdrawalId} is already REVERSED. Skipping.`);
+        return withdrawal;
+      }
+
+      const amount = Number(withdrawal.amount);
+
+      // Fetch partner wallet with write lock
+      const walletRepo = manager.getRepository(Wallet);
+      const wallet = await walletRepo
+        .createQueryBuilder('wallet')
+        .setLock('pessimistic_write')
+        .where('wallet.user_id = :userId', { userId: withdrawal.userId })
+        .getOne();
+
+      if (!wallet) {
+        this.logger.error(`Wallet for user ${withdrawal.userId} not found during withdrawal reversal`);
+        return null;
+      }
+
+      // Credit amount back to available balance and decrement totalWithdrawn
+      const currentAvailable = Number(wallet.availableBalance);
+      const currentWithdrawn = Number(wallet.totalWithdrawn);
+      const newAvailable = currentAvailable + amount;
+      const newWithdrawn = Math.max(0, currentWithdrawn - amount);
+
+      await walletRepo.update(wallet.id, {
+        availableBalance: newAvailable,
+        totalWithdrawn: newWithdrawn,
+      });
+
+      // Update withdrawal record
+      const failureReason = reason || rawPayoutData?.failure_reason || 'Reversed by bank/Razorpay';
+      withdrawal.status = WithdrawalStatus.REVERSED;
+      withdrawal.adminRemarks = `RazorpayX Payout Reversed. Reason: ${failureReason}`;
+      withdrawal.processedAt = new Date();
+      await withdrawalRepo.save(withdrawal);
+
+      // Record WITHDRAWAL_REVERSAL transaction
+      const txnRepo = manager.getRepository(WalletTransaction);
+      const txn = txnRepo.create({
+        walletId: wallet.id,
+        type: TransactionType.CREDIT,
+        category: TransactionCategory.WITHDRAWAL_REVERSAL,
+        amount,
+        balanceAfter: newAvailable,
+        referenceType: 'WITHDRAWAL',
+        referenceId: String(withdrawal.id),
+        description: `Withdrawal #${withdrawal.id} payout reversed (${failureReason}). ${this.formatPaise(amount)} credited back to wallet.`,
+      });
+      await txnRepo.save(txn);
+
+      // In-app Notification to partner
+      await this.notificationService.create(
+        withdrawal.userId,
+        NotificationKey.WITHDRAWAL_REJECTED,
+        `Withdrawal #${withdrawal.id} reversed`,
+        `Your payout of ${this.formatPaise(amount)} was reversed (${failureReason}). The amount has been credited back to your wallet.`,
+        { withdrawalId: Number(withdrawal.id), amountPaise: amount, reason: failureReason },
+        manager,
+      );
+
+      this.logger.log(
+        `[Withdrawal Reversal] Withdrawal #${withdrawal.id} reversed. ₹${amount / 100} credited back to user #${withdrawal.userId}. Available: ₹${newAvailable / 100}`,
+      );
+
+      return withdrawal;
+    });
+  }
+
+  /**
+   * Called when RazorpayX marks a payout as processed / settled by bank.
+   */
+  async handlePayoutProcessed(withdrawalId: number | null, payoutId: string, rawPayoutData?: any) {
+    let withdrawal: Withdrawal | null = null;
+    if (withdrawalId) {
+      withdrawal = await this.withdrawalRepo.findOne({ where: { id: withdrawalId } });
+    }
+    if (!withdrawal && payoutId) {
+      withdrawal = await this.withdrawalRepo
+        .createQueryBuilder('w')
+        .where('w.adminRemarks LIKE :pat', { pat: `%${payoutId}%` })
+        .getOne();
+    }
+
+    if (!withdrawal) {
+      this.logger.warn(`Withdrawal not found for payout ${payoutId}`);
+      return null;
+    }
+
+    if (withdrawal.status !== WithdrawalStatus.COMPLETED) {
+      withdrawal.status = WithdrawalStatus.COMPLETED;
+      const utr = rawPayoutData?.utr || payoutId;
+      withdrawal.adminRemarks = `RazorpayX Payout Completed. UTR: ${utr}`;
+      await this.withdrawalRepo.save(withdrawal);
+      this.logger.log(`Withdrawal #${withdrawal.id} marked COMPLETED (UTR: ${utr})`);
+    }
+
+    return withdrawal;
+  }
+
+  /**
+   * Helper to handle payout reversal lookup by payoutId or withdrawalId.
+   */
+  async handlePayoutReversalByPayoutIdOrId(
+    withdrawalId: number | null,
+    payoutId: string,
+    reason?: string,
+    rawPayoutData?: any,
+  ) {
+    let withdrawal: Withdrawal | null = null;
+    if (withdrawalId) {
+      withdrawal = await this.withdrawalRepo.findOne({ where: { id: withdrawalId } });
+    }
+    if (!withdrawal && payoutId) {
+      withdrawal = await this.withdrawalRepo
+        .createQueryBuilder('w')
+        .where('w.adminRemarks LIKE :pat', { pat: `%${payoutId}%` })
+        .getOne();
+    }
+
+    if (!withdrawal) {
+      this.logger.warn(`Could not find withdrawal matching payout ${payoutId} / #${withdrawalId} for reversal`);
+      return null;
+    }
+
+    return this.handlePayoutReversed(Number(withdrawal.id), reason, rawPayoutData);
+  }
+
+  /**
+   * Admin: Synchronize status of a specific withdrawal payout with RazorpayX
+   */
+  async syncWithdrawalPayout(withdrawalId: number) {
+    const withdrawal = await this.withdrawalRepo.findOne({
+      where: { id: withdrawalId },
+      relations: { bank: true, user: true },
+    });
+
+    if (!withdrawal) {
+      throw new NotFoundException(`Withdrawal #${withdrawalId} not found.`);
+    }
+
+    // Extract payoutId from adminRemarks (e.g. pout_TqWONYb8P01onW)
+    const match = withdrawal.adminRemarks?.match(/pout_[a-zA-Z0-9]+/);
+    const payoutId = match ? match[0] : null;
+
+    if (!payoutId) {
+      throw new BadRequestException(
+        `Withdrawal #${withdrawalId} does not have a RazorpayX Payout ID in its records.`,
+      );
+    }
+
+    const payoutData = await this.razorpayPayoutService.getPayoutStatus(payoutId);
+
+    if (!payoutData?.id) {
+      throw new BadRequestException(
+        `Razorpay error: ${payoutData?.error?.description || 'Failed to fetch status'}`,
+      );
+    }
+
+    const status = payoutData.status; // 'processed' | 'reversed' | 'failed' | 'rejected' | 'processing' | 'queued'
+
+    if (status === 'reversed' || status === 'failed' || status === 'rejected') {
+      const reason = payoutData.failure_reason || payoutData.status_details?.description || 'Reversed by bank';
+      const reversed = await this.handlePayoutReversed(withdrawalId, reason, payoutData);
+      return {
+        synced: true,
+        payoutId,
+        razorpayStatus: status,
+        actionTaken: 'REVERSED',
+        message: `Payout was ${status} on Razorpay. ${this.formatPaise(withdrawal.amount)} has been credited back to the user's wallet.`,
+        withdrawal: reversed,
+      };
+    } else if (status === 'processed') {
+      withdrawal.status = WithdrawalStatus.COMPLETED;
+      withdrawal.adminRemarks = `RazorpayX Payout Completed. UTR: ${payoutData.utr || payoutId}`;
+      await this.withdrawalRepo.save(withdrawal);
+      return {
+        synced: true,
+        payoutId,
+        razorpayStatus: status,
+        actionTaken: 'COMPLETED',
+        message: `Payout was processed successfully on Razorpay. Withdrawal marked COMPLETED.`,
+        withdrawal,
+      };
+    }
+
+    return {
+      synced: true,
+      payoutId,
+      razorpayStatus: status,
+      actionTaken: 'NO_CHANGE',
+      message: `Razorpay payout status is currently "${status}".`,
+      withdrawal,
+    };
+  }
+
+  /**
+   * Admin: Synchronize all APPROVED / PROCESSING withdrawals with RazorpayX
+   */
+  async syncAllActiveWithdrawals() {
+    const activeWithdrawals = await this.withdrawalRepo
+      .createQueryBuilder('w')
+      .where('w.status IN (:...statuses)', { statuses: [WithdrawalStatus.APPROVED, WithdrawalStatus.PROCESSING] })
+      .andWhere("w.adminRemarks LIKE '%pout_%'")
+      .getMany();
+
+    const results = [];
+    for (const w of activeWithdrawals) {
+      try {
+        const res = await this.syncWithdrawalPayout(Number(w.id));
+        results.push({ id: Number(w.id), ...res });
+      } catch (err: any) {
+        results.push({ id: Number(w.id), error: err.message });
+      }
+    }
+
+    return {
+      totalChecked: activeWithdrawals.length,
+      results,
+    };
   }
 }

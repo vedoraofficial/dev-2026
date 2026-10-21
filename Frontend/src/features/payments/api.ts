@@ -2,19 +2,44 @@ import { api } from "@/lib/api"
 
 export type InitiatePaymentResponse = {
   message: string
-  redirectUrl: string
-  merchantOrderId: string
-  orderId: number
-}
-
-export type InitiateTopupResponse = {
-  message: string
-  redirectUrl: string
-  merchantOrderId: string
+  keyId: string
   amount: number
+  currency: string
+  orderId: string
+  merchantOrderId: string
+  redirectUrl: string
+  name?: string
+  description?: string
+  prefill?: {
+    name?: string
+    email?: string
+    contact?: string
+  }
+  notes?: Record<string, any>
+  theme?: {
+    color?: string
+  }
+  receipt?: string
 }
 
-/** GET /api/payment/status/:merchantOrderId */
+export type InitiateTopupResponse = InitiatePaymentResponse
+
+export type VerifyPaymentPayload = {
+  razorpayOrderId: string
+  razorpayPaymentId: string
+  razorpaySignature: string
+}
+
+export type VerifyPaymentResponse = {
+  message: string
+  orderId?: number
+  topupId?: number
+  paymentStatus?: "PAID" | "FAILED" | "PENDING"
+  status?: "COMPLETED" | "FAILED" | "PENDING"
+  orderStatus?: string
+  amount?: number
+}
+
 export type PaymentStatusResponse = {
   message: string
   orderId?: number
@@ -22,7 +47,6 @@ export type PaymentStatusResponse = {
   paymentStatus?: "PAID" | "FAILED" | "PENDING"
   status?: "COMPLETED" | "FAILED" | "PENDING"
   orderStatus?: string
-  phonepeState?: string
   amount?: number
 }
 
@@ -41,13 +65,13 @@ export function isPaymentPending(res?: PaymentStatusResponse | null): boolean {
   return res.paymentStatus === "PENDING" || res.status === "PENDING"
 }
 
-/** POST /api/payment/initiate/:orderId — returns PhonePe's checkout page URL for an order. */
+/** POST /api/payment/initiate/:orderId — creates Razorpay order for an order. */
 export async function initiatePayment(orderId: number): Promise<InitiatePaymentResponse> {
   const { data } = await api.post<InitiatePaymentResponse>(`/payment/initiate/${orderId}`)
   return data
 }
 
-/** POST /api/payment/topup — returns PhonePe's checkout page URL for wallet top-up. */
+/** POST /api/payment/topup — creates Razorpay order for wallet top-up. */
 export async function initiateTopup(amountInPaise: number): Promise<InitiateTopupResponse> {
   const { data } = await api.post<InitiateTopupResponse>("/payment/topup", {
     amount: amountInPaise,
@@ -55,18 +79,19 @@ export async function initiateTopup(amountInPaise: number): Promise<InitiateTopu
   return data
 }
 
-/** GET /api/payment/status/:merchantOrderId — asks PhonePe and confirms / fails the payment. */
+/** POST /api/payment/verify — verifies Razorpay payment signature */
+export async function verifyPayment(payload: VerifyPaymentPayload): Promise<VerifyPaymentResponse> {
+  const { data } = await api.post<VerifyPaymentResponse>("/payment/verify", payload)
+  return data
+}
+
+/** GET /api/payment/status/:merchantOrderId — checks payment status */
 export async function getPaymentStatus(merchantOrderId: string): Promise<PaymentStatusResponse> {
   const { data } = await api.get<PaymentStatusResponse>(
     `/payment/status/${encodeURIComponent(merchantOrderId)}`,
   )
   return data
 }
-
-/*
- * GET /api/payment/callback and POST /api/payment/webhook are called by PhonePe itself
- * (server-to-server / redirect), never by this app.
- */
 
 const PENDING_PAYMENT_KEY = "vedora.pendingPayment"
 
@@ -77,41 +102,14 @@ export type PendingPayment = {
   amount?: number
 }
 
-/**
- * Start PhonePe checkout for an order: remember which payment we are waiting for,
- * then send the browser to PhonePe.
- */
-export async function startPhonePeCheckout(orderId: number): Promise<void> {
-  const { redirectUrl, merchantOrderId } = await initiatePayment(orderId)
+export function savePendingPayment(pending: PendingPayment) {
   try {
-    sessionStorage.setItem(
-      PENDING_PAYMENT_KEY,
-      JSON.stringify({ merchantOrderId, type: "ORDER", orderId } satisfies PendingPayment),
-    )
+    sessionStorage.setItem(PENDING_PAYMENT_KEY, JSON.stringify(pending))
   } catch {
-    // Storage blocked — the status page will ask the user to check My Orders.
+    // ignore
   }
-  window.location.assign(redirectUrl)
 }
 
-/**
- * Start PhonePe checkout for wallet top-up: remember topup details,
- * then send the browser to PhonePe.
- */
-export async function startPhonePeTopup(amountInPaise: number): Promise<void> {
-  const { redirectUrl, merchantOrderId, amount } = await initiateTopup(amountInPaise)
-  try {
-    sessionStorage.setItem(
-      PENDING_PAYMENT_KEY,
-      JSON.stringify({ merchantOrderId, type: "TOPUP", amount } satisfies PendingPayment),
-    )
-  } catch {
-    // Storage blocked
-  }
-  window.location.assign(redirectUrl)
-}
-
-/** The payment started by `startPhonePeCheckout` or `startPhonePeTopup`, read on the /payment/status page. */
 export function readPendingPayment(): PendingPayment | null {
   try {
     const raw = sessionStorage.getItem(PENDING_PAYMENT_KEY)
@@ -134,4 +132,142 @@ export function clearPendingPayment() {
   } catch {
     // nothing to clear
   }
+}
+
+declare global {
+  interface Window {
+    Razorpay?: any
+  }
+}
+
+export interface RazorpayModalOptions {
+  initiateData: InitiatePaymentResponse
+  onSuccess: (verifyResponse: VerifyPaymentResponse) => void
+  onError?: (error: any) => void
+  onDismiss?: () => void
+}
+
+/**
+ * Open Razorpay Standard Checkout Modal
+ */
+export function openRazorpayCheckout({
+  initiateData,
+  onSuccess,
+  onError,
+  onDismiss,
+}: RazorpayModalOptions): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (typeof window === "undefined" || !window.Razorpay) {
+      const err = new Error("Razorpay SDK is not loaded. Please refresh the page.")
+      onError?.(err)
+      reject(err)
+      return
+    }
+
+    const options = {
+      key: initiateData.keyId,
+      amount: initiateData.amount,
+      currency: initiateData.currency || "INR",
+      name: initiateData.name || "VEDORA",
+      description: initiateData.description || "Order Payment",
+      order_id: initiateData.orderId,
+      prefill: initiateData.prefill || {},
+      notes: initiateData.notes || {},
+      theme: initiateData.theme || { color: "#D4AF37" },
+      modal: {
+        ondismiss: () => {
+          onDismiss?.()
+          resolve()
+        },
+      },
+      handler: async (response: {
+        razorpay_payment_id: string
+        razorpay_order_id: string
+        razorpay_signature: string
+      }) => {
+        try {
+          const verifyResult = await verifyPayment({
+            razorpayOrderId: response.razorpay_order_id,
+            razorpayPaymentId: response.razorpay_payment_id,
+            razorpaySignature: response.razorpay_signature,
+          })
+          onSuccess(verifyResult)
+          resolve()
+        } catch (verifyErr) {
+          onError?.(verifyErr)
+          reject(verifyErr)
+        }
+      },
+    }
+
+    const rzp = new window.Razorpay(options)
+    rzp.on("payment.failed", (response: any) => {
+      onError?.(response.error || response)
+    })
+    rzp.open()
+  })
+}
+
+/**
+ * Start Razorpay checkout for an order
+ */
+export async function startRazorpayOrderCheckout(
+  orderId: number,
+  callbacks?: {
+    onSuccess?: (verifyRes: VerifyPaymentResponse) => void
+    onError?: (error: any) => void
+    onDismiss?: () => void
+  },
+): Promise<void> {
+  const initiateData = await initiatePayment(orderId)
+  savePendingPayment({
+    merchantOrderId: initiateData.orderId,
+    type: "ORDER",
+    orderId,
+  })
+
+  return openRazorpayCheckout({
+    initiateData,
+    onSuccess: (res) => {
+      callbacks?.onSuccess?.(res)
+    },
+    onError: (err) => {
+      callbacks?.onError?.(err)
+    },
+    onDismiss: () => {
+      callbacks?.onDismiss?.()
+    },
+  })
+}
+
+/**
+ * Start Razorpay checkout for wallet top-up
+ */
+export async function startRazorpayTopup(
+  amountInPaise: number,
+  callbacks?: {
+    onSuccess?: (verifyRes: VerifyPaymentResponse) => void
+    onError?: (error: any) => void
+    onDismiss?: () => void
+  },
+): Promise<void> {
+  const initiateData = await initiateTopup(amountInPaise)
+  savePendingPayment({
+    merchantOrderId: initiateData.orderId,
+    type: "TOPUP",
+    amount: amountInPaise,
+  })
+
+  return openRazorpayCheckout({
+    initiateData,
+    onSuccess: (res) => {
+      callbacks?.onSuccess?.(res)
+    },
+    onError: (err) => {
+      callbacks?.onError?.(err)
+    },
+    onDismiss: () => {
+      callbacks?.onDismiss?.()
+    },
+  })
 }

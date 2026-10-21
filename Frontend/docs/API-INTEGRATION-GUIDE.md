@@ -16,8 +16,8 @@ Welcome to the **VEDORA Platform API Integration Guide**. This document is desig
    - [5.4 Product Module (`/api/product`)](#54-product-module-apiproduct)
    - [5.5 Order & Checkout Module (`/api/order`)](#55-order--checkout-module-apiorder)
    - [5.6 Wallet & Withdrawal Module (`/api/wallet`)](#56-wallet--withdrawal-module-apiwallet)
-   - [5.7 PhonePe Payment Module (`/api/payment`)](#57-phonepe-payment-module-apipayment)
-6. [Complete PhonePe Checkout Flow (Step-by-Step)](#6-complete-phonepe-checkout-flow-step-by-step)
+   - [5.7 Razorpay Payment Module (`/api/payment`)](#57-razorpay-payment-module-apipayment)
+6. [Complete Razorpay Checkout Flow (Step-by-Step)](#6-complete-razorpay-checkout-flow-step-by-step)
 7. [Error Handling & HTTP Status Codes](#7-error-handling--http-status-codes)
 8. [Development Credentials for Testing](#8-development-credentials-for-testing)
 
@@ -133,7 +133,8 @@ export enum ProductStatus {
 }
 
 export enum PaymentMethod {
-  PHONEPE = 'PHONEPE',
+  RAZORPAY = 'RAZORPAY',
+  WALLET = 'WALLET',
   CASH = 'CASH',
 }
 
@@ -699,7 +700,7 @@ Returns all 20 direct partner slots for the logged-in user.
   {
     "productId": 1,
     "quantity": 2,
-    "paymentMethod": "PHONEPE"
+    "paymentMethod": "RAZORPAY"
   }
   ```
 - **Response (201 Created):**
@@ -714,7 +715,7 @@ Returns all 20 direct partner slots for the logged-in user.
       "totalAmount": 240000,
       "totalAmountFormatted": "₹2400.00",
       "bvTotal": 1000,
-      "paymentMethod": "PHONEPE",
+      "paymentMethod": "RAZORPAY",
       "paymentStatus": "PENDING",
       "orderStatus": "PENDING",
       "createdAt": "2026-10-01T08:30:00.000Z"
@@ -847,22 +848,36 @@ Creates an offline order and automatically triggers instant 5-level commission d
 
 ---
 
-### 5.7 PhonePe Payment Module (`/api/payment`)
+### 5.7 Razorpay Payment Module (`/api/payment`)
 
-#### 1. Initiate PhonePe Payment
+#### 1. Initiate Razorpay Payment
 - **Endpoint:** `POST /api/payment/initiate/:orderId`
 - **Access:** Authenticated
 - **Response (201 Created):**
   ```json
   {
-    "message": "Payment initiated. Redirect the user to the provided URL.",
-    "redirectUrl": "https://mercury-t2.phonepe.com/transact/pg?token=...",
-    "merchantOrderId": "VEDORA_18_1759312345",
-    "orderId": 18
+    "message": "Payment initiated. Open Razorpay checkout modal.",
+    "keyId": "rzp_live_TqUKp4gAeSustL",
+    "amount": 240000,
+    "currency": "INR",
+    "orderId": "order_OG72Kxyz",
+    "merchantOrderId": "order_OG72Kxyz"
   }
   ```
 
-#### 2. Manual Payment Status Check (Polling)
+#### 2. Verify Razorpay Payment Signature
+- **Endpoint:** `POST /api/payment/verify`
+- **Access:** Authenticated
+- **Body:**
+  ```json
+  {
+    "razorpayOrderId": "order_OG72Kxyz",
+    "razorpayPaymentId": "pay_OG74Abcd",
+    "razorpaySignature": "4b68e92f..."
+  }
+  ```
+
+#### 3. Manual Payment Status Check (Polling)
 - **Endpoint:** `GET /api/payment/status/:merchantOrderId`
 - **Access:** Authenticated
 - **Response (200 OK):**
@@ -874,10 +889,6 @@ Creates an offline order and automatically triggers instant 5-level commission d
     "orderStatus": "CONFIRMED"
   }
   ```
-
-#### 3. PhonePe Redirect Callback
-- **Endpoint:** `GET /api/payment/callback?merchantOrderId=...`
-- **Access:** Public (Invoked when PhonePe redirects back to frontend).
 
 ---
 
@@ -974,79 +985,21 @@ Fast lightweight endpoint designed for interval polling (e.g. every 30-60s) to u
 
 ---
 
-## 6. Complete PhonePe Checkout Flow (Step-by-Step)
+## 6. Complete Razorpay Checkout Flow (Step-by-Step)
 
 ```text
-[1. User Clicks Buy] -> [2. FE calls POST /api/order] -> [3. FE calls POST /api/payment/initiate/:orderId]
+[1. User clicks Checkout] -> [2. FE calls POST /api/order] -> [3. FE calls POST /api/payment/initiate/:orderId]
                                                                         |
                                                                         v
-[5. User completes UPI/Card on PhonePe] <- [4. FE redirects: window.location.href = redirectUrl]
+[5. User completes UPI/Card in modal] <- [4. FE opens new window.Razorpay(options).open()]
               |
-              +---> [PhonePe sends Webhook to Backend -> Backend confirms order & distributes commission]
-              |
-              v
-[6. PhonePe redirects browser to /payment/status?merchantOrderId=...]
+              +---> [6. FE handler receives { razorpay_order_id, razorpay_payment_id, razorpay_signature }]
               |
               v
-[7. FE calls GET /api/payment/status/:merchantOrderId -> Shows Success Screen!]
-```
-
-### Frontend Implementation Snippet:
-
-```typescript
-// features/checkout/api.ts
-import { api } from '@/lib/api';
-
-export async function checkoutAndPay(productId: number, quantity: number = 1) {
-  // 1. Create order
-  const { data: orderData } = await api.post('/order', {
-    productId,
-    quantity,
-    paymentMethod: 'PHONEPE',
-  });
-
-  const orderId = orderData.order.id;
-
-  // 2. Initiate PhonePe payment
-  const { data: paymentData } = await api.post(`/payment/initiate/${orderId}`);
-
-  // 3. Redirect to PhonePe hosted checkout
-  if (paymentData.redirectUrl) {
-    window.location.href = paymentData.redirectUrl;
-  }
-}
-```
-
-```typescript
-// pages/PaymentStatusPage.tsx
-import React, { useEffect, useState } from 'react';
-import { useSearchParams, useNavigate } from 'react-router-dom';
-import { api } from '@/lib/api';
-
-export function PaymentStatusPage() {
-  const [searchParams] = useSearchParams();
-  const navigate = useNavigate();
-  const merchantOrderId = searchParams.get('merchantOrderId');
-  const [status, setStatus] = useState<'LOADING' | 'PAID' | 'FAILED'>('LOADING');
-
-  useEffect(() => {
-    if (!merchantOrderId) return;
-
-    api.get(`/payment/status/${merchantOrderId}`)
-      .then((res) => {
-        if (res.data.paymentStatus === 'PAID') {
-          setStatus('PAID');
-        } else {
-          setStatus('FAILED');
-        }
-      })
-      .catch(() => setStatus('FAILED'));
-  }, [merchantOrderId]);
-
-  if (status === 'LOADING') return <div>Verifying your payment, please wait...</div>;
-  if (status === 'PAID') return <div>🎉 Payment Successful! Your order has been confirmed.</div>;
-  return <div>❌ Payment could not be confirmed. Please check your order history.</div>;
-}
+[7. FE calls POST /api/payment/verify -> Backend verifies HMAC SHA256 & confirms order]
+              |
+              v
+[8. Success UI displayed instantly!]
 ```
 
 ---
@@ -1071,7 +1024,7 @@ When an error occurs, the backend returns standard NestJS error payloads:
 - **`403 Forbidden`**: Insufficient permissions (e.g. Partner accessing an Admin endpoint). Display "Access Denied".
 - **`404 Not Found`**: Resource does not exist (e.g. wrong ID, sponsor referral code not found).
 - **`409 Conflict`**: Duplicate field (e.g. email or mobile already registered).
-- **`500 Internal Server Error`**: Unexpected server issue or PhonePe gateway unconfigured.
+- **`500 Internal Server Error`**: Unexpected server issue or Razorpay gateway unconfigured.
 
 ### Helper for Displaying Error Messages in UI:
 ```typescript

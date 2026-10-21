@@ -562,14 +562,14 @@ describe('VEDORA - Full System End-to-End API Test Suite', () => {
   // 6. ORDER MODULE & COMMISSION DISTRIBUTION (/api/order)
   // ═══════════════════════════════════════════════════════════════════════════
   describe('6. Order Module & Multi-Level Commissions (/api/order)', () => {
-    it('POST /api/order - Partner creates an online (PhonePe) order', async () => {
+    it('POST /api/order - Partner creates an online (Razorpay) order', async () => {
       const res = await request(app.getHttpServer())
         .post('/api/order')
         .set('Authorization', `Bearer ${partnerToken}`)
         .send({
           productId: createdProductId,
           quantity: 1,
-          paymentMethod: PaymentMethod.PHONEPE,
+          paymentMethod: PaymentMethod.RAZORPAY,
         });
 
       expect(res.status).toBe(201);
@@ -749,34 +749,33 @@ describe('VEDORA - Full System End-to-End API Test Suite', () => {
   // ═══════════════════════════════════════════════════════════════════════════
   // 8. PAYMENT GATEWAY MODULE (/api/payment)
   // ═══════════════════════════════════════════════════════════════════════════
-  describe('8. PhonePe Payment Gateway Module (/api/payment)', () => {
-    it('POST /api/payment/initiate/:orderId - Initiates payment or handles unconfigured credentials gracefully', async () => {
+  describe('8. Razorpay Payment Gateway Module (/api/payment)', () => {
+    it('POST /api/payment/initiate/:orderId - Initiates Razorpay payment', async () => {
       const res = await request(app.getHttpServer())
         .post(`/api/payment/initiate/${pendingOrderId}`)
         .set('Authorization', `Bearer ${partnerToken}`);
 
-      // If credentials configured: 201; if not: 500 with unconfigured gateway response
-      expect([201, 500]).toContain(res.status);
+      expect([200, 201]).toContain(res.status);
+      expect(res.body).toHaveProperty('orderId');
     });
 
     it('POST /api/payment/webhook - Server-to-server webhook endpoint accepts notifications', async () => {
       const res = await request(app.getHttpServer())
         .post('/api/payment/webhook')
         .send({
-          merchantOrderId: 'VEDORA_MOCK_PAYMENT_TEST',
-          code: 'PAYMENT_SUCCESS',
+          event: 'payment.captured',
+          payload: { payment: { entity: { id: 'pay_test_123' } } },
         });
 
       // Webhook logs and responds gracefully
       expect([200, 201]).toContain(res.status);
-      expect(res.body).toHaveProperty('message');
     });
 
-    it('GET /api/payment/callback - Handles redirect callback with status check', async () => {
+    it('GET /api/payment/status/:merchantOrderId - Handles status check gracefully', async () => {
       const res = await request(app.getHttpServer())
-        .get('/api/payment/callback?merchantOrderId=NON_EXISTENT_ORDER');
+        .get('/api/payment/status/NON_EXISTENT_ORDER')
+        .set('Authorization', `Bearer ${partnerToken}`);
 
-      // Either handles error or returns 404/500 without crashing
       expect([404, 500]).toContain(res.status);
     });
   });
@@ -1104,7 +1103,7 @@ describe('VEDORA - Full System End-to-End API Test Suite', () => {
       expect(Number(summaryAfter.totalEarned)).toBe(initialEarned);
     });
 
-    it('Oversell Race Prevention - Confirming PhonePe order when out of stock refunds to wallet and skips commission distribution', async () => {
+    it('Oversell Race Prevention - Confirming Razorpay order when out of stock refunds to wallet and skips commission distribution', async () => {
       const orderService = app.get(OrderService);
       const walletService = app.get(WalletService);
 
@@ -1133,14 +1132,14 @@ describe('VEDORA - Full System End-to-End API Test Suite', () => {
           note: 'Stock for test',
         });
 
-      // 2. Partner initiates PhonePe order for 1 unit
+      // 2. Partner initiates Razorpay order for 1 unit
       const orderRes = await request(app.getHttpServer())
         .post('/api/order')
         .set('Authorization', `Bearer ${partnerToken}`)
         .send({
           productId: zeroStockProdId,
           quantity: 1,
-          paymentMethod: PaymentMethod.PHONEPE,
+          paymentMethod: PaymentMethod.RAZORPAY,
         });
       expect(orderRes.status).toBe(201);
       const testOrderId = orderRes.body.order.id;

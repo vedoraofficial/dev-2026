@@ -126,7 +126,7 @@ export function PartnerOrdersPage() {
     <>
       <PageHeader
         title="My Orders"
-        subtitle="Prepaid orders only · paid online with PhonePe"
+        subtitle="Prepaid orders only · paid online with Razorpay"
         actions={
           <Button asChild>
             <Link to={ROUTES.partner.products}>Place new order</Link>
@@ -207,18 +207,18 @@ export function PartnerOrdersPage() {
         onClose={() => setOpenId(null)}
         actions={(o) => (
           <>
-            {o.phonepeMerchantOrderId && o.paymentStatus === "PENDING" ? (
+            {o.razorpayOrderId && o.paymentStatus === "PENDING" ? (
               <Button
                 variant="outline"
                 disabled={checkPayment.isPending}
-                onClick={() => checkPayment.mutate(o.phonepeMerchantOrderId ?? "")}
+                onClick={() => checkPayment.mutate(o.razorpayOrderId ?? "")}
               >
                 {checkPayment.isPending ? "Checking…" : "Check payment status"}
               </Button>
             ) : null}
             {canPay(o) ? (
               <Button disabled={payOrder.isPending} onClick={() => pay(o.id)}>
-                {payOrder.isPending ? "Opening PhonePe…" : "Pay now"}
+                {payOrder.isPending ? "Opening Razorpay…" : "Pay now"}
               </Button>
             ) : null}
           </>

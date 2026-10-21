@@ -60,13 +60,13 @@ export const useSaveAccountDetails = () => {
 export const useChangePassword = () =>
   useApiMutation(changePassword, { success: "Password updated" })
 
-/** Toast text after the backend's Penny Drop check. */
+/** Toast text after RazorpayX Penny Drop check. */
 const verificationResult = (b: Bank) =>
   b.verificationStatus === "VERIFIED"
-    ? `${b.bankName} ****${b.accountNumber.slice(-4)} verified — you can withdraw to it`
+    ? `${b.bankName} ****${b.accountNumber.slice(-4)} verified via RazorpayX penny drop — you can withdraw to it`
     : b.verificationStatus === "REJECTED"
       ? `Bank couldn't be verified: ${b.verificationFailedReason ?? "check the details"}`
-      : "Bank account added — it will be verified before payouts"
+      : "Bank account verified successfully"
 
 /** Adding a bank also runs the Penny Drop check, so the toast says how it went. */
 export const useAddBank = () =>

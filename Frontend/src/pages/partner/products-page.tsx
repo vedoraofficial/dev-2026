@@ -27,7 +27,7 @@ type Cart = Record<number, number>
 
 /**
  * Same catalogue as Admin › Products (without the stat cards) — "sold" is this partner's own paid
- * orders — plus the order panel. Checkout supports both PhonePe online gateway and Wallet Balance.
+ * orders — plus the order panel. Checkout supports both Razorpay online gateway and Wallet Balance.
  */
 export function PartnerProductsPage() {
   const queryClient = useQueryClient()
@@ -38,7 +38,7 @@ export function PartnerProductsPage() {
   const payOrder = usePayOrder()
   const [cart, setCart] = useState<Cart>({})
   const [busy, setBusy] = useState(false)
-  const [paymentMethod, setPaymentMethod] = useState<"PHONEPE" | "WALLET">("PHONEPE")
+  const [paymentMethod, setPaymentMethod] = useState<"RAZORPAY" | "WALLET">("RAZORPAY")
 
   const sold = unitsByProduct(myOrders.data ?? [])
   const live = (productsQuery.data ?? []).filter((p) => p.status === "ACTIVE")
@@ -212,7 +212,7 @@ export function PartnerProductsPage() {
                   <div className="space-y-2">
                     <label
                       className={`flex cursor-pointer items-start justify-between rounded-lg border p-2.5 text-xs transition-colors ${
-                        paymentMethod === "PHONEPE"
+                        paymentMethod === "RAZORPAY"
                           ? "border-gold bg-gold/10"
                           : "border-border hover:bg-muted"
                       }`}
@@ -221,13 +221,13 @@ export function PartnerProductsPage() {
                         <input
                           type="radio"
                           name="paymentMethod"
-                          value="PHONEPE"
-                          checked={paymentMethod === "PHONEPE"}
-                          onChange={() => setPaymentMethod("PHONEPE")}
+                          value="RAZORPAY"
+                          checked={paymentMethod === "RAZORPAY"}
+                          onChange={() => setPaymentMethod("RAZORPAY")}
                           className="accent-gold"
                         />
                         <div>
-                          <p className="font-medium text-foreground">PhonePe Online</p>
+                          <p className="font-medium text-foreground">Razorpay Online</p>
                           <p className="text-[0.6875rem] text-muted-foreground">
                             UPI, Credit/Debit Cards, Net Banking
                           </p>
@@ -287,16 +287,16 @@ export function PartnerProductsPage() {
                 onClick={() => void checkout()}
               >
                 {working
-                  ? paymentMethod === "PHONEPE"
-                    ? "Opening PhonePe…"
+                  ? paymentMethod === "RAZORPAY"
+                    ? "Opening Razorpay…"
                     : "Processing order…"
-                  : paymentMethod === "PHONEPE"
-                    ? `Checkout with PhonePe (${formatINR(total)})`
+                  : paymentMethod === "RAZORPAY"
+                    ? `Checkout with Razorpay (${formatINR(total)})`
                     : `Pay ${formatINR(total)} from Wallet`}
               </Button>
               <p className="mt-3 text-center text-[0.625rem] text-muted-foreground">
-                {paymentMethod === "PHONEPE"
-                  ? "Prepaid only · UPI, cards, net banking on PhonePe. No COD."
+                {paymentMethod === "RAZORPAY"
+                  ? "Prepaid only · UPI, cards, net banking on Razorpay. No COD."
                   : "Debited instantly from your available wallet balance."}
                 {lines.length > 1 ? (
                   <>

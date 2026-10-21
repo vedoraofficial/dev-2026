@@ -72,6 +72,8 @@ export type RegisterDownlineInput = ProfileFields & {
   email: string
   mobile: string
   password: string
+  productId?: number
+  productSku?: string
   /** 1–20; leave out for the lowest free slot */
   slotNumber?: number
   /** Place under this team member instead of yourself; you stay the sponsor (direct ₹200) */

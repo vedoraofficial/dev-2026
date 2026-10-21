@@ -19,7 +19,7 @@ const planConstants = [
 ]
 
 type Settings = {
-  phonepeEnabled: boolean
+  razorpayEnabled: boolean
   maintenanceMode: boolean
   minPayout: string
   fee: string
@@ -28,7 +28,7 @@ type Settings = {
 }
 
 const initialSettings: Settings = {
-  phonepeEnabled: true,
+  razorpayEnabled: true,
   maintenanceMode: false,
   minPayout: "₹ 100",
   fee: "₹ 0 (Free)",
@@ -161,10 +161,10 @@ export function AdminSettingsPage() {
             <Panel>
               <PanelHeader title="Payment gateway" />
               <ToggleRow
-                title="PhonePe"
+                title="Razorpay"
                 detail="Collection & payout"
-                checked={draft.phonepeEnabled}
-                onCheckedChange={setToggle("phonepeEnabled")}
+                checked={draft.razorpayEnabled}
+                onCheckedChange={setToggle("razorpayEnabled")}
               />
             </Panel>
 

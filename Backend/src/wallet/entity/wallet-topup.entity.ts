@@ -37,14 +37,14 @@ export class WalletTopup {
   @Column({ type: 'varchar', length: 20, default: WalletTopupStatus.PENDING })
   status: WalletTopupStatus;
 
-  @Column({ name: 'phonepe_merchant_order_id', type: 'varchar', length: 100, unique: true })
-  phonepeMerchantOrderId: string;
+  @Column({ name: 'razorpay_order_id', type: 'varchar', length: 100, nullable: true })
+  razorpayOrderId: string | null;
 
-  @Column({ name: 'phonepe_transaction_id', type: 'varchar', length: 100, nullable: true })
-  phonepeTransactionId: string | null;
+  @Column({ name: 'razorpay_payment_id', type: 'varchar', length: 100, nullable: true })
+  razorpayPaymentId: string | null;
 
-  @Column({ name: 'phonepe_redirect_url', type: 'text', nullable: true })
-  phonepeRedirectUrl: string | null;
+  @Column({ name: 'razorpay_signature', type: 'varchar', length: 255, nullable: true })
+  razorpaySignature: string | null;
 
   @Column({ name: 'wallet_transaction_id', type: 'bigint', nullable: true })
   walletTransactionId: number | null;

@@ -41,7 +41,7 @@ export const policies: Policy[] = [
     detail: "Prepaid only — UPI, cards, net banking",
     body: [
       "All product orders and ID registrations on VEDORA are prepaid. Cash on delivery is not offered.",
-      "Accepted payment methods are UPI, debit/credit cards and net banking, processed through Razorpay and PhonePe — the two gateways empanelled for VEDORA's direct-selling settlements.",
+      "Accepted payment methods are UPI, debit/credit cards and net banking, processed through Razorpay — the gateway empanelled for VEDORA's direct-selling settlements.",
       "Wallet withdrawals are settled by Admin to the partner's registered bank account only; VEDORA does not settle payouts to a third party's account.",
       "A failed or reversed payment does not activate an ID or confirm an order until a successful transaction is recorded against it.",
     ],
@@ -91,7 +91,7 @@ export const policies: Policy[] = [
     body: [
       "VEDORA collects the name, mobile number, address, PAN and bank details needed to register an ID, process orders and settle payouts.",
       "This data is used only for order fulfilment, commission processing, tax compliance and support — it is never sold to third parties.",
-      "Payment details are handled by Razorpay and PhonePe directly; VEDORA does not store card numbers or UPI credentials on its own servers.",
+      "Payment details are handled by Razorpay directly; VEDORA does not store card numbers or UPI credentials on its own servers.",
       "A partner may request a copy of, or the deletion of, their personal data by writing to the Grievance Officer, subject to statutory record-keeping requirements.",
     ],
   },

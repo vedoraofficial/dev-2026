@@ -32,11 +32,11 @@ export class PaymentReconciliationService {
     let processedTopups = 0;
     const errors: string[] = [];
 
-    // 1. Reconcile pending PhonePe orders via direct order merchant ID
+    // 1. Reconcile pending online orders via Razorpay Order ID
     const pendingOrders = await this.orderRepo.find({
       where: {
         paymentStatus: PaymentStatus.PENDING,
-        paymentMethod: PaymentMethod.PHONEPE,
+        paymentMethod: PaymentMethod.RAZORPAY,
         createdAt: LessThan(cutoff),
       },
       take: 50,
@@ -45,11 +45,12 @@ export class PaymentReconciliationService {
     const checkedMerchantOrderIds = new Set<string>();
 
     for (const order of pendingOrders) {
-      if (!order.phonepeMerchantOrderId) continue;
-      checkedMerchantOrderIds.add(order.phonepeMerchantOrderId);
+      const orderRef = order.razorpayOrderId;
+      if (!orderRef) continue;
+      checkedMerchantOrderIds.add(orderRef);
       try {
         await this.paymentService.checkAndProcessPayment(
-          order.phonepeMerchantOrderId,
+          orderRef,
           'RECONCILIATION',
         );
         processedOrders++;
@@ -93,10 +94,11 @@ export class PaymentReconciliationService {
     });
 
     for (const topup of pendingTopups) {
-      if (!topup.phonepeMerchantOrderId) continue;
+      const topupRef = topup.razorpayOrderId;
+      if (!topupRef) continue;
       try {
         await this.paymentService.checkAndProcessPayment(
-          topup.phonepeMerchantOrderId,
+          topupRef,
           'RECONCILIATION',
         );
         processedTopups++;

@@ -1,5 +1,5 @@
 /** Amounts in paise; `totalAmountFormatted` is the backend's ₹ text. */
-export type PaymentMethod = "PHONEPE" | "WALLET" | "CASH"
+export type PaymentMethod = "RAZORPAY" | "WALLET" | "CASH"
 export type PaymentStatus = "PENDING" | "PAID" | "FAILED" | "REFUNDED"
 export type OrderStatus = "PENDING" | "CONFIRMED" | "CANCELLED" | "DELIVERED"
 
@@ -17,6 +17,7 @@ export type ApiOrder = {
   commissionsDistributed?: boolean
   user?: { id: number; vedId: string; name: string }
   createdAt: string
+  razorpayOrderId?: string | null
 }
 
 /** GET /api/order/:id */
@@ -24,7 +25,7 @@ export type OrderDetail = Omit<ApiOrder, "product"> & {
   user: { id: number; vedId: string; name: string }
   product: { id: number; name: string; description: string | null }
   unitPrice: number
-  phonepeMerchantOrderId: string | null
+  razorpayOrderId: string | null
   commissionsDistributed: boolean
   commissions: {
     level: number
@@ -35,7 +36,7 @@ export type OrderDetail = Omit<ApiOrder, "product"> & {
   }[]
 }
 
-/** POST /api/order — partners pay online (PHONEPE); CASH is admin-only. */
+/** POST /api/order — partners pay online (RAZORPAY); CASH is admin-only. */
 export type CreateOrderInput = {
   productId: number
   quantity: number

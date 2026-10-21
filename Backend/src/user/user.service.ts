@@ -11,7 +11,7 @@ import { UpdateProfileDetailsDto } from './dto/profile-details.dto';
 import { UserBank, BankVerificationStatus } from './entity/user-bank.entity';
 import { UserProfile } from './entity/user-profile.entity';
 import { generateNextVedId } from '../common/utils/ved-id.generator';
-import { CashfreeVerificationService } from '../bank-verification/cashfree-verification.service';
+import { RazorpayBankVerificationService } from '../bank-verification/razorpay-bank-verification.service';
 import { NotificationService } from '../notification/notification.service';
 import { NotificationKey } from '../notification/notification.constants';
 import { WalletService } from '../wallet/wallet.service';
@@ -29,7 +29,7 @@ export class UserService {
     private readonly userBankRepo: Repository<UserBank>,
     @InjectRepository(UserProfile)
     private readonly userProfileRepo: Repository<UserProfile>,
-    private readonly cashfreeVerification: CashfreeVerificationService,
+    private readonly bankVerificationService: RazorpayBankVerificationService,
     private readonly notificationService: NotificationService,
     private readonly walletService: WalletService,
   ) {}
@@ -232,14 +232,14 @@ export class UserService {
     const ifscUpper = (dto.ifscCode || '').trim().toUpperCase();
     const accountNum = (dto.accountNumber || '').trim();
 
-    if (!this.cashfreeVerification.validateIfsc(ifscUpper)) {
+    if (!this.bankVerificationService.validateIfsc(ifscUpper)) {
       throw new BadRequestException(
-        `Invalid IFSC code format: "${ifscUpper}". Must be 11 characters (e.g. HDFC0001234).`,
+        `Invalid IFSC code format: "${ifscUpper}". Must be 11 characters (e.g. SBIN0000284).`,
       );
     }
-    if (!this.cashfreeVerification.validateAccountNumber(accountNum)) {
+    if (!this.bankVerificationService.validateAccountNumber(accountNum)) {
       throw new BadRequestException(
-        'Invalid bank account number. Must contain 9 to 18 digits.',
+        'Invalid bank account number. Must contain 5 to 35 alphanumeric characters.',
       );
     }
 
@@ -256,8 +256,8 @@ export class UserService {
       await this.userBankRepo.update({ user: { id: userId } }, { isPrimary: false });
     }
 
-    // Trigger Cashfree Penny Drop Verification (Sync ₹1 transfer & name match)
-    const verification = await this.cashfreeVerification.verifyBankAccount({
+    // Trigger RazorpayX Penny Drop Verification
+    const verification = await this.bankVerificationService.verifyBankAccount({
       accountNumber: accountNum,
       ifscCode: ifscUpper,
       accountHolderName: dto.accountHolderName,
@@ -267,6 +267,14 @@ export class UserService {
 
     const isVerified = verification.isValid && verification.accountStatus === 'VALID';
 
+    // REQUIREMENT: Must be verified by penny drop before saving; otherwise fail and do not save!
+    if (!isVerified) {
+      throw new BadRequestException(
+        verification.failureReason ||
+          'Bank account verification failed via RazorpayX penny drop. Please check your account number and IFSC code.',
+      );
+    }
+
     const newBank = this.userBankRepo.create({
       user,
       accountHolderName: dto.accountHolderName,
@@ -274,45 +282,26 @@ export class UserService {
       bankName: dto.bankName,
       ifscCode: ifscUpper,
       isPrimary,
-      verificationStatus: isVerified ? BankVerificationStatus.VERIFIED : BankVerificationStatus.REJECTED,
-      verifiedName: verification.registeredName || null,
+      verificationStatus: BankVerificationStatus.VERIFIED,
+      verifiedName: verification.registeredName || dto.accountHolderName,
       nameMatchScore: verification.nameMatchScore,
       nameMatchResult: verification.nameMatchResult,
       utr: verification.utr || null,
       verificationReferenceId: verification.referenceId || null,
-      verificationFailedReason: isVerified ? null : (verification.failureReason || 'Verification failed'),
-      verifiedAt: isVerified ? new Date() : null,
+      verificationFailedReason: null,
+      verifiedAt: new Date(),
     });
 
     const savedBank = await this.userBankRepo.save(newBank);
     const bankMasked = `${dto.bankName} (XX${accountNum.slice(-4)})`;
 
-    // In-app Notification: BANK_ADDED
-    await this.notificationService.create(
-      userId,
-      NotificationKey.BANK_ADDED,
-      'Bank account added',
-      `${bankMasked} was added. It will be verified before payouts.`,
-      { bankId: savedBank.id, bankMasked },
-    );
-
     // In-app Notification: BANK_VERIFIED
     await this.notificationService.create(
       userId,
       NotificationKey.BANK_VERIFIED,
-      `Bank account ${isVerified ? 'verified' : 'rejected'}`,
-      isVerified
-        ? `${bankMasked} is verified, you can withdraw.`
-        : `could not be verified: ${verification.failureReason || 'Verification failed.'}`,
+      'Bank account verified',
+      `${bankMasked} was verified via RazorpayX penny drop and added to your profile. You can withdraw to it.`,
       { bankId: savedBank.id, bankMasked, status: savedBank.verificationStatus },
-    );
-
-    // In-app Notification: ADMIN_BANK_TO_VERIFY (to all Admins)
-    await this.notificationService.notifyAllAdmins(
-      NotificationKey.ADMIN_BANK_TO_VERIFY,
-      'Bank account to verify',
-      `${user.name} (${user.vedId}) added ${bankMasked}, IFSC ${ifscUpper}.`,
-      { userId: user.id, bankId: savedBank.id, ifsc: ifscUpper },
     );
 
     return savedBank;
@@ -329,7 +318,7 @@ export class UserService {
       throw new BadRequestException('This bank account is already verified.');
     }
 
-    const verification = await this.cashfreeVerification.verifyBankAccount({
+    const verification = await this.bankVerificationService.verifyBankAccount({
       accountNumber: bank.accountNumber,
       ifscCode: bank.ifscCode,
       accountHolderName: bank.accountHolderName,
@@ -339,14 +328,23 @@ export class UserService {
 
     const isVerified = verification.isValid && verification.accountStatus === 'VALID';
 
-    bank.verificationStatus = isVerified ? BankVerificationStatus.VERIFIED : BankVerificationStatus.REJECTED;
-    bank.verifiedName = verification.registeredName || null;
+    if (!isVerified) {
+      bank.verificationStatus = BankVerificationStatus.REJECTED;
+      bank.verificationFailedReason = verification.failureReason || 'Verification failed';
+      await this.userBankRepo.save(bank);
+      throw new BadRequestException(
+        verification.failureReason || 'Bank account verification failed via RazorpayX penny drop.',
+      );
+    }
+
+    bank.verificationStatus = BankVerificationStatus.VERIFIED;
+    bank.verifiedName = verification.registeredName || bank.accountHolderName;
     bank.nameMatchScore = verification.nameMatchScore;
     bank.nameMatchResult = verification.nameMatchResult;
     bank.utr = verification.utr || null;
     bank.verificationReferenceId = verification.referenceId || null;
-    bank.verificationFailedReason = isVerified ? null : (verification.failureReason || 'Verification failed');
-    bank.verifiedAt = isVerified ? new Date() : null;
+    bank.verificationFailedReason = null;
+    bank.verifiedAt = new Date();
 
     const saved = await this.userBankRepo.save(bank);
     const bankMasked = `${bank.bankName} (XX${bank.accountNumber.slice(-4)})`;
@@ -355,10 +353,8 @@ export class UserService {
     await this.notificationService.create(
       userId,
       NotificationKey.BANK_VERIFIED,
-      `Bank account ${isVerified ? 'verified' : 'rejected'}`,
-      isVerified
-        ? `${bankMasked} is verified, you can withdraw.`
-        : `could not be verified: ${verification.failureReason || 'Verification failed.'}`,
+      'Bank account verified',
+      `${bankMasked} is verified via RazorpayX penny drop, you can now withdraw to it.`,
       { bankId: bank.id, bankMasked, status: bank.verificationStatus },
     );
 

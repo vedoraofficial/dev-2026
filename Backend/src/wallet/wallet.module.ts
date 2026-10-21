@@ -7,6 +7,7 @@ import { WalletTopup } from './entity/wallet-topup.entity';
 import { UserBank } from '../user/entity/user-bank.entity';
 import { NotificationModule } from '../notification/notification.module';
 import { PaymentModule } from '../payment/payment.module';
+import { PayoutModule } from '../payout/payout.module';
 import { WalletService } from './wallet.service';
 import { WalletController } from './wallet.controller';
 
@@ -15,6 +16,7 @@ import { WalletController } from './wallet.controller';
     TypeOrmModule.forFeature([Wallet, WalletTransaction, Withdrawal, UserBank, WalletTopup]),
     NotificationModule,
     forwardRef(() => PaymentModule),
+    PayoutModule,
   ],
   controllers: [WalletController],
   providers: [WalletService],
