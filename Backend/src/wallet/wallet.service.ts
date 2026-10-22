@@ -14,6 +14,7 @@ import { UserBank, BankVerificationStatus } from '../user/entity/user-bank.entit
 import { WalletTransactionsQueryDto } from './dto/wallet-transactions-query.dto';
 import { NotificationService } from '../notification/notification.service';
 import { NotificationKey } from '../notification/notification.constants';
+import { MailService } from '../notification/mail.service';
 import { RazorpayPayoutService } from '../payout/razorpay-payout.service';
 
 @Injectable()
@@ -32,6 +33,7 @@ export class WalletService {
     private readonly bankRepo: Repository<UserBank>,
     private readonly notificationService: NotificationService,
     private readonly razorpayPayoutService: RazorpayPayoutService,
+    private readonly mailService?: MailService,
   ) {}
 
   // ─── Helper: Convert paise to formatted rupee string ────────────────
@@ -423,6 +425,18 @@ export class WalletService {
         manager,
       );
 
+      if (this.mailService && bank.user?.email) {
+        this.mailService
+          .sendWithdrawalRequestedEmail(bank.user.email, {
+            name: bank.user.name,
+            vedId: bank.user.vedId,
+            withdrawalId: Number(withdrawal.id),
+            amountFormatted: formattedAmount,
+            bankMasked,
+          })
+          .catch(() => {});
+      }
+
       return {
         message: 'Withdrawal request submitted successfully.',
         withdrawal: {
@@ -501,6 +515,19 @@ export class WalletService {
         { withdrawalId: Number(withdrawal.id), amountPaise: Number(withdrawal.amount), utr: payoutResult.utr },
         manager,
       );
+
+      if (this.mailService && withdrawal.user?.email) {
+        this.mailService
+          .sendPayoutDisbursedEmail(withdrawal.user.email, {
+            name: withdrawal.user.name,
+            vedId: withdrawal.user.vedId,
+            withdrawalId: Number(withdrawal.id),
+            amountFormatted: formattedAmount,
+            bankMasked,
+            utr: payoutResult.utr,
+          })
+          .catch(() => {});
+      }
 
       return {
         message: 'Withdrawal approved and payout transfer initiated successfully.',

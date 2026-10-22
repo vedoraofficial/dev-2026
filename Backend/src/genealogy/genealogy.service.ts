@@ -6,6 +6,7 @@ import {
   ForbiddenException,
   Inject,
   forwardRef,
+  Optional,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, EntityManager, Repository } from 'typeorm';
@@ -26,6 +27,7 @@ import { generateNextVedId } from '../common/utils/ved-id.generator';
 import { WalletService } from '../wallet/wallet.service';
 import { NotificationService } from '../notification/notification.service';
 import { NotificationKey } from '../notification/notification.constants';
+import { MailService } from '../notification/mail.service';
 import { OrderService } from '../order/order.service';
 
 @Injectable()
@@ -42,6 +44,8 @@ export class GenealogyService {
     private readonly notificationService: NotificationService,
     @Inject(forwardRef(() => OrderService))
     private readonly orderService: OrderService,
+    @Optional()
+    private readonly mailService?: MailService,
   ) {}
 
   async joinPartner(dto: JoinPartnerDto) {
@@ -212,6 +216,17 @@ export class GenealogyService {
           { vedId: newUser.vedId, sponsorVedId: sponsor.vedId, slotNumber: availableSlot },
           manager,
         );
+
+        if (this.mailService && newUser.email) {
+          this.mailService
+            .sendRegistrationEmail(newUser.email, {
+              name: newUser.name,
+              vedId: newUser.vedId,
+              email: newUser.email,
+              mobile: newUser.mobile,
+            })
+            .catch(() => {});
+        }
 
         // 2. TEAM_DIRECT_JOINED (to sponsor)
         const filledSlots = existingChildren.length + 1;
@@ -738,6 +753,17 @@ export class GenealogyService {
         { vedId: newUser.vedId, sponsorVedId: sponsor.vedId, parentVedId: parent.vedId, slotNumber: chosenSlot },
         manager,
       );
+
+      if (this.mailService && newUser.email) {
+        this.mailService
+          .sendRegistrationEmail(newUser.email, {
+            name: newUser.name,
+            vedId: newUser.vedId,
+            email: newUser.email,
+            mobile: newUser.mobile,
+          })
+          .catch(() => {});
+      }
 
       // 1b. TEAM_DIRECT_JOINED to the placement parent when someone above placed the partner there
       const filledSlots = existingChildren.length + 1;

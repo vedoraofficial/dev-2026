@@ -12,6 +12,7 @@ import {
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { NotificationService } from './notification.service';
+import { MailService } from './mail.service';
 import { GetNotificationsQueryDto } from './dto/get-notifications-query.dto';
 import { CreateAnnouncementDto } from './dto/create-announcement.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
@@ -21,7 +22,10 @@ import { Roles } from '../common/decorators/roles.decorator';
 @ApiTags('Notifications')
 @Controller('notifications')
 export class NotificationController {
-  constructor(private readonly notificationService: NotificationService) {}
+  constructor(
+    private readonly notificationService: NotificationService,
+    private readonly mailService: MailService,
+  ) {}
 
   @Get()
   @UseGuards(JwtAuthGuard)

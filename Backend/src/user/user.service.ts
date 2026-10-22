@@ -1,4 +1,4 @@
-import { Injectable, ConflictException, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, ConflictException, NotFoundException, BadRequestException, Optional } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import * as bcrypt from 'bcrypt';
@@ -14,6 +14,7 @@ import { generateNextVedId } from '../common/utils/ved-id.generator';
 import { RazorpayBankVerificationService } from '../bank-verification/razorpay-bank-verification.service';
 import { NotificationService } from '../notification/notification.service';
 import { NotificationKey } from '../notification/notification.constants';
+import { MailService } from '../notification/mail.service';
 import { WalletService } from '../wallet/wallet.service';
 import { Order } from '../order/entity/order.entity';
 import { WalletTransaction } from '../wallet/entity/wallet-transaction.entity';
@@ -32,6 +33,8 @@ export class UserService {
     private readonly bankVerificationService: RazorpayBankVerificationService,
     private readonly notificationService: NotificationService,
     private readonly walletService: WalletService,
+    @Optional()
+    private readonly mailService?: MailService,
   ) {}
 
   async create(dto: CreateUserDto): Promise<User> {
@@ -60,6 +63,17 @@ export class UserService {
 
     // Ensure wallet is created immediately for the new user
     await this.walletService.createWallet(saved.id);
+
+    if (this.mailService && saved.email) {
+      this.mailService
+        .sendRegistrationEmail(saved.email, {
+          name: saved.name,
+          vedId: saved.vedId,
+          email: saved.email,
+          mobile: saved.mobile,
+        })
+        .catch(() => {});
+    }
 
     return saved;
   }
