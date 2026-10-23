@@ -16,17 +16,26 @@ import { Order, OrderStatus, PaymentMethod, PaymentStatus } from '../order/entit
 import { Product, ProductStatus } from '../product/entity/product.entity';
 import { StockMovement, StockMovementType } from '../stock/entity/stock-movement.entity';
 import { getAvailableStock } from '../stock/stock-levels';
-import { User, UserStatus } from '../user/entity/user.entity';
+import { User, UserRole, UserStatus } from '../user/entity/user.entity';
 import { WalletService } from '../wallet/wallet.service';
 import { TransactionCategory, WalletTransaction } from '../wallet/entity/wallet-transaction.entity';
 import { NotificationService } from '../notification/notification.service';
 import { NotificationKey } from '../notification/notification.constants';
 import { ExternalPaymentHandler, PaymentRequester, PaymentService } from '../payment/payment.service';
 import { RegisterWithOrderDto } from './dto/register-with-order.dto';
-import { PendingRegistration, PendingRegistrationStatus } from './entity/pending-registration.entity';
+import { MobileOtpService } from './mobile-otp.service';
+import {
+  PendingRegistration,
+  PendingRegistrationStatus,
+  RegistrationPayer,
+} from './entity/pending-registration.entity';
+import { JoinWithOrderDto, VerifyJoinPaymentDto } from './dto/join-with-order.dto';
 
 /** Razorpay receipt prefix of a partner-registration payment */
 const JOIN_PREFIX = 'JOIN_';
+
+/** Onboarding takes the payment and creates the joining order itself — registration must not charge again. */
+const JOINING_ORDER_HERE = { withJoiningOrder: false };
 
 const formatPaise = (paise: number) => `₹${(Number(paise) / 100).toFixed(2)}`;
 
@@ -50,6 +59,7 @@ export class OnboardingService implements OnModuleInit, ExternalPaymentHandler {
     private readonly walletService: WalletService,
     private readonly paymentService: PaymentService,
     private readonly notificationService: NotificationService,
+    private readonly mobileOtpService: MobileOtpService,
   ) {}
 
   onModuleInit() {
@@ -58,6 +68,9 @@ export class OnboardingService implements OnModuleInit, ExternalPaymentHandler {
 
   async registerWithOrder(sponsorUserId: number, dto: RegisterWithOrderDto) {
     const { productId, quantity = 1, paymentMethod, ...details } = dto;
+
+    // The new partner's mobile number must be verified with OTP first (POST /partner/mobile-otp/*).
+    await this.mobileOtpService.assertVerified(sponsorUserId, details.mobile);
 
     const product = await this.orderableProduct(this.productRepo.manager, productId, quantity);
     const amount = Number(product.salePrice) * quantity;
@@ -69,6 +82,64 @@ export class OnboardingService implements OnModuleInit, ExternalPaymentHandler {
       return this.registerWithWallet(sponsorUserId, details, product, quantity, amount);
     }
     return this.startRazorpayRegistration(sponsorUserId, details, product, quantity, amount);
+  }
+
+  // ─── Referral join page: the new partner verifies their mobile and pays online themselves ───
+
+  /** The sponsor behind a referral link — a partner or founder who isn't blocked. */
+  async findReferralSponsor(referralId: string): Promise<User> {
+    const vedId = referralId.trim().toUpperCase();
+    const sponsor = await this.dataSource.getRepository(User).findOne({ where: { vedId } });
+    if (!sponsor) throw new NotFoundException(`No partner found with referral ID ${vedId}.`);
+    if (sponsor.role === UserRole.ADMIN) {
+      throw new BadRequestException("This referral link can't be used to join. Ask your sponsor for their own link.");
+    }
+    if (sponsor.status === UserStatus.BLOCKED) {
+      throw new BadRequestException("This sponsor's account is blocked. Ask your sponsor for help.");
+    }
+    return sponsor;
+  }
+
+  /** Placed in the sponsor's lowest free slot once the Razorpay payment succeeds. */
+  async joinWithOrder(dto: JoinWithOrderDto) {
+    const { referralId, productId, quantity = 1, ...details } = dto;
+    const sponsor = await this.findReferralSponsor(referralId);
+    await this.mobileOtpService.assertVerified(Number(sponsor.id), details.mobile, 'JOIN');
+
+    const product = await this.orderableProduct(this.productRepo.manager, productId, quantity);
+    const amount = Number(product.salePrice) * quantity;
+
+    try {
+      await this.genealogyService.validateRegistration(Number(sponsor.id), details);
+    } catch (error: any) {
+      // The checks are worded for the sponsor ("You have reached…") — say it for the joiner.
+      if (String(error?.message ?? '').includes('maximum capacity')) {
+        throw new BadRequestException(
+          `${sponsor.name}'s 20 direct slots are full. Ask them for a team member's referral link.`,
+        );
+      }
+      throw error;
+    }
+    return this.startRazorpayRegistration(Number(sponsor.id), details, product, quantity, amount, 'SELF');
+  }
+
+  /** Join page: the Razorpay checkout handler's result (PaymentService checks the signature). */
+  async verifySelfJoinPayment(dto: VerifyJoinPaymentDto) {
+    await this.findSelfJoin(dto.razorpayOrderId);
+    return this.paymentService.verifyPayment(dto);
+  }
+
+  /** Join page: status after a refresh, or while the payment is still being confirmed. */
+  async selfJoinStatus(razorpayOrderId: string) {
+    await this.findSelfJoin(razorpayOrderId);
+    return this.checkAndProcess(razorpayOrderId, 'STATUS_CHECK');
+  }
+
+  /** Only payments made from the join page can be checked without signing in. */
+  private async findSelfJoin(razorpayOrderId: string) {
+    const row = await this.pendingRepo.findOne({ where: { razorpayOrderId, paidBy: 'SELF' } });
+    if (!row) throw new NotFoundException('Payment not found.');
+    return row;
   }
 
   // ─── Wallet: one transaction — nothing is created unless the debit goes through ───
@@ -93,6 +164,8 @@ export class OnboardingService implements OnModuleInit, ExternalPaymentHandler {
           manager,
           sponsorUserId,
           details,
+          undefined,
+          JOINING_ORDER_HERE,
         );
         const walletTxn = await this.walletService.debit(
           sponsorUserId,
@@ -135,6 +208,7 @@ export class OnboardingService implements OnModuleInit, ExternalPaymentHandler {
     product: Product,
     quantity: number,
     amount: number,
+    paidBy: RegistrationPayer = 'SPONSOR',
   ) {
     const { password, ...safeDetails } = details;
     if (!password) throw new BadRequestException('Password is required.');
@@ -144,8 +218,12 @@ export class OnboardingService implements OnModuleInit, ExternalPaymentHandler {
       amount,
       receipt: `${JOIN_PREFIX}${sponsorUserId}_${Date.now().toString().slice(-6)}`,
       description: `Joining order for ${details.name}: ${product.name} × ${quantity}`,
-      notes: { type: 'PARTNER_REGISTRATION', sponsorUserId: String(sponsorUserId) },
-      prefill: { name: sponsor?.name, email: sponsor?.email ?? undefined, contact: sponsor?.mobile },
+      notes: { type: 'PARTNER_REGISTRATION', sponsorUserId: String(sponsorUserId), paidBy },
+      // Razorpay pre-fills the payer: the sponsor, or the new partner on the join page
+      prefill:
+        paidBy === 'SELF'
+          ? { name: details.name, email: details.email, contact: details.mobile }
+          : { name: sponsor?.name, email: sponsor?.email ?? undefined, contact: sponsor?.mobile },
     });
 
     await this.pendingRepo.save(
@@ -157,6 +235,7 @@ export class OnboardingService implements OnModuleInit, ExternalPaymentHandler {
         quantity,
         amount,
         status: PendingRegistrationStatus.PENDING,
+        paidBy,
         razorpayOrderId: checkout.orderId,
       }),
     );
@@ -164,7 +243,10 @@ export class OnboardingService implements OnModuleInit, ExternalPaymentHandler {
 
     return {
       status: 'PAYMENT_REQUIRED' as const,
-      message: 'Complete the Razorpay payment — the partner is registered once it succeeds.',
+      message:
+        paidBy === 'SELF'
+          ? 'Complete the payment — your VEDORA ID is created once it succeeds.'
+          : 'Complete the Razorpay payment — the partner is registered once it succeeds.',
       razorpayOrderId: checkout.orderId,
       checkout,
       amount,
@@ -258,11 +340,11 @@ export class OnboardingService implements OnModuleInit, ExternalPaymentHandler {
     const details = row.details as RegistrationDetails;
     const passwordHash = row.passwordHash ?? undefined;
     if (details.slotNumber == null) {
-      return this.genealogyService.registerPartnerInTransaction(manager, row.sponsorUserId, details, passwordHash);
+      return this.genealogyService.registerPartnerInTransaction(manager, row.sponsorUserId, details, passwordHash, JOINING_ORDER_HERE);
     }
     try {
       return await manager.transaction((inner) =>
-        this.genealogyService.registerPartnerInTransaction(inner, row.sponsorUserId, details, passwordHash),
+        this.genealogyService.registerPartnerInTransaction(inner, row.sponsorUserId, details, passwordHash, JOINING_ORDER_HERE),
       );
     } catch (error: any) {
       const slotTaken =
@@ -274,6 +356,7 @@ export class OnboardingService implements OnModuleInit, ExternalPaymentHandler {
         row.sponsorUserId,
         { ...details, slotNumber: undefined },
         passwordHash,
+        JOINING_ORDER_HERE,
       );
     }
   }
@@ -293,7 +376,28 @@ export class OnboardingService implements OnModuleInit, ExternalPaymentHandler {
       const row = await repo.findOne({ where: { id: pendingId }, lock: { mode: 'pessimistic_write' } });
       if (!row || row.status !== PendingRegistrationStatus.PENDING) return;
 
-      if (status === PendingRegistrationStatus.REFUNDED) {
+      if (status === PendingRegistrationStatus.REFUNDED && row.paidBy === 'SELF') {
+        // Joined from a referral link: there's no wallet — refund the Razorpay payment itself.
+        let refundNote = 'Refund it from the Razorpay dashboard.';
+        if (razorpayPaymentId) {
+          try {
+            const refund = await this.paymentService.refundPayment(
+              { razorpayPaymentId } as Order,
+              Number(row.amount),
+            );
+            refundNote = `Razorpay refund ${refund.refundId} started.`;
+          } catch (err: any) {
+            refundNote = `The automatic Razorpay refund failed (${err?.message ?? err}) — refund it from the Razorpay dashboard.`;
+          }
+        }
+        await this.notificationService.notifyAllAdmins(
+          NotificationKey.ADMIN_ORDER_CANCELLED,
+          'Paid join refunded',
+          `${row.details.name} paid ${formatPaise(row.amount)} on the join page (${row.razorpayOrderId}, ${razorpayPaymentId ?? 'no payment id'}) but could not be registered: ${reason}. ${refundNote}`,
+          { razorpayOrderId: row.razorpayOrderId, pendingRegistrationId: Number(row.id) },
+          manager,
+        );
+      } else if (status === PendingRegistrationStatus.REFUNDED) {
         await this.walletService.credit(
           row.sponsorUserId,
           Number(row.amount),
@@ -449,7 +553,10 @@ export class OnboardingService implements OnModuleInit, ExternalPaymentHandler {
       [PendingRegistrationStatus.PENDING]: 'Waiting for the Razorpay payment.',
       [PendingRegistrationStatus.COMPLETED]: `Payment received — ${row.details.name} is registered.`,
       [PendingRegistrationStatus.FAILED]: row.failureReason ?? 'Payment failed. The partner was not registered.',
-      [PendingRegistrationStatus.REFUNDED]: `Payment received, but ${row.details.name} could not be registered: ${row.failureReason}. ${formatPaise(row.amount)} was refunded to your wallet.`,
+      [PendingRegistrationStatus.REFUNDED]:
+        row.paidBy === 'SELF'
+          ? `Payment received, but ${row.details.name} could not be registered: ${row.failureReason}. ${formatPaise(row.amount)} will be refunded to your original payment method in 5–7 working days.`
+          : `Payment received, but ${row.details.name} could not be registered: ${row.failureReason}. ${formatPaise(row.amount)} was refunded to your wallet.`,
     }[row.status];
 
     return {
@@ -464,7 +571,14 @@ export class OnboardingService implements OnModuleInit, ExternalPaymentHandler {
       partner,
       orderId: row.orderId ? Number(row.orderId) : undefined,
       failureReason: row.failureReason ?? undefined,
+      // The join page's welcome screen names the sponsor
+      sponsor: row.paidBy === 'SELF' ? await this.sponsorSummary(row.sponsorUserId) : undefined,
     };
+  }
+
+  private async sponsorSummary(userId: number) {
+    const sponsor = await this.dataSource.getRepository(User).findOne({ where: { id: userId } });
+    return sponsor ? { vedId: sponsor.vedId, name: sponsor.name } : undefined;
   }
 }
 

@@ -54,6 +54,8 @@ export type PaymentStatusResponse = {
   partnerName?: string
   partner?: { id: number; vedId: string; name: string; status: string; slotNumber?: number }
   failureReason?: string
+  /** Referral join page payments: whose team the new partner joined */
+  sponsor?: { vedId: string; name: string }
 }
 
 export function isPaymentSuccess(res?: PaymentStatusResponse | null): boolean {
@@ -180,6 +182,8 @@ export interface RazorpayModalOptions {
   onSuccess: (verifyResponse: VerifyPaymentResponse) => void
   onError?: (error: any) => void
   onDismiss?: () => void
+  /** Checks the payment after the popup — POST /api/payment/verify unless given (join page) */
+  verify?: (payload: VerifyPaymentPayload) => Promise<VerifyPaymentResponse>
 }
 
 /**
@@ -190,6 +194,7 @@ export function openRazorpayCheckout({
   onSuccess,
   onError,
   onDismiss,
+  verify = verifyPayment,
 }: RazorpayModalOptions): Promise<void> {
   return new Promise((resolve, reject) => {
     if (typeof window === "undefined" || !window.Razorpay) {
@@ -221,7 +226,7 @@ export function openRazorpayCheckout({
         razorpay_signature: string
       }) => {
         try {
-          const verifyResult = await verifyPayment({
+          const verifyResult = await verify({
             razorpayOrderId: response.razorpay_order_id,
             razorpayPaymentId: response.razorpay_payment_id,
             razorpaySignature: response.razorpay_signature,

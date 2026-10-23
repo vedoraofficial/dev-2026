@@ -1,7 +1,11 @@
 import type { RegisteredPartner } from "@/features/placement/components/placement-success"
 import type { partnerDetailsPayload } from "@/features/placement/partner-details"
 import { api } from "@/lib/api"
-import type { InitiatePaymentResponse } from "@/features/payments/api"
+import type {
+  InitiatePaymentResponse,
+  PaymentStatusResponse,
+  VerifyPaymentPayload,
+} from "@/features/payments/api"
 
 /** What the address form needs from a pincode. */
 export type PincodeInfo = {
@@ -41,6 +45,91 @@ export async function lookupPincode(pincode: string): Promise<PincodeInfo | null
     state: first.State,
     areas: [...new Set(offices.map((o) => o.Name))].sort(),
   }
+}
+
+/** POST /api/partner/mobile-otp/send — SMS an OTP to the new partner's mobile (Add Partner). */
+export async function sendMobileOtp(
+  mobile: string,
+): Promise<{ message: string; expiresInSeconds: number }> {
+  const { data } = await api.post<{ message: string; expiresInSeconds: number }>(
+    "/partner/mobile-otp/send",
+    { mobile },
+  )
+  return data
+}
+
+/** POST /api/partner/mobile-otp/verify — a verified number can be registered for 30 minutes. */
+export async function verifyMobileOtp(input: {
+  mobile: string
+  otp: string
+}): Promise<{ verified: true; mobile: string; message: string }> {
+  const { data } = await api.post<{ verified: true; mobile: string; message: string }>(
+    "/partner/mobile-otp/verify",
+    input,
+  )
+  return data
+}
+
+// ─── Referral join page (no sign-in): the same flow as Add Partner, paid by the new partner ───
+
+/** POST /api/public/join/otp/send */
+export async function sendJoinOtp(
+  referralId: string,
+  mobile: string,
+): Promise<{ message: string; expiresInSeconds: number }> {
+  const { data } = await api.post<{ message: string; expiresInSeconds: number }>(
+    "/public/join/otp/send",
+    { referralId, mobile },
+  )
+  return data
+}
+
+/** POST /api/public/join/otp/verify */
+export async function verifyJoinOtp(
+  referralId: string,
+  input: { mobile: string; otp: string },
+): Promise<{ verified: true; mobile: string; message: string }> {
+  const { data } = await api.post<{ verified: true; mobile: string; message: string }>(
+    "/public/join/otp/verify",
+    { referralId, ...input },
+  )
+  return data
+}
+
+export type JoinWithOrderInput = ReturnType<typeof partnerDetailsPayload> & {
+  /** VEDORA ID from the referral link */
+  referralId: string
+  productId: number
+  quantity?: number
+}
+
+/** POST /api/public/join — nothing is created until the Razorpay payment succeeds. */
+export async function joinWithOrder(input: JoinWithOrderInput): Promise<{
+  status: "PAYMENT_REQUIRED"
+  message: string
+  razorpayOrderId: string
+  checkout: InitiatePaymentResponse
+  amount: number
+  partnerName: string
+}> {
+  const { data } = await api.post("/public/join", input)
+  return data
+}
+
+/** POST /api/public/join/verify — after the Razorpay popup; creates the VEDORA ID. */
+export async function verifyJoinPayment(
+  payload: VerifyPaymentPayload,
+): Promise<PaymentStatusResponse> {
+  const { data } = await api.post<PaymentStatusResponse>("/public/join/verify", payload)
+  return data
+}
+
+/** GET /api/public/join/status/:razorpayOrderId */
+export async function getJoinStatus(razorpayOrderId: string): Promise<PaymentStatusResponse> {
+  const { data } = await api.get<PaymentStatusResponse>(
+    `/public/join/status/${encodeURIComponent(razorpayOrderId)}`,
+  )
+  return data
 }
 
 /** POST /api/partner/register-with-order — a new partner plus their joining order. */

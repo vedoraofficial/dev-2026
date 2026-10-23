@@ -17,6 +17,7 @@ import {
   JoiningPayment,
   type JoiningPaymentMethod,
 } from "@/features/placement/components/joining-payment"
+import { MobileOtpVerify } from "@/features/placement/components/mobile-otp-verify"
 import { PartnerDetailsFields } from "@/features/placement/components/partner-details-fields"
 import {
   PlacementSuccess,
@@ -37,6 +38,7 @@ import {
 import { useRegisterWithOrder } from "@/features/placement/queries"
 import {
   placementSchema,
+  toMobile10,
   type PlacementInput,
   type PlacementValues,
 } from "@/features/placement/schemas"
@@ -122,6 +124,8 @@ export function PartnerManualPlacementPage() {
 
   const [completed, setCompleted] = useState<Completed | null>(null)
   const [shipSameAsRegistered, setShipSameAsRegistered] = useState(false)
+  // The new partner's mobile, once verified with OTP — needed before registering
+  const [verifiedMobile, setVerifiedMobile] = useState<string | null>(null)
 
   const form = useForm<PlacementInput, unknown, PlacementValues>({
     resolver: zodResolver(placementSchema),
@@ -138,9 +142,9 @@ export function PartnerManualPlacementPage() {
     formState: { errors },
   } = form
 
-  const [slot, productSku, uplineRaw] = useWatch({
+  const [slot, productSku, uplineRaw, mobile] = useWatch({
     control,
-    name: ["slot", "productSku", "upline"],
+    name: ["slot", "productSku", "upline", "mobile"],
   })
 
   // "Place under": me by default, or a team member (their team comes from the genealogy API,
@@ -193,6 +197,11 @@ export function PartnerManualPlacementPage() {
     payWith === "WALLET" && walletShort ? "RAZORPAY" : payWith
 
   const onValid = (values: PlacementValues) => {
+    if (toMobile10(values.mobile) !== verifiedMobile) {
+      setError("mobile", { message: "Verify this mobile number with OTP" })
+      toast.error("Verify the partner's mobile number with OTP first")
+      return
+    }
     const chosen = products.find((p) => p.sku === values.productSku)
     if (!chosen) {
       setError("productSku", { message: "Choose a product" })
@@ -250,14 +259,19 @@ export function PartnerManualPlacementPage() {
   const submit = (e: FormEvent<HTMLFormElement>) => {
     // Copy right before validating so the shipping address always matches the latest registered one.
     if (shipSameAsRegistered) copyRegisteredToShipping(form)
-    return handleSubmit(onValid, () =>
-      toast.error("Some details are missing — check the highlighted fields"),
-    )(e)
+    return handleSubmit(onValid, () => {
+      // Flag an unverified mobile together with the other missing fields
+      if (toMobile10(getValues("mobile")) !== verifiedMobile) {
+        setError("mobile", { message: "Verify this mobile number with OTP" })
+      }
+      toast.error("Some details are missing — check the highlighted fields")
+    })(e)
   }
 
   const startOver = () => {
     reset(blankForm(myFirstFreeSlot, me?.vedId ?? ""))
     setShipSameAsRegistered(false)
+    setVerifiedMobile(null)
     setCompleted(null)
     window.scrollTo({ top: 0, behavior: "smooth" })
   }
@@ -293,7 +307,19 @@ export function PartnerManualPlacementPage() {
         >
           <div className="min-w-0 space-y-4 md:space-y-5">
             <Step n={1} title="New partner details">
-              <PartnerDetailsFields form={form} />
+              <PartnerDetailsFields
+                form={form}
+                mobileVerification={
+                  <MobileOtpVerify
+                    mobile={mobile}
+                    verifiedMobile={verifiedMobile}
+                    onVerified={(m) => {
+                      setVerifiedMobile(m)
+                      form.clearErrors("mobile")
+                    }}
+                  />
+                }
+              />
             </Step>
 
             <Step n={2} title="Upline & slot">

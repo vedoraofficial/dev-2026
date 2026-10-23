@@ -23,6 +23,9 @@ export enum PendingRegistrationStatus {
   REFUNDED = 'REFUNDED',
 }
 
+/** Who pays the joining order: the sponsor (Add Partner) or the new partner (referral join page) */
+export type RegistrationPayer = 'SPONSOR' | 'SELF';
+
 /**
  * A partner registration (with its joining order) held until the sponsor's Razorpay payment is
  * confirmed. The partner account is only created once the payment succeeds.
@@ -60,6 +63,10 @@ export class PendingRegistration {
 
   @Column({ type: 'varchar', length: 20, default: PendingRegistrationStatus.PENDING })
   status: PendingRegistrationStatus;
+
+  /** SELF: joined from a referral link and paid themselves — a refund goes back to their payment, not a wallet */
+  @Column({ name: 'paid_by', type: 'varchar', length: 10, default: 'SPONSOR' })
+  paidBy: RegistrationPayer;
 
   /** Razorpay order id the sponsor pays against */
   @Column({ name: 'razorpay_order_id', type: 'varchar', length: 100, unique: true })

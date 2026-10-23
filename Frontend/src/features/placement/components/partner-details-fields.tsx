@@ -1,4 +1,4 @@
-import { useEffect, type ChangeEvent } from "react"
+import { useEffect, type ChangeEvent, type ReactNode } from "react"
 import { Controller, useWatch, type UseFormReturn } from "react-hook-form"
 
 import { FormField as Field } from "@/components/common/form-field"
@@ -28,8 +28,11 @@ export const textareaClass =
  */
 export function PartnerDetailsFields<T extends PartnerDetailsInput>({
   form,
+  mobileVerification,
 }: {
   form: UseFormReturn<T, unknown, unknown>
+  /** Add Partner's OTP field — takes the place next to Mobile (and New ID is left out) */
+  mobileVerification?: ReactNode
 }) {
   // The fields below exist on every form this is used with.
   const {
@@ -122,6 +125,8 @@ export function PartnerDetailsFields<T extends PartnerDetailsInput>({
             })}
           />
         </Field>
+        {/* Add Partner: Mobile | OTP | Email. The join form keeps Mobile | Email | New ID. */}
+        {mobileVerification}
         <Field label="Email" htmlFor="email" error={errors.email?.message}>
           <Input
             id="email"
@@ -132,15 +137,17 @@ export function PartnerDetailsFields<T extends PartnerDetailsInput>({
             {...register("email", { onChange: emailLock.onChange })}
           />
         </Field>
-        <Field label="New ID" htmlFor="newId">
-          <Input
-            id="newId"
-            readOnly
-            tabIndex={-1}
-            value="Assigned by system"
-            className="border-gold/40 bg-gold/10 font-mono text-gold"
-          />
-        </Field>
+        {mobileVerification ? null : (
+          <Field label="New ID" htmlFor="newId">
+            <Input
+              id="newId"
+              readOnly
+              tabIndex={-1}
+              value="Assigned by system"
+              className="border-gold/40 bg-gold/10 font-mono text-gold"
+            />
+          </Field>
+        )}
       </div>
       <div className="grid gap-3 sm:grid-cols-2">
         <Field label="Aadhaar number" htmlFor="aadhaar" error={errors.aadhaar?.message}>

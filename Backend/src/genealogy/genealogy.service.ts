@@ -480,7 +480,11 @@ export class GenealogyService {
     sponsorUserId: number,
     dto: RegistrationDetails,
     passwordHash?: string,
+    // false when the caller takes the payment and creates the joining order itself (onboarding),
+    // so the sponsor isn't charged twice and no second order / stock / commission is made
+    options: { withJoiningOrder?: boolean } = {},
   ) {
+      const withJoiningOrder = options.withJoiningOrder ?? true;
       const userRepo = manager.getRepository(User);
       const profileRepo = manager.getRepository(UserProfile);
       const nodeRepo = manager.getRepository(GenealogyNode);
@@ -492,6 +496,9 @@ export class GenealogyService {
       // 4b. Identify joining product & verify sponsor wallet balance
       const productRepo = manager.getRepository(Product);
         let product: Product | null = null;
+        let productCost = 0;
+        let debitTxn: WalletTransaction | null = null;
+        if (withJoiningOrder) {
         if (dto.productId) {
           product = await productRepo.findOne({ where: { id: dto.productId } });
         } else if (dto.productSku) {
@@ -507,7 +514,7 @@ export class GenealogyService {
           throw new BadRequestException('A valid active joining product must be selected to register a partner.');
         }
 
-        const productCost = Number(product.salePrice);
+        productCost = Number(product.salePrice);
 
         // Verify stock availability
         const inStock = await getAvailableStock(manager, Number(product.id));
@@ -537,7 +544,7 @@ export class GenealogyService {
         }
 
         // Atomically debit product cost from sponsor's wallet
-        const debitTxn = await this.walletService.debit(
+        debitTxn = await this.walletService.debit(
           sponsor.id,
           productCost,
           TransactionCategory.PRODUCT_PURCHASE,
@@ -546,6 +553,7 @@ export class GenealogyService {
           undefined,
           manager,
         );
+        }
 
         // 5. Calculate tree depth and 5-level uplines
         // (BV level income follows the tree, so the uplines start from the placement parent.)
@@ -648,6 +656,8 @@ export class GenealogyService {
       await this.walletService.createWallet(newUser.id, manager);
 
       // 12. Create joining product Order for the new partner paid via sponsor wallet
+      let savedOrder: Order | null = null;
+      if (product) {
       const orderRepo = manager.getRepository(Order);
       const newOrder = orderRepo.create({
         userId: newUser.id,
@@ -660,7 +670,7 @@ export class GenealogyService {
         paymentStatus: PaymentStatus.PAID,
         orderStatus: OrderStatus.CONFIRMED,
       });
-      const savedOrder = await orderRepo.save(newOrder);
+      savedOrder = await orderRepo.save(newOrder);
 
       // Link sponsor's debit transaction to this order
       if (debitTxn) {
@@ -682,6 +692,7 @@ export class GenealogyService {
 
       // Distribute Commissions (Direct ₹200 to sponsor & Admin, Uplines, and BV earnings)
       await this.orderService.distributeCommissions(Number(savedOrder.id), manager);
+      }
 
       // In-app Notifications:
       // 1. PARTNER_WELCOME (to new partner)
@@ -775,9 +786,9 @@ export class GenealogyService {
           sponsorName: sponsor.name,
           placedUnderVedId: parent.vedId,
           placedUnderName: parent.name,
-          orderId: Number(savedOrder.id),
-          productName: product.name,
-          amountPaidFormatted: `₹${(productCost / 100).toFixed(2)}`,
+          orderId: savedOrder ? Number(savedOrder.id) : undefined,
+          productName: product?.name,
+          amountPaidFormatted: product ? `₹${(productCost / 100).toFixed(2)}` : undefined,
         },
       };
   }

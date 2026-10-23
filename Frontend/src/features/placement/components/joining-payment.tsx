@@ -13,6 +13,8 @@ type Props = {
   walletBalance: number | undefined
   /** Joining order price in rupees; undefined until a product is chosen */
   price: number | undefined
+  /** Set when there's no wallet to pay from (referral join page) — the wallet option is greyed out */
+  walletUnavailable?: string
 }
 
 function Option({
@@ -53,7 +55,13 @@ function Option({
 }
 
 /** Who pays the joining order: the sponsor's wallet, or online with Razorpay. */
-export function JoiningPayment({ value, onChange, walletBalance, price }: Props) {
+export function JoiningPayment({
+  value,
+  onChange,
+  walletBalance,
+  price,
+  walletUnavailable,
+}: Props) {
   const walletShort = walletBalance !== undefined && price !== undefined && walletBalance < price
 
   return (
@@ -62,16 +70,18 @@ export function JoiningPayment({ value, onChange, walletBalance, price }: Props)
       <div role="radiogroup" aria-label="Payment method" className="space-y-2">
         <Option
           selected={value === "WALLET"}
-          disabled={walletShort}
+          disabled={walletShort || !!walletUnavailable}
           onSelect={() => onChange("WALLET")}
           icon={<Wallet className="size-4" aria-hidden />}
           title="My wallet"
           hint={
-            walletBalance === undefined
-              ? "Loading balance…"
-              : walletShort
-                ? `Balance ${formatINR(walletBalance)} — not enough for this order`
-                : `Balance ${formatINR(walletBalance)} · paid instantly`
+            walletUnavailable
+              ? walletUnavailable
+              : walletBalance === undefined
+                ? "Loading balance…"
+                : walletShort
+                  ? `Balance ${formatINR(walletBalance)} — not enough for this order`
+                  : `Balance ${formatINR(walletBalance)} · paid instantly`
           }
         />
         <Option
