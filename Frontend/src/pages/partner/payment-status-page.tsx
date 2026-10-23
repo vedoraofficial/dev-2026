@@ -35,8 +35,10 @@ export function PaymentStatusPage() {
   const isSuccess = isPaymentSuccess(status.data)
   const isFailed = isPaymentFailed(status.data)
 
-  const isTopup =
-    activeMerchantOrderId?.startsWith("TOPUP_") || pending?.type === "TOPUP"
+  const isTopup = activeMerchantOrderId?.startsWith("TOPUP_") || pending?.type === "TOPUP"
+  // Add Partner: the partner is registered only once this payment succeeds.
+  const isJoin = status.data?.kind === "REGISTRATION" || pending?.type === "JOIN"
+  const partnerName = status.data?.partnerName ?? pending?.partnerName ?? "the partner"
 
   // Clear pending payment key once a definitive answer is received
   useEffect(() => {
@@ -48,6 +50,12 @@ export function PaymentStatusPage() {
   const ordersLink = (
     <Button asChild variant="outline">
       <Link to={ROUTES.partner.orders}>Go to My Orders</Link>
+    </Button>
+  )
+
+  const addPartnerLink = (
+    <Button asChild variant="outline">
+      <Link to={ROUTES.partner.manualPlacement}>Back to Add Partner</Link>
     </Button>
   )
 
@@ -79,7 +87,61 @@ export function PaymentStatusPage() {
         <p className="text-sm text-muted-foreground">{apiErrorMessage(status.error)}</p>
         <div className="flex flex-wrap justify-center gap-2">
           <Button onClick={() => void status.refetch()}>Try again</Button>
-          {isTopup ? walletLink : ordersLink}
+          {isJoin ? addPartnerLink : isTopup ? walletLink : ordersLink}
+        </div>
+      </>
+    )
+  } else if (isSuccess && isJoin) {
+    const partner = status.data?.partner
+    body = (
+      <>
+        <CircleCheck className="size-14 text-success" aria-hidden />
+        <h2 className="font-display text-2xl">Partner registered</h2>
+        <p className="text-sm text-muted-foreground">
+          Payment received.{" "}
+          {partner ? (
+            <>
+              {partner.name} is now <MonoId tone="gold">{partner.vedId}</MonoId>
+              {partner.slotNumber ? ` in slot ${partner.slotNumber}` : ""} and can sign in with the
+              password you set.
+            </>
+          ) : (
+            `${partnerName} is registered.`
+          )}
+          {status.data?.orderId ? (
+            <>
+              {" "}
+              Joining order <MonoId tone="gold">{orderNo(status.data.orderId)}</MonoId> is paid and
+              ready to ship.
+            </>
+          ) : null}
+        </p>
+        <div className="flex flex-wrap justify-center gap-2">
+          <Button asChild>
+            <Link to={ROUTES.partner.genealogy}>View in Genealogy Tree</Link>
+          </Button>
+          <Button asChild variant="outline">
+            <Link to={ROUTES.partner.manualPlacement}>Add another partner</Link>
+          </Button>
+        </div>
+      </>
+    )
+  } else if (isFailed && isJoin) {
+    const refunded = status.data?.status === "REFUNDED"
+    body = (
+      <>
+        <CircleX className="size-14 text-danger" aria-hidden />
+        <h2 className="font-display text-2xl">
+          {refunded ? "Payment refunded to your wallet" : "Payment failed"}
+        </h2>
+        <p className="text-sm text-muted-foreground">
+          {refunded
+            ? status.data?.message
+            : `Nothing was charged and ${partnerName} was not registered. You can fill in the details and try again.`}
+        </p>
+        <div className="flex flex-wrap justify-center gap-2">
+          {addPartnerLink}
+          {refunded ? walletLink : null}
         </div>
       </>
     )
@@ -90,13 +152,16 @@ export function PaymentStatusPage() {
         <>
           <div className="relative">
             <CircleCheck className="size-14 text-success" aria-hidden />
-            <Wallet className="absolute -bottom-1 -right-1 size-6 rounded-full bg-field p-0.5 text-gold" />
+            <Wallet className="absolute -right-1 -bottom-1 size-6 rounded-full bg-field p-0.5 text-gold" />
           </div>
           <h2 className="font-display text-2xl">Wallet Top-up Successful</h2>
           <p className="text-sm text-muted-foreground">
             {topupRupees > 0 ? (
               <>
-                <span className="font-mono font-medium text-foreground">{formatINR(topupRupees)}</span> has been credited to your available wallet balance.
+                <span className="font-mono font-medium text-foreground">
+                  {formatINR(topupRupees)}
+                </span>{" "}
+                has been credited to your available wallet balance.
               </>
             ) : (
               "Your wallet balance has been updated successfully via Razorpay."
@@ -121,7 +186,8 @@ export function PaymentStatusPage() {
           <p className="text-sm text-muted-foreground">
             {resolvedOrderId ? (
               <>
-                Order <MonoId tone="gold">{orderNo(resolvedOrderId)}</MonoId> is confirmed and commissions have been distributed.
+                Order <MonoId tone="gold">{orderNo(resolvedOrderId)}</MonoId> is confirmed and
+                commissions have been distributed.
               </>
             ) : (
               "Your order payment has been confirmed successfully."
@@ -164,7 +230,8 @@ export function PaymentStatusPage() {
           <p className="text-sm text-muted-foreground">
             {resolvedOrderId ? (
               <>
-                Nothing was charged for <MonoId tone="gold">{orderNo(resolvedOrderId)}</MonoId>. You can try again.
+                Nothing was charged for <MonoId tone="gold">{orderNo(resolvedOrderId)}</MonoId>. You
+                can try again.
               </>
             ) : (
               "Payment could not be completed. You can try again from My Orders."
@@ -172,7 +239,10 @@ export function PaymentStatusPage() {
           </p>
           <div className="flex flex-wrap justify-center gap-2">
             {resolvedOrderId ? (
-              <Button disabled={payOrder.isPending} onClick={() => payOrder.mutate(resolvedOrderId)}>
+              <Button
+                disabled={payOrder.isPending}
+                onClick={() => payOrder.mutate(resolvedOrderId)}
+              >
                 {payOrder.isPending ? "Opening Razorpay…" : "Retry payment"}
               </Button>
             ) : null}
@@ -189,18 +259,21 @@ export function PaymentStatusPage() {
         <Loader2 className="size-12 animate-spin text-gold" aria-hidden />
         <h2 className="font-display text-2xl">Confirming your payment…</h2>
         <p className="text-sm text-muted-foreground">
-          {isTopup ? (
+          {isJoin ? (
+            `Waiting for Razorpay. ${partnerName} is registered as soon as the payment is confirmed — this page updates automatically.`
+          ) : isTopup ? (
             "Waiting for Razorpay confirmation for your wallet top-up. This page updates automatically."
           ) : resolvedOrderId ? (
             <>
-              Waiting for Razorpay for <MonoId tone="gold">{orderNo(resolvedOrderId)}</MonoId>. This page updates automatically.
+              Waiting for Razorpay for <MonoId tone="gold">{orderNo(resolvedOrderId)}</MonoId>. This
+              page updates automatically.
             </>
           ) : (
             "Waiting for Razorpay transaction confirmation. This page updates automatically."
           )}
         </p>
         <div className="flex flex-wrap justify-center gap-2">
-          {isTopup ? walletLink : ordersLink}
+          {isJoin ? addPartnerLink : isTopup ? walletLink : ordersLink}
         </div>
       </>
     )

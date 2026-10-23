@@ -14,6 +14,7 @@ import { NotificationModule } from './notification/notification.module';
 import { StockModule } from './stock/stock.module';
 import { ShiprocketModule } from './shiprocket/shiprocket.module';
 import { PayoutModule } from './payout/payout.module';
+import { OnboardingModule } from './onboarding/onboarding.module';
 
 @Module({
   imports: [
@@ -40,6 +41,7 @@ import { PayoutModule } from './payout/payout.module';
     NotificationModule,
     StockModule,
     ShiprocketModule,
+    OnboardingModule,
   ],
   controllers: [AppController],
   providers: [AppService],

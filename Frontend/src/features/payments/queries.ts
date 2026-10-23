@@ -5,6 +5,7 @@ import {
   isPaymentFailed,
   isPaymentPending,
   isPaymentSuccess,
+  reconcilePayments,
   startRazorpayOrderCheckout,
   startRazorpayTopup,
 } from "@/features/payments/api"
@@ -48,5 +49,17 @@ export const useCheckPayment = () =>
         : isPaymentFailed(r)
           ? "Payment failed — you can try again"
           : "Payment still pending verification",
+    invalidate: AFFECTED,
+  })
+
+/** [Admin] Ask Razorpay about every order / top-up / Add Partner payment still pending after 10 minutes. */
+export const useReconcilePayments = () =>
+  useApiMutation(() => reconcilePayments(), {
+    success: (r) => {
+      const found = r.pendingOrdersFound + r.pendingTopupsFound + (r.pendingRegistrationsFound ?? 0)
+      if (found === 0) return "No stuck payments — everything is settled"
+      const settled = `${r.processedOrders} of ${r.pendingOrdersFound} orders and ${r.processedTopups} of ${r.pendingTopupsFound} top-ups re-checked`
+      return r.errors.length ? `${settled} · ${r.errors.length} could not be checked` : settled
+    },
     invalidate: AFFECTED,
   })

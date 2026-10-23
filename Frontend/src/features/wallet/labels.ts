@@ -10,6 +10,8 @@ export const categoryLabel: Record<TransactionCategory, string> = {
   COMMISSION_LEVEL_4: "Level 4 commission",
   COMMISSION_LEVEL_5: "Level 5 commission",
   PRODUCT_PURCHASE: "Product purchase",
+  ORDER_PAYMENT: "Order payment",
+  TOPUP: "Money added",
   WITHDRAWAL: "Withdrawal",
   WITHDRAWAL_REVERSAL: "Withdrawal reversed",
   ADMIN_CREDIT: "Admin credit",

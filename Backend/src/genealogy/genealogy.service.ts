@@ -23,6 +23,9 @@ import { Wallet } from '../wallet/entity/wallet.entity';
 import { WalletTransaction, TransactionCategory } from '../wallet/entity/wallet-transaction.entity';
 import { JoinPartnerDto } from './dto/join-partner.dto';
 import { RegisterPartnerBySponsorDto } from './dto/register-partner-by-sponsor.dto';
+
+/** What a registration needs; the password can be left out when a hash is passed instead. */
+export type RegistrationDetails = Omit<RegisterPartnerBySponsorDto, 'password'> & { password?: string };
 import { generateNextVedId } from '../common/utils/ved-id.generator';
 import { WalletService } from '../wallet/wallet.service';
 import { NotificationService } from '../notification/notification.service';
@@ -452,104 +455,39 @@ export class GenealogyService {
 
   async registerPartnerBySponsor(sponsorUserId: number, dto: RegisterPartnerBySponsorDto) {
     try {
-      return await this.dataSource.transaction(async (manager) => {
-        const userRepo = manager.getRepository(User);
-        const profileRepo = manager.getRepository(UserProfile);
-        const nodeRepo = manager.getRepository(GenealogyNode);
-        const uplineRepo = manager.getRepository(CommissionUpline);
+      return await this.dataSource.transaction((manager) =>
+        this.registerPartnerInTransaction(manager, sponsorUserId, dto),
+      );
+    } catch (error: any) {
+      throw this.toRegistrationError(error);
+    }
+  }
 
-        // 1. Verify sponsor with pessimistic write lock (FOR UPDATE)
-        // Queues concurrent registrations under this sponsor so manual or auto slots are allocated cleanly
-        const sponsor = await userRepo
-          .createQueryBuilder('user')
-          .setLock('pessimistic_write')
-          .where('user.id = :id', { id: sponsorUserId })
-          .getOne();
+  /**
+   * Checks that a registration would go through (sponsor, placement, free slot, unused email and
+   * mobile) without creating anything — used before taking a joining-order payment.
+   */
+  async validateRegistration(sponsorUserId: number, dto: RegistrationDetails): Promise<void> {
+    await this.resolvePlacement(this.dataSource.manager, sponsorUserId, dto, false);
+  }
 
-        if (!sponsor) {
-          throw new NotFoundException('Sponsor not found.');
-        }
+  /**
+   * Registers a partner inside the caller's transaction. `passwordHash` lets an already hashed
+   * password be used (a registration stored while its payment was pending).
+   */
+  async registerPartnerInTransaction(
+    manager: EntityManager,
+    sponsorUserId: number,
+    dto: RegistrationDetails,
+    passwordHash?: string,
+  ) {
+      const userRepo = manager.getRepository(User);
+      const profileRepo = manager.getRepository(UserProfile);
+      const nodeRepo = manager.getRepository(GenealogyNode);
+      const uplineRepo = manager.getRepository(CommissionUpline);
 
-        if (sponsor.role === UserRole.ADMIN) {
-          throw new BadRequestException('Root Admin cannot directly sponsor partners.');
-        }
-
-        if (sponsor.status === UserStatus.BLOCKED) {
-          throw new BadRequestException('Your account is currently blocked.');
-        }
-
-        // 1b. Placement: under the sponsor, or under someone in the sponsor's own downline.
-        // The sponsor stays the sponsor (direct commission); `parent` is where the node sits.
-        let parent = sponsor;
-        const parentVedId = dto.parentVedId?.trim().toUpperCase();
-        if (parentVedId && parentVedId !== sponsor.vedId) {
-          const target = await userRepo
-            .createQueryBuilder('user')
-            .setLock('pessimistic_write')
-            .where('user.ved_id = :vedId', { vedId: parentVedId })
-            .getOne();
-          if (!target) {
-            throw new NotFoundException(`No partner found with VED ID ${parentVedId}.`);
-          }
-          if (target.status === UserStatus.BLOCKED) {
-            throw new BadRequestException(`${target.name} (${target.vedId}) is blocked.`);
-          }
-          if (!(await this.isInDownline(sponsor.id, target.id, manager))) {
-            throw new ForbiddenException('You can only place partners inside your own team.');
-          }
-          parent = target;
-        }
-        const placedUnderYou = parent.id === sponsor.id;
-
-      // 2. Check for duplicate email or mobile
-      const existing = await userRepo.findOne({
-        where: [{ email: dto.email }, { mobile: dto.mobile }],
-      });
-      if (existing) {
-        throw new ConflictException('Email or mobile number is already registered.');
-      }
-
-      // 3. Verify total direct partners capacity (Max 20)
-      const existingChildren = await nodeRepo.find({
-        where: { parentUserId: parent.id },
-        select: { slotNumber: true, userId: true },
-      });
-
-      if (existingChildren.length >= 20) {
-        throw new BadRequestException(
-          placedUnderYou
-            ? 'You have reached the maximum capacity of 20 direct partners.'
-            : `${parent.name} (${parent.vedId}) has reached the maximum capacity of 20 direct partners.`,
-        );
-      }
-
-      // 4. Determine slot: manual selection vs auto-allocation
-      const occupiedSlots = new Set(existingChildren.map((c) => c.slotNumber));
-      let chosenSlot: number;
-
-      if (dto.slotNumber !== undefined && dto.slotNumber !== null) {
-        if (dto.slotNumber < 1 || dto.slotNumber > 20) {
-          throw new BadRequestException('Slot number must be between 1 and 20.');
-        }
-
-        if (occupiedSlots.has(dto.slotNumber)) {
-          const conflictNode = existingChildren.find((c) => c.slotNumber === dto.slotNumber);
-          const conflictUser = conflictNode ? await userRepo.findOne({ where: { id: conflictNode.userId } }) : null;
-          const occupiedByName = conflictUser ? `${conflictUser.name} (${conflictUser.vedId})` : 'another partner';
-          throw new BadRequestException(`Slot ${dto.slotNumber} is already occupied by ${occupiedByName}.`);
-        }
-        chosenSlot = dto.slotNumber;
-      } else {
-        // Auto-allocate lowest unoccupied slot (1 to 20)
-        let slot = 1;
-        while (slot <= 20) {
-          if (!occupiedSlots.has(slot)) {
-            break;
-          }
-          slot++;
-        }
-        chosenSlot = slot;
-      }
+      const { sponsor, parent, placedUnderYou, existingChildren, chosenSlot } =
+        await this.resolvePlacement(manager, sponsorUserId, dto, true);
 
       // 4b. Identify joining product & verify sponsor wallet balance
       const productRepo = manager.getRepository(Product);
@@ -644,13 +582,15 @@ export class GenealogyService {
       const newVedId = await generateNextVedId(manager);
 
       // 7. Create User
-      const passwordHash = await bcrypt.hash(dto.password, 10);
+      if (!passwordHash && !dto.password) {
+        throw new BadRequestException('Password is required.');
+      }
       const newUser = userRepo.create({
         vedId: newVedId,
         name: dto.name,
         email: dto.email,
         mobile: dto.mobile,
-        passwordHash,
+        passwordHash: passwordHash ?? (await bcrypt.hash(dto.password as string, 10)),
         role: UserRole.PARTNER,
         status: UserStatus.PENDING,
       });
@@ -840,21 +780,127 @@ export class GenealogyService {
           amountPaidFormatted: `₹${(productCost / 100).toFixed(2)}`,
         },
       };
-    });
-    } catch (error: any) {
-      if (error?.code === '23505') {
-        if (error.detail?.includes('email')) {
-          throw new ConflictException('Email is already registered.');
-        }
-        if (error.detail?.includes('mobile')) {
-          throw new ConflictException('Mobile number is already registered.');
-        }
-        if (error.detail?.includes('parent_user_id') && error.detail?.includes('slot_number')) {
-          throw new ConflictException('The target slot was just claimed by another user. Please retry.');
-        }
+  }
+
+  /** Unique-key violations from a registration, as readable errors. */
+  toRegistrationError(error: any) {
+    if (error?.code === '23505') {
+      if (error.detail?.includes('email')) {
+        return new ConflictException('Email is already registered.');
       }
-      throw error;
+      if (error.detail?.includes('mobile')) {
+        return new ConflictException('Mobile number is already registered.');
+      }
+      if (error.detail?.includes('parent_user_id') && error.detail?.includes('slot_number')) {
+        return new ConflictException('The target slot was just claimed by another user. Please retry.');
+      }
     }
+    return error;
+  }
+
+  /**
+   * Sponsor, placement parent and slot for a new partner, after every check that can refuse the
+   * registration. `lock` takes row locks (inside the registering transaction).
+   */
+  private async resolvePlacement(
+    manager: EntityManager,
+    sponsorUserId: number,
+    dto: RegistrationDetails,
+    lock: boolean,
+  ) {
+    const userRepo = manager.getRepository(User);
+    const nodeRepo = manager.getRepository(GenealogyNode);
+    const findUser = (where: string, params: Record<string, unknown>) => {
+      const qb = userRepo.createQueryBuilder('user').where(where, params);
+      return (lock ? qb.setLock('pessimistic_write') : qb).getOne();
+    };
+
+    // 1. Verify sponsor with pessimistic write lock (FOR UPDATE)
+    // Queues concurrent registrations under this sponsor so manual or auto slots are allocated cleanly
+    const sponsor = await findUser('user.id = :id', { id: sponsorUserId });
+
+    if (!sponsor) {
+      throw new NotFoundException('Sponsor not found.');
+    }
+
+    if (sponsor.role === UserRole.ADMIN) {
+      throw new BadRequestException('Root Admin cannot directly sponsor partners.');
+    }
+
+    if (sponsor.status === UserStatus.BLOCKED) {
+      throw new BadRequestException('Your account is currently blocked.');
+    }
+
+    // 1b. Placement: under the sponsor, or under someone in the sponsor's own downline.
+    // The sponsor stays the sponsor (direct commission); `parent` is where the node sits.
+    let parent = sponsor;
+    const parentVedId = dto.parentVedId?.trim().toUpperCase();
+    if (parentVedId && parentVedId !== sponsor.vedId) {
+      const target = await findUser('user.ved_id = :vedId', { vedId: parentVedId });
+      if (!target) {
+        throw new NotFoundException(`No partner found with VED ID ${parentVedId}.`);
+      }
+      if (target.status === UserStatus.BLOCKED) {
+        throw new BadRequestException(`${target.name} (${target.vedId}) is blocked.`);
+      }
+      if (!(await this.isInDownline(sponsor.id, target.id, manager))) {
+        throw new ForbiddenException('You can only place partners inside your own team.');
+      }
+      parent = target;
+    }
+    const placedUnderYou = parent.id === sponsor.id;
+
+    // 2. Check for duplicate email or mobile
+    const existing = await userRepo.findOne({
+      where: [{ email: dto.email }, { mobile: dto.mobile }],
+    });
+    if (existing) {
+      throw new ConflictException('Email or mobile number is already registered.');
+    }
+
+    // 3. Verify total direct partners capacity (Max 20)
+    const existingChildren = await nodeRepo.find({
+      where: { parentUserId: parent.id },
+      select: { slotNumber: true, userId: true },
+    });
+
+    if (existingChildren.length >= 20) {
+      throw new BadRequestException(
+        placedUnderYou
+          ? 'You have reached the maximum capacity of 20 direct partners.'
+          : `${parent.name} (${parent.vedId}) has reached the maximum capacity of 20 direct partners.`,
+      );
+    }
+
+    // 4. Determine slot: manual selection vs auto-allocation
+    const occupiedSlots = new Set(existingChildren.map((c) => c.slotNumber));
+    let chosenSlot: number;
+
+    if (dto.slotNumber !== undefined && dto.slotNumber !== null) {
+      if (dto.slotNumber < 1 || dto.slotNumber > 20) {
+        throw new BadRequestException('Slot number must be between 1 and 20.');
+      }
+
+      if (occupiedSlots.has(dto.slotNumber)) {
+        const conflictNode = existingChildren.find((c) => c.slotNumber === dto.slotNumber);
+        const conflictUser = conflictNode ? await userRepo.findOne({ where: { id: conflictNode.userId } }) : null;
+        const occupiedByName = conflictUser ? `${conflictUser.name} (${conflictUser.vedId})` : 'another partner';
+        throw new BadRequestException(`Slot ${dto.slotNumber} is already occupied by ${occupiedByName}.`);
+      }
+      chosenSlot = dto.slotNumber;
+    } else {
+      // Auto-allocate lowest unoccupied slot (1 to 20)
+      let slot = 1;
+      while (slot <= 20) {
+        if (!occupiedSlots.has(slot)) {
+          break;
+        }
+        slot++;
+      }
+      chosenSlot = slot;
+    }
+
+    return { sponsor, parent, placedUnderYou, existingChildren, chosenSlot };
   }
 
   async getMySlots(sponsorUserId: number) {

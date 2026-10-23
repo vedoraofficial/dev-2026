@@ -313,6 +313,33 @@ export class OrderService {
    * Distribute commissions to upline partners based on the VEDORA compensation plan.
    * Must be called INSIDE a database transaction.
    */
+  /**
+   * Saves a level-0 commission row. commission_distributions is unique on (order, level, person),
+   * and the sponsor's direct bonus, the Admin commission and the buyer's BV credit are all level 0 —
+   * so when they land on the same person (e.g. VED108 is also the sponsor) the amount is added to
+   * the existing row instead of failing the whole order. Each wallet credit stays its own entry.
+   */
+  private async recordLevelZeroDistribution(
+    commissionRepo: Repository<CommissionDistribution>,
+    row: {
+      orderId: number;
+      beneficiaryUserId: number;
+      commissionRate: number;
+      amount: number;
+      walletTransactionId: number | null;
+    },
+  ): Promise<void> {
+    const existing = await commissionRepo.findOne({
+      where: { orderId: row.orderId, level: 0, beneficiaryUserId: row.beneficiaryUserId },
+    });
+    if (existing) {
+      existing.amount = Number(existing.amount) + row.amount;
+      await commissionRepo.save(existing);
+      return;
+    }
+    await commissionRepo.save(commissionRepo.create({ ...row, level: 0 }));
+  }
+
   async distributeCommissions(orderId: number, manager: EntityManager): Promise<void> {
     const orderRepo = manager.getRepository(Order);
     const commissionRepo = manager.getRepository(CommissionDistribution);
@@ -341,20 +368,19 @@ export class OrderService {
       where: { userId: order.userId },
     });
 
+    // No upline row (e.g. Founders, who sit at the top of the tree): no sponsor / level
+    // commissions, but the Admin commission and the buyer's BV credit below still apply.
     if (!upline) {
-      this.logger.warn(`No commission upline found for user ${order.userId}. Skipping commission distribution.`);
-      order.commissionsDistributed = true;
-      await orderRepo.save(order);
-      return;
+      this.logger.warn(`No commission upline found for user ${order.userId}. Skipping upline commissions only.`);
     }
 
     // Map level → upline user ID
     const uplineMap: Record<number, number | null> = {
-      1: upline.level1UserId,
-      2: upline.level2UserId,
-      3: upline.level3UserId,
-      4: upline.level4UserId,
-      5: upline.level5UserId,
+      1: upline?.level1UserId ?? null,
+      2: upline?.level2UserId ?? null,
+      3: upline?.level3UserId ?? null,
+      4: upline?.level4UserId ?? null,
+      5: upline?.level5UserId ?? null,
     };
 
     // Who enrolled the buyer (earns the direct bonus); BV levels above follow the tree (uplineMap)
@@ -372,7 +398,7 @@ export class OrderService {
 
     const bvTotalPaise = Number(order.bvTotal) * 100; // BV → paise (1 BV = ₹1 = 100 paise)
 
-    for (const config of COMMISSION_CONFIG) {
+    for (const config of upline ? COMMISSION_CONFIG : []) {
       let beneficiaryUserId: number | null = null;
 
       if (config.level === 0) {
@@ -442,39 +468,38 @@ export class OrderService {
       earnedByBeneficiary.set(beneficiaryUserId, earned);
     }
 
-    // ─── Task 3: Admin Direct Commission (₹200 on every product purchase) ───
-    const rootAdmin = await manager.getRepository(User).findOne({
-      where: [{ role: UserRole.ADMIN }, { vedId: 'VED108' }],
-    });
+    // ─── Task 3: Admin Direct Commission (₹200 per product unit sold) ───
+    const rootAdmin =
+      (await manager.getRepository(User).findOne({ where: { vedId: 'VED108' } })) ??
+      (await manager.getRepository(User).findOne({ where: { role: UserRole.ADMIN } }));
     if (rootAdmin) {
       await this.walletService.createWallet(rootAdmin.id, manager);
-      const adminCommissionPaise = 20000; // ₹200 flat = 20,000 paise
+      const units = Math.max(1, Number(order.quantity) || 1);
+      const adminCommissionPaise = 20000 * units; // ₹200 (20,000 paise) per unit
       const adminTxn = await this.walletService.credit(
         rootAdmin.id,
         adminCommissionPaise,
         TransactionCategory.COMMISSION_DIRECT,
-        `Admin direct commission for product purchase - Order #${orderId}`,
+        `Admin direct commission for product purchase - Order #${orderId} (₹200 × ${units})`,
         'ORDER',
         String(orderId),
         manager,
       );
 
-      const adminDist = commissionRepo.create({
+      await this.recordLevelZeroDistribution(commissionRepo, {
         orderId,
         beneficiaryUserId: rootAdmin.id,
-        level: 0,
         commissionRate: 0,
         amount: adminCommissionPaise,
         walletTransactionId: adminTxn ? Number(adminTxn.id) : null,
       });
-      await commissionRepo.save(adminDist);
 
       await this.notificationService.create(
         rootAdmin.id,
         NotificationKey.COMMISSION_CREDITED,
-        '₹200 Admin commission credited',
-        `Direct commission of ₹200 credited to Admin wallet for Order #${orderId}.`,
-        { orderId, totalPaise: adminCommissionPaise },
+        `₹${adminCommissionPaise / 100} Admin commission credited`,
+        `Direct commission of ₹${adminCommissionPaise / 100} (₹200 × ${units}) credited to Admin wallet for Order #${orderId}.`,
+        { orderId, units, totalPaise: adminCommissionPaise },
         manager,
       );
     }
@@ -493,15 +518,13 @@ export class OrderService {
         manager,
       );
 
-      const bvDist = commissionRepo.create({
+      await this.recordLevelZeroDistribution(commissionRepo, {
         orderId,
         beneficiaryUserId: order.userId,
-        level: 0,
         commissionRate: 10000, // 100% (1 BV = ₹1)
         amount: bvPaise,
         walletTransactionId: bvTxn ? Number(bvTxn.id) : null,
       });
-      await commissionRepo.save(bvDist);
 
       await this.notificationService.create(
         order.userId,

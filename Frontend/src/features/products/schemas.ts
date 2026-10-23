@@ -14,6 +14,11 @@ const rupees = (label: string) =>
 export const productSchema = z
   .object({
     name: z.string().trim().min(2, "Enter the product name"),
+    sku: z
+      .string()
+      .trim()
+      .max(40, "SKU can be at most 40 characters")
+      .regex(/^[A-Za-z0-9_-]*$/, "Use only letters, numbers, - and _ (no spaces)"),
     description: z.string().trim(),
     mrp: rupees("MRP"),
     salePrice: rupees("Sale price"),
@@ -28,6 +33,7 @@ export type ProductFormValues = z.infer<typeof productSchema>
 
 export const blankProduct: ProductFormValues = {
   name: "",
+  sku: "",
   description: "",
   mrp: "",
   salePrice: "",
@@ -37,6 +43,7 @@ export const blankProduct: ProductFormValues = {
 
 export const productToForm = (p: ApiProduct): ProductFormValues => ({
   name: p.name,
+  sku: p.sku ?? "",
   description: p.description ?? "",
   mrp: String(paiseToRupees(p.mrp)),
   salePrice: String(paiseToRupees(p.salePrice)),
@@ -46,6 +53,8 @@ export const productToForm = (p: ApiProduct): ProductFormValues => ({
 
 export const formToProduct = (v: ProductFormValues): ProductInput => ({
   name: v.name,
+  // Sent even when empty: the backend then generates one (also when Admin clears it)
+  sku: v.sku.toUpperCase(),
   description: v.description || undefined,
   mrp: rupeesToPaise(Number(v.mrp)),
   salePrice: rupeesToPaise(Number(v.salePrice)),

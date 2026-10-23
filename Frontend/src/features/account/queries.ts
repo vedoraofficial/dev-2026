@@ -3,7 +3,9 @@ import { useQuery } from "@tanstack/react-query"
 import {
   addBank,
   adminVerifyBank,
+  adminChangeUserStatus,
   adminCreateUser,
+  adminDeleteUser,
   changePassword,
   deleteBank,
   getBanks,
@@ -14,7 +16,12 @@ import {
   updateProfileDetails,
   verifyBank,
 } from "@/features/account/api"
-import type { Bank, UpdateMeInput, UpdateProfileDetailsInput } from "@/features/account/types"
+import type {
+  Bank,
+  UpdateMeInput,
+  UpdateProfileDetailsInput,
+  UserStatus,
+} from "@/features/account/types"
 import { useApiMutation } from "@/lib/mutation"
 import { useSession } from "@/lib/session"
 
@@ -94,3 +101,24 @@ export const useDeleteBank = () =>
 
 export const useAdminCreateUser = () =>
   useApiMutation(adminCreateUser, { success: (u) => `User ${u.vedId} created` })
+
+const STATUS_TOAST: Record<UserStatus, string> = {
+  ACTIVE: "Account activated",
+  INACTIVE: "Account deactivated",
+  BLOCKED: "Account blocked — they can no longer sign in",
+  PENDING: "Account set to pending",
+}
+
+/** [Admin] Block / activate a partner. Refreshes the genealogy, which lists them. */
+export const useAdminChangeUserStatus = () =>
+  useApiMutation(adminChangeUserStatus, {
+    success: (_r, v) => STATUS_TOAST[v.status],
+    invalidate: [["genealogy"]],
+  })
+
+/** [Admin] Delete a partner with no orders or wallet history. */
+export const useAdminDeleteUser = () =>
+  useApiMutation(adminDeleteUser, {
+    success: (r) => r.message || "Partner deleted",
+    invalidate: [["genealogy"]],
+  })

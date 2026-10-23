@@ -243,7 +243,7 @@ export function AdminWithdrawalsPage() {
         }
       />
       <PageBody>
-        <StatGrid>
+        <StatGrid cols={5}>
           <StatCard
             label="Pending requests"
             value={pending.length}
@@ -261,10 +261,12 @@ export function AdminWithdrawalsPage() {
             value={byStatus("REJECTED").length}
             onClick={() => setTab("REJECTED")}
           />
+          {/* 5th card: full width on phone / tablet (2 columns) so it doesn't sit alone */}
           <StatCard
             label="Reversed"
             value={byStatus("REVERSED").length}
             onClick={() => setTab("REVERSED")}
+            className="col-span-2 lg:col-span-1"
           />
         </StatGrid>
 
@@ -280,43 +282,47 @@ export function AdminWithdrawalsPage() {
               }}
             />
             {tab === "PENDING" ? (
-              <label className="flex cursor-pointer items-center gap-2 text-xs text-muted-foreground">
-                <Checkbox
-                  checked={selectedRows.length > 0 && !allSelected ? "indeterminate" : allSelected}
-                  onCheckedChange={toggleAll}
-                  aria-label="Select all pending requests"
-                />
-                Select all
-              </label>
+              // Bulk actions sit on the tabs row, just left of "Select all"
+              <div className="flex flex-wrap items-center justify-end gap-2">
+                {selectedRows.length > 0 ? (
+                  <>
+                    <span className="text-xs text-muted-foreground">
+                      {selectedRows.length} selected
+                    </span>
+                    <ConfirmDialog
+                      trigger={
+                        <Button size="sm" disabled={bulkBusy}>
+                          Approve selected
+                        </Button>
+                      }
+                      title={`Approve ${selectedRows.length} requests?`}
+                      description={`${formatINR(sum(selectedRows))} in total.`}
+                      confirmLabel="Approve all"
+                      onConfirm={() => void bulk("approve")}
+                    />
+                    <RejectWithdrawalDialog
+                      trigger={
+                        <Button variant="destructive" size="sm" disabled={bulkBusy}>
+                          Reject selected
+                        </Button>
+                      }
+                      what={`${selectedRows.length} requests`}
+                      busy={bulkBusy}
+                      onReject={(remarks) => void bulk("reject", remarks || undefined)}
+                    />
+                  </>
+                ) : null}
+                <label className="ml-2 flex cursor-pointer items-center gap-2 text-xs text-muted-foreground">
+                  <Checkbox
+                    checked={selectedRows.length > 0 && !allSelected ? "indeterminate" : allSelected}
+                    onCheckedChange={toggleAll}
+                    aria-label="Select all pending requests"
+                  />
+                  Select all
+                </label>
+              </div>
             ) : null}
           </div>
-
-          {tab === "PENDING" && selectedRows.length > 0 ? (
-            <div className="mb-3 flex items-center justify-end gap-2 border-b border-border/70 pb-3">
-              <span className="text-xs text-muted-foreground">{selectedRows.length} selected</span>
-              <ConfirmDialog
-                trigger={
-                  <Button size="sm" disabled={bulkBusy}>
-                    Approve selected
-                  </Button>
-                }
-                title={`Approve ${selectedRows.length} requests?`}
-                description={`${formatINR(sum(selectedRows))} in total.`}
-                confirmLabel="Approve all"
-                onConfirm={() => void bulk("approve")}
-              />
-              <RejectWithdrawalDialog
-                trigger={
-                  <Button variant="destructive" size="sm" disabled={bulkBusy}>
-                    Reject selected
-                  </Button>
-                }
-                what={`${selectedRows.length} requests`}
-                busy={bulkBusy}
-                onReject={(remarks) => void bulk("reject", remarks || undefined)}
-              />
-            </div>
-          ) : null}
 
           <QueryState query={withdrawals} rows={5}>
             <DataTable

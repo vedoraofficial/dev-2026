@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query"
 
 import {
+  cancelOrder,
   createCashOrder,
   createOrder,
   getAllOrders,
@@ -34,4 +35,11 @@ export const useCreateCashOrder = () =>
   useApiMutation(createCashOrder, {
     success: "Cash order created — commissions distributed",
     invalidate: [orderKeys.all, ["wallet"]],
+  })
+
+/** Cancel an order. A paid one (Admin) is refunded to the wallet and its stock returned. */
+export const useCancelOrder = () =>
+  useApiMutation(cancelOrder, {
+    success: (r) => r.message || "Order cancelled",
+    invalidate: [orderKeys.all, ["wallet"], ["stock"]],
   })

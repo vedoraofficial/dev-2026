@@ -14,6 +14,7 @@ import {
   UserPlus,
   Users,
   Wallet,
+  WalletMinimal,
   type LucideIcon,
 } from "lucide-react"
 
@@ -30,6 +31,7 @@ export const ADMIN_NAV: NavItem[] = [
   { label: "Products", to: ROUTES.admin.products, icon: Package },
   { label: "Stock", to: ROUTES.admin.stock, icon: Boxes },
   { label: "Orders", to: ROUTES.admin.orders, icon: ShoppingCart },
+  { label: "Wallet", to: ROUTES.admin.wallet, icon: WalletMinimal },
   { label: "Withdrawals", to: ROUTES.admin.withdrawals, icon: Wallet },
   { label: "Income Reports", to: ROUTES.admin.incomeReports, icon: ChartColumn },
   { label: "Transactions", to: ROUTES.admin.transactions, icon: ArrowLeftRight },

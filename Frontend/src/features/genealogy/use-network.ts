@@ -8,6 +8,8 @@ import { useSession } from "@/lib/session"
 
 /** One person in a network or downline. */
 export type NetworkMember = {
+  /** Account id (for admin actions) — Founders and the walk's root have none */
+  userId?: number
   vedId: string
   name: string
   email: string
@@ -63,6 +65,7 @@ async function crawlTeams(
       for (const p of team) {
         if (members.has(p.vedId)) continue // never loop on bad data
         const member: NetworkMember = {
+          userId: p.id,
           vedId: p.vedId,
           name: p.name,
           email: p.email,

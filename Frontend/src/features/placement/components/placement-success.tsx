@@ -29,10 +29,18 @@ export type RegisteredPartner = {
   placedUnderName?: string
 }
 
+/** The joining order the backend created (paid) for the new partner. */
+export type JoiningOrder = {
+  id: number
+  totalAmountFormatted: string
+  paymentMethod: "WALLET" | "RAZORPAY"
+}
+
 type Props = {
   partner: RegisteredPartner
   values: PlacementValues
   product: PickerProduct & { name: string }
+  order: JoiningOrder
   onPlaceAnother: () => void
 }
 
@@ -46,7 +54,7 @@ function Row({ label, value }: { label: string; value: ReactNode }) {
 }
 
 /** Shown after a successful Manual Placement — every value comes from the backend's response. */
-export function PlacementSuccess({ partner, values, product, onPlaceAnother }: Props) {
+export function PlacementSuccess({ partner, values, product, order, onPlaceAnother }: Props) {
   const parentVedId = partner.placedUnderVedId ?? partner.sponsorVedId
   const parentName = partner.placedUnderName ?? partner.sponsorName
   const underYou = parentVedId === partner.sponsorVedId
@@ -72,7 +80,11 @@ export function PlacementSuccess({ partner, values, product, onPlaceAnother }: P
         <Panel>
           <PanelHeader
             title="Placed in the tree"
-            aside={<StatusPill variant="pending">{partner.status}</StatusPill>}
+            aside={
+              <StatusPill variant={partner.status === "ACTIVE" ? "success" : "pending"}>
+                {partner.status}
+              </StatusPill>
+            }
           />
           <div className="mb-5 flex flex-col items-center">
             <div className="w-full max-w-60 rounded-xl border border-border bg-field/60 p-3 text-center">
@@ -126,7 +138,10 @@ export function PlacementSuccess({ partner, values, product, onPlaceAnother }: P
         </Panel>
 
         <Panel>
-          <PanelHeader title="Joining order" aside={<StatusPill>Not sent</StatusPill>} />
+          <PanelHeader
+            title={`Joining order ORD-${String(order.id).padStart(5, "0")}`}
+            aside={<StatusPill variant="success">Paid</StatusPill>}
+          />
           <div className="flex gap-3">
             <img
               src={product.image}
@@ -146,21 +161,21 @@ export function PlacementSuccess({ partner, values, product, onPlaceAnother }: P
             </div>
           </div>
           <div className="mt-4 rounded-xl border border-border bg-field/60 p-3.5 text-[0.8125rem] leading-relaxed">
-            <p className="mb-1 eyebrow text-[0.625rem]">Ship to</p>
-            <p className="font-medium">{values.shipName}</p>
+            <p className="mb-1 eyebrow text-[0.625rem]">Ships to (registered address)</p>
+            <p className="font-medium">{partner.name}</p>
             <p className="text-muted-foreground">
-              {values.shipLine1}
-              {values.shipArea ? `, ${values.shipArea}` : ""}
-              {values.shipLandmark ? `, ${values.shipLandmark}` : ""}
+              {values.address}
+              {values.area ? `, ${values.area}` : ""}
               <br />
-              {values.shipCity}, {values.shipState} – {values.shipPincode}
+              {values.city}, {values.state} – {values.pincode}
               <br />
-              {values.shipMobile}
+              {partner.mobile}
             </p>
           </div>
           <p className="mt-4 text-[0.6875rem] leading-relaxed text-muted-foreground">
-            The backend has no joining-order API yet, so this order was not created. The new partner
-            can sign in and order from Products, which goes through Razorpay.
+            {order.totalAmountFormatted} paid{" "}
+            {order.paymentMethod === "WALLET" ? "from your wallet" : "online (Razorpay)"}. The order
+            is confirmed and the commissions have gone out — Admin books the courier from Orders.
           </p>
         </Panel>
       </div>

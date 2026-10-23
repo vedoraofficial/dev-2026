@@ -108,15 +108,34 @@ export class PaymentReconciliationService {
       }
     }
 
+    // 3. Payments owned by other modules (e.g. partner registrations waiting for Razorpay)
+    let processedRegistrations = 0;
+    let pendingRegistrationsFound = 0;
+    for (const handler of this.paymentService.getExternalHandlers()) {
+      const razorpayOrderIds = await handler.findStalePending(cutoff);
+      pendingRegistrationsFound += razorpayOrderIds.length;
+      for (const razorpayOrderId of razorpayOrderIds) {
+        try {
+          await this.paymentService.checkAndProcessPayment(razorpayOrderId, 'RECONCILIATION');
+          processedRegistrations++;
+        } catch (err: any) {
+          this.logger.warn(`Failed reconciling ${razorpayOrderId}: ${err.message}`);
+          errors.push(`${razorpayOrderId}: ${err.message}`);
+        }
+      }
+    }
+
     this.logger.log(
-      `Reconciliation complete: ${processedOrders} orders, ${processedTopups} top-ups processed.`,
+      `Reconciliation complete: ${processedOrders} orders, ${processedTopups} top-ups, ${processedRegistrations} registrations processed.`,
     );
 
     return {
       processedOrders,
       processedTopups,
+      processedRegistrations,
       pendingOrdersFound: pendingOrders.length,
       pendingTopupsFound: pendingTopups.length,
+      pendingRegistrationsFound,
       errors,
     };
   }

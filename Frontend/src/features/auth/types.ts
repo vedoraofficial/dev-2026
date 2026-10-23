@@ -6,7 +6,7 @@ export type LoginResponse = {
   user: SessionUser
 }
 
-/** POST /api/auth/forgot-password. `resetToken` is the OTP (the backend returns it while there is no SMS/email). */
+/** POST /api/auth/forgot-password. The OTP goes by SMS; `resetToken` only comes back in the backend's test mode. */
 export type ForgotPasswordResponse = {
   message: string
   resetToken?: string

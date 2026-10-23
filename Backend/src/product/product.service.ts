@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, ConflictException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { IsNull, Repository } from 'typeorm';
 import { Product, ProductStatus } from './entity/product.entity';
@@ -8,6 +8,21 @@ import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
 import { NotificationService } from '../notification/notification.service';
 import { NotificationKey } from '../notification/notification.constants';
+
+/**
+ * Auto SKU: VED-<first word of the name, without "VEDORA">-<product number>,
+ * e.g. "VEDORA PYRITE LEGACY" #3 → VED-PYRITE-003. The product number keeps it unique.
+ */
+export function generateSku(name: string, id: number): string {
+  const word = name
+    .replace(/\bvedora\b/gi, ' ')
+    .replace(/[^a-z0-9 ]/gi, ' ')
+    .trim()
+    .split(/\s+/)[0]
+    ?.toUpperCase()
+    .slice(0, 20);
+  return `VED-${word || 'PRD'}-${String(id).padStart(3, '0')}`;
+}
 
 @Injectable()
 export class ProductService {
@@ -22,12 +37,20 @@ export class ProductService {
       throw new BadRequestException('Sale price cannot exceed Maximum Retail Price (MRP).');
     }
 
+    const sku = this.normalizeSku(dto.sku);
+    if (sku) await this.assertSkuFree(sku);
+
     const product = this.productRepo.create({
       ...dto,
+      sku,
       createdBy: userId,
       updatedBy: userId,
     });
     const saved = await this.productRepo.save(product);
+    if (!saved.sku) {
+      saved.sku = generateSku(saved.name, Number(saved.id));
+      await this.productRepo.save(saved);
+    }
 
     if (saved.status === ProductStatus.ACTIVE) {
       const priceFormatted = `₹${(Number(saved.salePrice) / 100).toFixed(2)}`;
@@ -78,7 +101,13 @@ export class ProductService {
       throw new BadRequestException('Sale price cannot exceed Maximum Retail Price (MRP).');
     }
     
-    Object.assign(product, dto);
+    const { sku: skuInput, ...rest } = dto;
+    Object.assign(product, rest);
+    if (skuInput !== undefined) {
+      const sku = this.normalizeSku(skuInput);
+      if (sku) await this.assertSkuFree(sku, Number(product.id));
+      product.sku = sku ?? generateSku(product.name, Number(product.id));
+    }
     product.updatedBy = userId;
 
     const saved = await this.productRepo.save(product);
@@ -110,5 +139,19 @@ export class ProductService {
       await this.productRepo.remove(product);
     }
     return { message: 'Product deleted successfully' };
+  }
+
+  /** Trimmed and upper-cased; empty means "generate one". */
+  private normalizeSku(sku?: string | null): string | null {
+    const value = sku?.trim().toUpperCase();
+    return value ? value : null;
+  }
+
+  /** SKUs are unique — including products that were deleted but still exist for old orders. */
+  private async assertSkuFree(sku: string, exceptProductId?: number) {
+    const existing = await this.productRepo.findOne({ where: { sku } });
+    if (existing && Number(existing.id) !== exceptProductId) {
+      throw new ConflictException(`SKU ${sku} is already used by "${existing.name}". Choose another one.`);
+    }
   }
 }

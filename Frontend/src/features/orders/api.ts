@@ -1,5 +1,6 @@
 import type {
   ApiOrder,
+  CancelOrderInput,
   CashOrderInput,
   CreatedOrder,
   CreateOrderInput,
@@ -42,5 +43,19 @@ export async function getAllOrders(): Promise<ApiOrder[]> {
 /** POST /api/order/admin/cash — [Admin] */
 export async function createCashOrder(input: CashOrderInput): Promise<{ message: string }> {
   const { data } = await api.post<{ message: string }>("/order/admin/cash", input)
+  return data
+}
+
+/**
+ * POST /api/order/:id/cancel — an unpaid order is just cancelled. A paid one (Admin only) is
+ * refunded to the buyer's wallet, its commissions are reversed and the stock goes back.
+ */
+export async function cancelOrder({
+  id,
+  reason,
+}: CancelOrderInput): Promise<{ message: string; orderId: number }> {
+  const { data } = await api.post<{ message: string; orderId: number }>(`/order/${id}/cancel`, {
+    reason,
+  })
   return data
 }

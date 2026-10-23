@@ -82,9 +82,19 @@ export const router = createBrowserRouter([
     ErrorBoundary: RouteError,
     children: [
       { path: ROUTES.login, ...page(() => import("@/pages/auth/login-page"), "LoginPage") },
+      {
+        path: ROUTES.forgotPassword,
+        ...page(() => import("@/pages/auth/forgot-password-page"), "ForgotPasswordPage"),
+      },
       // Referral link — public, no sign-in needed.
       { path: `${ROUTES.join}/:ref`, ...page(() => import("@/pages/auth/join-page"), "JoinPage") },
       { path: ROUTES.join, ...page(() => import("@/pages/auth/join-page"), "JoinPage") },
+      // Parcel tracking by AWB — public, no sign-in needed.
+      {
+        path: `${ROUTES.track}/:awb`,
+        ...page(() => import("@/pages/auth/track-page"), "TrackPage"),
+      },
+      { path: ROUTES.track, ...page(() => import("@/pages/auth/track-page"), "TrackPage") },
       // Old separate admin sign-in link — everyone signs in at /login now.
       { path: ROUTES.adminLogin, element: <Navigate to={ROUTES.login} replace /> },
     ],
@@ -117,6 +127,7 @@ export const router = createBrowserRouter([
       },
       { path: "stock", ...page(() => import("@/pages/admin/stock-page"), "AdminStockPage") },
       { path: "orders", ...page(() => import("@/pages/admin/orders-page"), "AdminOrdersPage") },
+      { path: "wallet", ...page(() => import("@/pages/admin/wallet-page"), "AdminWalletPage") },
       {
         path: "withdrawals",
         ...page(() => import("@/pages/admin/withdrawals-page"), "AdminWithdrawalsPage"),

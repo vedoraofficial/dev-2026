@@ -100,21 +100,25 @@ export async function adminCreateUser(input: CreateUserInput): Promise<CreatedUs
   return data
 }
 
-/**
- * PATCH /api/user/status — [Admin].
- * ⚠ Backend bug: it changes the status of the signed-in admin (req.user), not another user.
- * Not wired to any button — calling it would block the admin's own account.
- */
-export async function adminChangeOwnStatus(status: UserStatus): Promise<Me> {
-  const { data } = await api.patch<Me>("/user/status", { status })
+/** PATCH /api/user/:id/status — [Admin] activate, deactivate or block someone's account. */
+export async function adminChangeUserStatus({
+  id,
+  status,
+}: {
+  id: number
+  status: UserStatus
+}): Promise<{ id: number; status: UserStatus }> {
+  const { data } = await api.patch<{ id: number; status: UserStatus }>(`/user/${id}/status`, {
+    status,
+  })
   return data
 }
 
 /**
- * DELETE /api/user — [Admin].
- * ⚠ Backend bug: it deletes the signed-in admin's own account. Not wired to any button.
+ * DELETE /api/user/:id — [Admin]. The backend refuses admins and anyone with orders or wallet
+ * history (block those instead).
  */
-export async function adminDeleteOwnAccount(): Promise<{ message: string }> {
-  const { data } = await api.delete<{ message: string }>("/user")
+export async function adminDeleteUser(id: number): Promise<{ message: string }> {
+  const { data } = await api.delete<{ message: string }>(`/user/${id}`)
   return data
 }

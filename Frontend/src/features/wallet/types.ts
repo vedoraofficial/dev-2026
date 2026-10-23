@@ -23,6 +23,8 @@ export type TransactionCategory =
   | "COMMISSION_LEVEL_4"
   | "COMMISSION_LEVEL_5"
   | "PRODUCT_PURCHASE"
+  | "ORDER_PAYMENT"
+  | "TOPUP"
   | "WITHDRAWAL"
   | "WITHDRAWAL_REVERSAL"
   | "ADMIN_CREDIT"
@@ -58,7 +60,8 @@ export type Paginated<T> = {
   pagination: { page: number; limit: number; total: number; totalPages: number }
 }
 
-export type WithdrawalStatus = "PENDING" | "APPROVED" | "PROCESSING" | "COMPLETED" | "REJECTED" | "REVERSED"
+export type WithdrawalStatus =
+  "PENDING" | "APPROVED" | "PROCESSING" | "COMPLETED" | "REJECTED" | "REVERSED"
 
 type WithdrawalBank = { id?: number; bankName: string; accountNumber: string; ifscCode: string }
 

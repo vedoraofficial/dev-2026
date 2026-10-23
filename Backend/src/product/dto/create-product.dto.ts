@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsEnum, IsInt, IsNotEmpty, IsOptional, IsString, Min } from 'class-validator';
+import { IsEnum, IsInt, IsNotEmpty, IsOptional, IsString, Matches, MaxLength, Min } from 'class-validator';
 import { ProductStatus } from '../entity/product.entity';
 
 export class CreateProductDto {
@@ -7,6 +7,17 @@ export class CreateProductDto {
   @IsString()
   @IsNotEmpty()
   name: string;
+
+  @ApiProperty({
+    example: 'VED-PYRITE-003',
+    required: false,
+    description: 'Product SKU (unique). Leave empty to auto-generate VED-<name>-<number>.',
+  })
+  @IsString()
+  @IsOptional()
+  @MaxLength(40)
+  @Matches(/^[A-Za-z0-9_-]*$/, { message: 'SKU can only use letters, numbers, - and _ (no spaces).' })
+  sku?: string;
 
   @ApiProperty({ example: 'A premium health supplement to boost immunity.', required: false })
   @IsString()

@@ -510,8 +510,8 @@ export class WalletService {
       await this.notificationService.create(
         withdrawal.userId,
         NotificationKey.WITHDRAWAL_APPROVED,
-        `Withdrawal #${withdrawal.id} approved & paid`,
-        `${formattedAmount} has been transferred to ${bankMasked}.${utrNote}`,
+        `Withdrawal #${withdrawal.id} approved`,
+        `${formattedAmount} will be credited to ${bankMasked} within 24 hours.${utrNote}`,
         { withdrawalId: Number(withdrawal.id), amountPaise: Number(withdrawal.amount), utr: payoutResult.utr },
         manager,
       );

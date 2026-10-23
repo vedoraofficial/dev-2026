@@ -1,7 +1,15 @@
 /** Amounts in paise; `totalAmountFormatted` is the backend's ₹ text. */
 export type PaymentMethod = "RAZORPAY" | "WALLET" | "CASH"
 export type PaymentStatus = "PENDING" | "PAID" | "FAILED" | "REFUNDED"
-export type OrderStatus = "PENDING" | "CONFIRMED" | "CANCELLED" | "DELIVERED"
+export type OrderStatus =
+  | "PENDING"
+  | "CONFIRMED"
+  | "PROCESSING"
+  | "SHIPPED"
+  | "DELIVERED"
+  | "CANCELLED"
+  /** Returned to origin by the courier */
+  | "RTO"
 
 /** GET /api/order (mine) and GET /api/order/admin/all (everyone, with `user`) */
 export type ApiOrder = {
@@ -62,3 +70,6 @@ export type CreatedOrder = {
 
 /** POST /api/order/admin/cash — [Admin] paid in cash, commissions go out at once. */
 export type CashOrderInput = { userId: number; productId: number; quantity: number }
+
+/** POST /api/order/:id/cancel */
+export type CancelOrderInput = { id: number; reason?: string }

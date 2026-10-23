@@ -12,8 +12,9 @@ export function productArt(name: string): Pick<Product, "image" | "gemstones" | 
   return { image: match.image, gemstones: match.gemstones, slug: match.slug }
 }
 
-/** "PRD-007" — the label shown for a backend product. */
-export const productCode = (id: number) => `PRD-${String(id).padStart(3, "0")}`
+/** The product's SKU ("VED-PYRITE-003"); "PRD-007" only for a product saved before SKUs existed. */
+export const productCode = (p: Pick<ApiProduct, "id" | "sku">) =>
+  p.sku || `PRD-${String(p.id).padStart(3, "0")}`
 
 /** A backend product in the shape the shared ProductCard / pickers use (prices in rupees). */
 export function toCatalogProduct(p: ApiProduct, unitsSold = 0): Product {
@@ -21,7 +22,7 @@ export function toCatalogProduct(p: ApiProduct, unitsSold = 0): Product {
   return {
     ...art,
     id: p.id,
-    sku: productCode(p.id),
+    sku: productCode(p),
     name: p.name,
     shortName: p.name.replace(/^VEDORA\s+/i, ""),
     price: paiseToRupees(p.salePrice),

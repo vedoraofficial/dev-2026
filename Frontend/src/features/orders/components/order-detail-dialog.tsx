@@ -33,10 +33,12 @@ type Props = {
   onClose: () => void
   /** Buttons for the footer, e.g. Pay now (the screen decides what is allowed) */
   actions?: (order: OrderDetail) => ReactNode
+  /** More sections under the commission split, e.g. shipment tracking */
+  extra?: (order: OrderDetail) => ReactNode
 }
 
 /** GET /api/order/:id — the order, its payment and the commission split. */
-export function OrderDetailDialog({ orderId, onClose, actions }: Props) {
+export function OrderDetailDialog({ orderId, onClose, actions, extra }: Props) {
   const order = useOrder(orderId)
   const o = order.data
 
@@ -116,6 +118,8 @@ export function OrderDetailDialog({ orderId, onClose, actions }: Props) {
                   </ul>
                 )}
               </div>
+
+              {extra ? extra(o) : null}
             </div>
           ) : null}
         </QueryState>

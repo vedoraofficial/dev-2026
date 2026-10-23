@@ -23,6 +23,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
+import { PartnerAccountActions } from "@/features/account/components/partner-account-actions"
 import { useNetwork, type NetworkMember } from "@/features/genealogy/use-network"
 import { downloadCsv } from "@/lib/csv"
 import { formatNumber } from "@/lib/format"
@@ -82,8 +83,9 @@ function DetailRow({ label, value }: { label: string; value: React.ReactNode }) 
 }
 
 function ViewPartnerDialog({ row }: { row: NetworkMember }) {
+  const [open, setOpen] = useState(false)
   return (
-    <Dialog>
+    <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
         <Button variant="quiet" size="sm">
           View
@@ -117,6 +119,13 @@ function ViewPartnerDialog({ row }: { row: NetworkMember }) {
             }
           />
         </dl>
+        {!row.isFounder && row.userId ? (
+          <PartnerAccountActions
+            userId={row.userId}
+            name={row.name}
+            onDeleted={() => setOpen(false)}
+          />
+        ) : null}
         <DialogFooter>
           <Button asChild variant="outline">
             <Link to={`${ROUTES.admin.genealogy}?id=${row.vedId}`}>Open genealogy</Link>

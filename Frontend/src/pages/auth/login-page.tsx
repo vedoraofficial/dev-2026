@@ -1,18 +1,17 @@
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useMutation } from "@tanstack/react-query"
 import { Eye, EyeOff } from "lucide-react"
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { useForm } from "react-hook-form"
-import { Navigate, useNavigate } from "react-router-dom"
+import { Link, Navigate, useLocation, useNavigate } from "react-router-dom"
 
 import { ROUTES } from "@/app/routes"
-import logo from "@/assets/images/vedora-logo.jpg"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { login } from "@/features/auth/api"
-import { ForgotPasswordDialog } from "@/features/auth/components/forgot-password-dialog"
+import { AuthBrandPanel } from "@/features/auth/components/auth-brand-panel"
 import { loginSchema, type LoginValues } from "@/features/auth/schemas"
 import { JoinPartnerDialog } from "@/features/genealogy/components/join-partner-dialog"
 import { apiErrorMessage } from "@/lib/api"
@@ -25,6 +24,7 @@ const homeFor = (role: UserRole) =>
 
 export function LoginPage() {
   const navigate = useNavigate()
+  const location = useLocation()
   const [showPassword, setShowPassword] = useState(false)
   const [remember, setRemember] = useState(true)
   const signedInUser = useSession((s) => s.user)
@@ -54,29 +54,19 @@ export function LoginPage() {
     setTimeout(() => setFocus("password"), 0)
   }
 
+  // Back from "Forgot password" with a new password: fill in the ID.
+  const resetVedId = (location.state as { vedId?: string } | null)?.vedId
+  useEffect(() => {
+    if (resetVedId) prefillId(resetVedId)
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- run once for the ID passed in
+  }, [resetVedId])
+
   // Already signed in (e.g. opened /login again) → straight to their portal.
   if (signedInUser) return <Navigate to={homeFor(signedInUser.role)} replace />
 
   return (
     <div className="grid min-h-svh lg:grid-cols-[1.1fr_1fr]">
-      {/* Brand side */}
-      <section className="relative flex flex-col justify-center gap-6 bg-[radial-gradient(ellipse_at_30%_20%,var(--secondary)_0%,transparent_70%)] py-8 safe-x md:px-10 lg:px-14 lg:py-12">
-        <div className="mx-auto w-full max-w-xl overflow-hidden rounded-3xl border border-gold/15 shadow-[0_24px_60px_-20px_var(--shadow-color)]">
-          <img
-            src={logo}
-            alt="VEDORA — Wear Your Energy"
-            className="aspect-[3/2] w-full object-cover"
-            width={1400}
-            height={933}
-          />
-        </div>
-        <div className="mx-auto w-full max-w-xl">
-          <h2 className="font-display text-4xl font-normal md:text-5xl">Wear Your Energy</h2>
-          <p className="mt-3 max-w-sm text-sm text-muted-foreground">
-            Natural gemstone bracelets, built into a direct-selling business you own.
-          </p>
-        </div>
-      </section>
+      <AuthBrandPanel />
 
       {/* Form side */}
       <section className="flex items-center bg-card/50 py-10 safe-x md:px-10 lg:px-16">
@@ -157,7 +147,9 @@ export function LoginPage() {
               />
               Remember me
             </label>
-            <ForgotPasswordDialog onReset={prefillId} />
+            <Link to={ROUTES.forgotPassword} className="font-medium text-gold hover:underline">
+              Forgot password?
+            </Link>
           </div>
 
           {loginMutation.isError ? (

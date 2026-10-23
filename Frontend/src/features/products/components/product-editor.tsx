@@ -75,7 +75,7 @@ export function ProductEditor({ product, soldLabel, onDone }: Props) {
       <form className="flex min-w-0 flex-col gap-3" onSubmit={handleSubmit(onSubmit)} noValidate>
         <div className="flex items-center justify-between gap-3">
           <MonoId tone="gold" className="text-[0.6875rem]">
-            {isNew ? "New product" : productCode(id)}
+            {isNew ? "New product" : productCode(product)}
           </MonoId>
           <Controller
             control={control}
@@ -93,9 +93,21 @@ export function ProductEditor({ product, soldLabel, onDone }: Props) {
           />
         </div>
 
-        <FormField label="Name" htmlFor={field("name")} error={errors.name?.message}>
-          <Input id={field("name")} aria-invalid={!!errors.name} {...register("name")} />
-        </FormField>
+        <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,13rem)]">
+          <FormField label="Name" htmlFor={field("name")} error={errors.name?.message}>
+            <Input id={field("name")} aria-invalid={!!errors.name} {...register("name")} />
+          </FormField>
+          <FormField label="SKU" htmlFor={field("sku")} error={errors.sku?.message}>
+            <Input
+              id={field("sku")}
+              placeholder="Auto-generated if empty"
+              autoComplete="off"
+              className="font-mono uppercase placeholder:normal-case"
+              aria-invalid={!!errors.sku}
+              {...register("sku")}
+            />
+          </FormField>
+        </div>
         <div className="grid gap-3 sm:grid-cols-3">
           <FormField label="MRP (₹)" htmlFor={field("mrp")} error={errors.mrp?.message}>
             <Input

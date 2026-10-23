@@ -1,7 +1,7 @@
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useEffect, useState, type FormEvent } from "react"
 import { useForm, useWatch, type DefaultValues } from "react-hook-form"
-import { Link } from "react-router-dom"
+import { Link, useNavigate } from "react-router-dom"
 import { toast } from "sonner"
 
 import { ROUTES } from "@/app/routes"
@@ -11,11 +11,16 @@ import { PageBody, PageHeader } from "@/components/common/page-header"
 import { ProgressBar } from "@/components/common/progress-bar"
 import { QueryState } from "@/components/common/query-state"
 import { Input } from "@/components/ui/input"
-import { useGenealogyOf, useMySlots, useRegisterDownline } from "@/features/genealogy/queries"
-import { useWalletSummary } from "@/features/wallet/queries"
+import { useGenealogyOf, useMySlots } from "@/features/genealogy/queries"
+import { startRazorpayJoinCheckout } from "@/features/payments/api"
+import {
+  JoiningPayment,
+  type JoiningPaymentMethod,
+} from "@/features/placement/components/joining-payment"
 import { PartnerDetailsFields } from "@/features/placement/components/partner-details-fields"
 import {
   PlacementSuccess,
+  type JoiningOrder,
   type RegisteredPartner,
 } from "@/features/placement/components/placement-success"
 import {
@@ -29,6 +34,7 @@ import {
   copyRegisteredToShipping,
   partnerDetailsPayload,
 } from "@/features/placement/partner-details"
+import { useRegisterWithOrder } from "@/features/placement/queries"
 import {
   placementSchema,
   type PlacementInput,
@@ -37,6 +43,9 @@ import {
 import { toCatalogProduct } from "@/features/products/catalog"
 import type { Product } from "@/features/products/types"
 import { useProducts } from "@/features/products/queries"
+import { useWalletSummary } from "@/features/wallet/queries"
+import { formatINR } from "@/lib/format"
+import { paiseToRupees } from "@/lib/money"
 import { useSession } from "@/lib/session"
 import { cn } from "@/lib/utils"
 import { normalizeVedId } from "@/lib/ved-id"
@@ -80,20 +89,31 @@ function blankForm(slot: number, upline: string): DefaultValues<PlacementInput> 
   }
 }
 
-type Completed = { values: PlacementValues; partner: RegisteredPartner; product: Product }
+type Completed = {
+  values: PlacementValues
+  partner: RegisteredPartner
+  product: Product
+  order: JoiningOrder
+}
 
 export function PartnerManualPlacementPage() {
   // The signed-in user is always the sponsor (earns the ₹200 direct commission). The partner is
   // placed under them, or under a team member whose VEDORA ID is typed in "Place under".
   const me = useSession((s) => s.user)
   const slotsQuery = useMySlots()
-  const walletQuery = useWalletSummary()
   // The joining product is picked from what Admin has put live in Products.
   const productsQuery = useProducts()
   const products = (productsQuery.data ?? [])
     .filter((p) => p.status === "ACTIVE")
     .map((p) => toCatalogProduct(p))
-  const registerDownline = useRegisterDownline()
+  const registerWithOrder = useRegisterWithOrder()
+  // The sponsor pays the joining order — from their wallet, or online with Razorpay.
+  const walletQuery = useWalletSummary()
+  const walletBalance = walletQuery.data
+    ? paiseToRupees(walletQuery.data.availableBalance)
+    : undefined
+  const navigate = useNavigate()
+  const [payWith, setPayWith] = useState<JoiningPaymentMethod>("WALLET")
 
   const myTaken = new Map<number, string>(
     (slotsQuery.data?.filledSlots ?? []).map((f) => [f.slotNumber, f.partner.vedId]),
@@ -167,21 +187,15 @@ export function PartnerManualPlacementPage() {
   }, [placementData, upline])
 
   const product = products.find((p) => p.sku === productSku)
-  const availableBalancePaise = walletQuery.data?.availableBalance ?? 0
-  const productPricePaise = product ? product.price * 100 : 0
-  const hasInsufficientBalance = !!product && availableBalancePaise < productPricePaise
+  const walletShort =
+    walletBalance !== undefined && product !== undefined && walletBalance < product.price
+  const paymentMethod: JoiningPaymentMethod =
+    payWith === "WALLET" && walletShort ? "RAZORPAY" : payWith
 
   const onValid = (values: PlacementValues) => {
     const chosen = products.find((p) => p.sku === values.productSku)
     if (!chosen) {
       setError("productSku", { message: "Choose a product" })
-      return
-    }
-    const neededPaise = chosen.price * 100
-    if (availableBalancePaise < neededPaise) {
-      toast.error(
-        `Insufficient wallet balance (₹${(availableBalancePaise / 100).toFixed(2)} available, ₹${chosen.price} required). Please top up your wallet.`,
-      )
       return
     }
     if (uplineProblem) {
@@ -192,17 +206,41 @@ export function PartnerManualPlacementPage() {
       setError("slot", { message: `Slot ${values.slot} is already taken` })
       return
     }
-    registerDownline.mutate(
+    const productId = chosen.id
+    if (!productId) {
+      setError("productSku", { message: "Choose a product" })
+      return
+    }
+    // The partner is created only once the payment goes through (wallet now, Razorpay once verified).
+    registerWithOrder.mutate(
       {
         ...partnerDetailsPayload(values),
         slotNumber: values.slot,
         parentVedId: underMe ? undefined : upline,
-        productId: chosen.id,
-        productSku: chosen.sku,
+        productId,
+        quantity: 1,
+        paymentMethod,
       },
       {
-        onSuccess: ({ partner }) => {
-          setCompleted({ values, partner, product: chosen })
+        onSuccess: (result) => {
+          if (result.status === "PAYMENT_REQUIRED") {
+            const statusUrl = `${ROUTES.paymentStatus}?merchantOrderId=${encodeURIComponent(result.razorpayOrderId)}`
+            startRazorpayJoinCheckout(
+              result.checkout,
+              { amount: result.amount, partnerName: result.partnerName },
+              {
+                onSuccess: () => navigate(statusUrl),
+                onDismiss: () =>
+                  toast.info(`Payment cancelled — ${result.partnerName} was not registered.`),
+                onError: () =>
+                  toast.error("The payment didn't go through — the partner was not registered."),
+              },
+            ).catch(() => {
+              // onError above already told the user
+            })
+            return
+          }
+          setCompleted({ values, partner: result.partner, product: chosen, order: result.order })
           window.scrollTo({ top: 0, behavior: "smooth" })
         },
       },
@@ -233,6 +271,7 @@ export function PartnerManualPlacementPage() {
             partner={completed.partner}
             values={completed.values}
             product={completed.product}
+            order={completed.order}
             onPlaceAnother={startOver}
           />
         </PageBody>
@@ -436,25 +475,6 @@ export function PartnerManualPlacementPage() {
                       You · <MonoId tone="gold">{me?.vedId}</MonoId>
                     </ConfirmRow>
                   )}
-                  <ConfirmRow label="Your Wallet">
-                    <span
-                      className={cn(
-                        "font-medium",
-                        hasInsufficientBalance ? "text-danger" : "text-success",
-                      )}
-                    >
-                      ₹{(availableBalancePaise / 100).toFixed(2)}
-                    </span>
-                  </ConfirmRow>
-                  {hasInsufficientBalance ? (
-                    <div className="rounded-lg border border-danger/40 bg-danger/10 p-2 text-xs text-danger">
-                      Insufficient wallet balance. You need ₹{product?.price} to register this
-                      partner.{" "}
-                      <Link to={ROUTES.partner.wallet} className="font-semibold underline">
-                        Top up wallet
-                      </Link>
-                    </div>
-                  ) : null}
                 </>
               }
               agreement={
@@ -471,11 +491,23 @@ export function PartnerManualPlacementPage() {
                   .
                 </>
               }
-              submitLabel="Register partner"
-              pendingLabel="Registering…"
-              pending={registerDownline.isPending}
-              disabled={allSlotsFull || !placementData || !!uplineProblem || hasInsufficientBalance}
-              footnote="The joining product price will be automatically debited from your wallet. An order will be placed and commissions will be distributed."
+              payment={
+                <JoiningPayment
+                  value={paymentMethod}
+                  onChange={setPayWith}
+                  walletBalance={walletBalance}
+                  price={product?.price}
+                />
+              }
+              submitLabel={
+                paymentMethod === "WALLET"
+                  ? `Pay ${product ? formatINR(product.price) : ""} from wallet & register`
+                  : "Pay online & register"
+              }
+              pendingLabel={paymentMethod === "WALLET" ? "Registering…" : "Opening Razorpay…"}
+              pending={registerWithOrder.isPending}
+              disabled={allSlotsFull || !placementData || !!uplineProblem}
+              footnote="The partner is registered only after the payment succeeds. Their joining order ships to the registered address — Admin books the courier from Orders."
             />
           </div>
         </form>

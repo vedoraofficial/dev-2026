@@ -234,7 +234,7 @@ Disbursement Summary:
   Disbursed On: ${disbursedAt}
   Status: COMPLETED
 
-Depending on your bank, the funds should reflect in your account shortly. If you have any inquiries regarding this transfer, please reference the UTR number with your branch or contact our support team.
+The amount will be credited to your bank account within 24 hours. If you have any inquiries regarding this transfer, please reference the UTR number with your branch or contact our support team.
 
 Warm regards,
 Team VEDORA

@@ -11,9 +11,13 @@ import { StatusPill } from "@/components/common/status-pill"
 import { TablePagination } from "@/components/common/table-pagination"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { CancelOrderDialog } from "@/features/orders/components/cancel-order-dialog"
 import { CashOrderDialog } from "@/features/orders/components/cash-order-dialog"
 import { OrderDetailDialog } from "@/features/orders/components/order-detail-dialog"
 import {
+  canAdminCancel,
+  canShip,
+  hasShipment,
   orderNo,
   orderStage,
   paymentMethodLabel,
@@ -24,7 +28,10 @@ import {
 import { deliverySla } from "@/features/orders/sla"
 import { useAllOrders } from "@/features/orders/queries"
 import type { ApiOrder } from "@/features/orders/types"
+import { useReconcilePayments } from "@/features/payments/queries"
 import { useProducts } from "@/features/products/queries"
+import { CreateShipmentDialog } from "@/features/shipping/components/create-shipment-dialog"
+import { OrderTrackingSection } from "@/features/shipping/components/order-tracking-section"
 import { downloadCsv } from "@/lib/csv"
 import { formatDate, formatDateTime } from "@/lib/date"
 import { formatCompactINR, formatINR, formatNumber } from "@/lib/format"
@@ -52,6 +59,7 @@ function matchesQuery(o: ApiOrder, query: string) {
 export function AdminOrdersPage() {
   const orders = useAllOrders()
   const products = useProducts()
+  const reconcile = useReconcilePayments()
   const [tab, setTab] = useState<Tab>("all")
   const [query, setQuery] = useState("")
   const [page, setPage] = useState(1)
@@ -187,6 +195,14 @@ export function AdminOrdersPage() {
               onChange={(e) => setQuery(e.target.value)}
               className="w-full md:w-64"
             />
+            <Button
+              variant="outline"
+              disabled={reconcile.isPending}
+              onClick={() => reconcile.mutate()}
+              title="Ask Razorpay about every order, top-up and Add Partner payment still pending after 10 minutes"
+            >
+              {reconcile.isPending ? "Checking…" : "Re-check pending payments"}
+            </Button>
             <CashOrderDialog
               products={(products.data ?? [])
                 .filter((p) => p.status === "ACTIVE")
@@ -281,8 +297,8 @@ export function AdminOrdersPage() {
             <div className="space-y-3 text-[0.8125rem] leading-relaxed text-muted-foreground">
               <p>
                 Partners can cancel only before dispatch. After dispatch the order moves to the
-                return route. Prepaid refunds settle to the original method within 7–10 business
-                days.
+                return route. Cancelling a paid order refunds the full amount to the partner&apos;s
+                wallet straight away and reverses the uplines&apos; commissions.
               </p>
               <p>
                 Admin may cancel for stock unavailability, payment verification failure, incomplete
@@ -293,7 +309,37 @@ export function AdminOrdersPage() {
         </div>
       </PageBody>
 
-      <OrderDetailDialog orderId={openId} onClose={() => setOpenId(null)} />
+      <OrderDetailDialog
+        orderId={openId}
+        onClose={() => setOpenId(null)}
+        extra={(o) => (hasShipment(o) ? <OrderTrackingSection orderId={o.id} /> : null)}
+        actions={(o) => (
+          <>
+            {canAdminCancel(o) ? (
+              <CancelOrderDialog
+                order={o}
+                onCancelled={() => setOpenId(null)}
+                trigger={
+                  <Button variant="quiet">
+                    {o.paymentStatus === "PAID" ? "Cancel & refund" : "Cancel order"}
+                  </Button>
+                }
+              />
+            ) : null}
+            {canShip(o) ? (
+              <CreateShipmentDialog
+                orderId={o.id}
+                orderLabel={orderNo(o.id)}
+                trigger={
+                  <Button>
+                    {o.orderStatus === "PROCESSING" ? "Retry shipment" : "Ship order"}
+                  </Button>
+                }
+              />
+            ) : null}
+          </>
+        )}
+      />
     </>
   )
 }

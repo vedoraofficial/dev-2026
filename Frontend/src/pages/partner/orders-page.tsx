@@ -11,9 +11,12 @@ import { QueryState } from "@/components/common/query-state"
 import { StatCard, StatGrid } from "@/components/common/stat-card"
 import { StatusPill } from "@/components/common/status-pill"
 import { Button } from "@/components/ui/button"
+import { CancelOrderDialog } from "@/features/orders/components/cancel-order-dialog"
 import { OrderDetailDialog } from "@/features/orders/components/order-detail-dialog"
 import {
+  canCancel,
   canPay,
+  hasShipment,
   orderNo,
   orderStage,
   paymentMethodLabel,
@@ -24,6 +27,7 @@ import {
 import { useMyOrders } from "@/features/orders/queries"
 import type { ApiOrder } from "@/features/orders/types"
 import { useCheckPayment, usePayOrder } from "@/features/payments/queries"
+import { OrderTrackingSection } from "@/features/shipping/components/order-tracking-section"
 import { formatDate } from "@/lib/date"
 import { formatINR } from "@/lib/format"
 import { paiseToRupees } from "@/lib/money"
@@ -205,8 +209,16 @@ export function PartnerOrdersPage() {
       <OrderDetailDialog
         orderId={openId}
         onClose={() => setOpenId(null)}
+        extra={(o) => (hasShipment(o) ? <OrderTrackingSection orderId={o.id} /> : null)}
         actions={(o) => (
           <>
+            {canCancel(o) ? (
+              <CancelOrderDialog
+                order={o}
+                onCancelled={() => setOpenId(null)}
+                trigger={<Button variant="quiet">Cancel order</Button>}
+              />
+            ) : null}
             {o.razorpayOrderId && o.paymentStatus === "PENDING" ? (
               <Button
                 variant="outline"

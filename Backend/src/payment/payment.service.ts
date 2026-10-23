@@ -23,10 +23,44 @@ import { WalletService } from '../wallet/wallet.service';
 import { TransactionCategory } from '../wallet/entity/wallet-transaction.entity';
 import { OrderService } from '../order/order.service';
 
+export type PaymentRequester = { sub?: number; id?: number; role?: string };
+
+/** What the frontend passes to the Razorpay checkout popup. */
+export type RazorpayCheckout = {
+  keyId: string;
+  amount: number;
+  currency: string;
+  orderId: string;
+  receipt: string;
+  name: string;
+  description: string;
+  prefill: { name: string; email: string; contact: string };
+};
+
+/**
+ * Razorpay payments owned by another module (e.g. partner registrations held until paid).
+ * The owning module registers itself, so this service needn't import it.
+ */
+export interface ExternalPaymentHandler {
+  /** True when this Razorpay order id belongs to the handler. */
+  owns(razorpayOrderId: string): Promise<boolean>;
+  /** The checkout signature is already verified — settle the payment. */
+  complete(razorpayOrderId: string, razorpayPaymentId: string): Promise<any>;
+  /** Status check, webhook or reconciliation for one of its payments. */
+  checkAndProcess(
+    razorpayOrderId: string,
+    eventType: string,
+    requestingUser?: PaymentRequester,
+  ): Promise<any>;
+  /** Razorpay order ids still pending since before `olderThan` (for reconciliation). */
+  findStalePending(olderThan: Date): Promise<string[]>;
+}
+
 @Injectable()
 export class PaymentService implements OnModuleInit {
   private readonly logger = new Logger(PaymentService.name);
   private razorpayInstance: any = null;
+  private readonly externalHandlers: ExternalPaymentHandler[] = [];
 
   constructor(
     private readonly configService: ConfigService,
@@ -73,6 +107,85 @@ export class PaymentService implements OnModuleInit {
 
   getKeyId(): string {
     return this.configService.get<string>('RAZORPAY_KEY_ID') || '';
+  }
+
+  // ─── Payments owned by other modules ───────────────────────────────
+
+  registerExternalHandler(handler: ExternalPaymentHandler) {
+    this.externalHandlers.push(handler);
+  }
+
+  getExternalHandlers(): ExternalPaymentHandler[] {
+    return [...this.externalHandlers];
+  }
+
+  private async findExternalHandler(razorpayOrderId: string) {
+    for (const handler of this.externalHandlers) {
+      if (await handler.owns(razorpayOrderId)) return handler;
+    }
+    return null;
+  }
+
+  /**
+   * Creates a Razorpay order for `amount` paise and returns what the checkout popup needs.
+   * Without Razorpay keys (local testing) it returns an `order_test_…` id, like order payments do.
+   */
+  async createRazorpayCheckout(params: {
+    amount: number;
+    receipt: string;
+    description: string;
+    notes?: Record<string, string>;
+    prefill?: { name?: string; email?: string; contact?: string };
+  }): Promise<RazorpayCheckout> {
+    const keyId = this.getKeyId();
+    const keySecret = this.configService.get<string>('RAZORPAY_KEY_SECRET') || '';
+    let razorpayOrderId: string;
+
+    if (this.razorpayInstance && keyId && keySecret) {
+      try {
+        const rzpOrder = await this.razorpayInstance.orders.create({
+          amount: params.amount,
+          currency: 'INR',
+          receipt: params.receipt,
+          notes: params.notes ?? {},
+        });
+        razorpayOrderId = rzpOrder.id;
+      } catch (err: any) {
+        const msg = err.error?.description || err.message || 'Authentication or network error';
+        this.logger.error(`Razorpay orders.create failed: ${msg}`, err);
+        throw new BadRequestException(`Razorpay Error: ${msg}. Please check RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET in .env.`);
+      }
+    } else {
+      razorpayOrderId = `order_test_${params.receipt}_${Date.now()}`;
+    }
+
+    return {
+      keyId,
+      amount: params.amount,
+      currency: 'INR',
+      orderId: razorpayOrderId,
+      receipt: params.receipt,
+      name: 'VEDORA',
+      description: params.description,
+      prefill: {
+        name: params.prefill?.name ?? '',
+        email: params.prefill?.email ?? '',
+        contact: params.prefill?.contact ?? '',
+      },
+    };
+  }
+
+  /** The captured Razorpay payment id for an order, or null (not paid yet / test order). */
+  async fetchCapturedPaymentId(razorpayOrderId: string): Promise<string | null> {
+    if (!this.razorpayInstance || razorpayOrderId.startsWith('order_test_')) return null;
+    try {
+      const payments = await this.razorpayInstance.orders.fetchPayments(razorpayOrderId);
+      const captured = payments?.items?.find((p: any) => p.status === 'captured');
+      return captured?.id ?? null;
+    } catch (err) {
+      this.logger.warn(`Failed to fetch Razorpay payments for ${razorpayOrderId}:`, err);
+      return null;
+    }
   }
 
   // ─── 1. Initiate Razorpay Payment for an Order ─────────────────────
@@ -266,6 +379,12 @@ export class PaymentService implements OnModuleInit {
       return this.processCompletedTopup(topup, razorpayPaymentId, razorpaySignature);
     }
 
+    // 2b. Payments owned by other modules (e.g. a partner registration held until paid)
+    const external = await this.findExternalHandler(razorpayOrderId);
+    if (external) {
+      return external.complete(razorpayOrderId, razorpayPaymentId);
+    }
+
     // 3. Otherwise check if this is an Order
     const order = await this.orderRepo.findOne({
       where: { razorpayOrderId },
@@ -419,6 +538,12 @@ export class PaymentService implements OnModuleInit {
         topupId: Number(topup.id),
         status: topup.status,
       };
+    }
+
+    // 1b. Payments owned by other modules (e.g. a partner registration held until paid)
+    const external = await this.findExternalHandler(razorpayOrderId);
+    if (external) {
+      return external.checkAndProcess(razorpayOrderId, eventType, requestingUser);
     }
 
     // 2. Check Order

@@ -250,6 +250,7 @@ export function ConfirmStep<T extends JoiningFormInput>({
   form,
   product,
   placementRows,
+  payment,
   agreement,
   submitLabel,
   pendingLabel,
@@ -260,6 +261,8 @@ export function ConfirmStep<T extends JoiningFormInput>({
   n: number
   product: PickerProduct | undefined
   placementRows: ReactNode
+  /** How the joining order is paid, shown above the agreement */
+  payment?: ReactNode
   /** The agreement sentence next to the checkbox */
   agreement: ReactNode
   submitLabel: string
@@ -300,6 +303,8 @@ export function ConfirmStep<T extends JoiningFormInput>({
           </dd>
         </div>
       </dl>
+
+      {payment}
 
       <Controller
         control={control}

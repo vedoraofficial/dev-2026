@@ -44,10 +44,16 @@ export type PaymentStatusResponse = {
   message: string
   orderId?: number
   topupId?: number
-  paymentStatus?: "PAID" | "FAILED" | "PENDING"
-  status?: "COMPLETED" | "FAILED" | "PENDING"
+  paymentStatus?: "PAID" | "FAILED" | "PENDING" | "REFUNDED"
+  /** REFUNDED: a partner registration was paid but could not be completed (money back in wallet) */
+  status?: "COMPLETED" | "FAILED" | "PENDING" | "REFUNDED"
   orderStatus?: string
   amount?: number
+  /** Add Partner payments (JOIN_…) */
+  kind?: "REGISTRATION"
+  partnerName?: string
+  partner?: { id: number; vedId: string; name: string; status: string; slotNumber?: number }
+  failureReason?: string
 }
 
 export function isPaymentSuccess(res?: PaymentStatusResponse | null): boolean {
@@ -57,7 +63,12 @@ export function isPaymentSuccess(res?: PaymentStatusResponse | null): boolean {
 
 export function isPaymentFailed(res?: PaymentStatusResponse | null): boolean {
   if (!res) return false
-  return res.paymentStatus === "FAILED" || res.status === "FAILED"
+  return (
+    res.paymentStatus === "FAILED" ||
+    res.status === "FAILED" ||
+    res.paymentStatus === "REFUNDED" ||
+    res.status === "REFUNDED"
+  )
 }
 
 export function isPaymentPending(res?: PaymentStatusResponse | null): boolean {
@@ -93,13 +104,36 @@ export async function getPaymentStatus(merchantOrderId: string): Promise<Payment
   return data
 }
 
+/** POST /api/payment/reconcile — [Admin] re-check payments still pending after `olderThanMinutes`. */
+export type ReconcileResult = {
+  processedOrders: number
+  processedTopups: number
+  pendingOrdersFound: number
+  pendingTopupsFound: number
+  /** Add Partner payments (partner registrations held until paid) */
+  processedRegistrations?: number
+  pendingRegistrationsFound?: number
+  errors: string[]
+}
+
+export async function reconcilePayments(olderThanMinutes = 10): Promise<ReconcileResult> {
+  const { data } = await api.post<ReconcileResult>("/payment/reconcile", undefined, {
+    params: { olderThanMinutes },
+  })
+  return data
+}
+
+/* POST /api/payment/webhook is called by Razorpay itself (server-to-server), never by this app. */
+
 const PENDING_PAYMENT_KEY = "vedora.pendingPayment"
 
 export type PendingPayment = {
   merchantOrderId: string
-  type: "ORDER" | "TOPUP"
+  /** JOIN = Add Partner: the partner is registered once this payment succeeds */
+  type: "ORDER" | "TOPUP" | "JOIN"
   orderId?: number
   amount?: number
+  partnerName?: string
 }
 
 export function savePendingPayment(pending: PendingPayment) {
@@ -120,6 +154,7 @@ export function readPendingPayment(): PendingPayment | null {
       type: parsed.type || (parsed.orderId ? "ORDER" : "TOPUP"),
       orderId: parsed.orderId,
       amount: parsed.amount,
+      partnerName: parsed.partnerName,
     }
   } catch {
     return null
@@ -220,14 +255,17 @@ export async function startRazorpayOrderCheckout(
   },
 ): Promise<void> {
   const initiateData = await initiatePayment(orderId)
+  // For orders the backend sends our order number as `orderId` and Razorpay's own order id
+  // (order_…) as `merchantOrderId` — Razorpay needs its own id, or it answers 400.
+  const razorpayOrderId = initiateData.merchantOrderId || initiateData.orderId
   savePendingPayment({
-    merchantOrderId: initiateData.orderId,
+    merchantOrderId: razorpayOrderId,
     type: "ORDER",
     orderId,
   })
 
   return openRazorpayCheckout({
-    initiateData,
+    initiateData: { ...initiateData, orderId: razorpayOrderId },
     onSuccess: (res) => {
       callbacks?.onSuccess?.(res)
     },
@@ -269,5 +307,27 @@ export async function startRazorpayTopup(
     onDismiss: () => {
       callbacks?.onDismiss?.()
     },
+  })
+}
+
+/**
+ * Add Partner (paid joining order): the backend already created the Razorpay order and returned
+ * its checkout details — remember the payment, then open the Razorpay popup.
+ */
+export function startRazorpayJoinCheckout(
+  checkout: InitiatePaymentResponse,
+  pending: Omit<PendingPayment, "merchantOrderId" | "type">,
+  callbacks?: {
+    onSuccess?: (verifyRes: VerifyPaymentResponse) => void
+    onError?: (error: any) => void
+    onDismiss?: () => void
+  },
+): Promise<void> {
+  savePendingPayment({ ...pending, merchantOrderId: checkout.orderId, type: "JOIN" })
+  return openRazorpayCheckout({
+    initiateData: checkout,
+    onSuccess: (res) => callbacks?.onSuccess?.(res),
+    onError: (err) => callbacks?.onError?.(err),
+    onDismiss: () => callbacks?.onDismiss?.(),
   })
 }

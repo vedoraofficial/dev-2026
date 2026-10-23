@@ -13,6 +13,10 @@ export class Product {
   @Column({ type: 'varchar', length: 150 })
   name: string;
 
+  /** Stock-keeping unit, e.g. VED-PYRITE-003 — typed by Admin or generated as VED-<name>-<number>. */
+  @Column({ type: 'varchar', length: 40, nullable: true, unique: true })
+  sku: string | null;
+
   @Column({ type: 'text', nullable: true })
   description: string;
 

@@ -2,6 +2,7 @@ import type { ReactNode } from "react"
 
 import { PageBody, PageHeader } from "@/components/common/page-header"
 import { Panel, PanelHeader } from "@/components/common/panel"
+import { BankAccountsPanel } from "@/features/account/components/bank-accounts-panel"
 import { ChangePasswordForm } from "@/features/account/components/change-password-form"
 import { PersonalDetailsForm } from "@/features/account/components/personal-details-form"
 import { ProfileCard } from "@/features/account/components/profile-card"
@@ -29,13 +30,15 @@ export function AdminProfilePage() {
               <dl className="space-y-3">
                 <Row label="Role" value="Root Admin" />
                 <Row label="Oversight" value="Whole network" />
-                <Row label="Income" value={<span className="text-muted-foreground">None</span>} />
+                <Row label="Income" value="₹200 per product sold" />
               </dl>
             </Panel>
           </div>
 
           <div className="space-y-4 md:space-y-5">
             <PersonalDetailsForm />
+            {/* Payout bank for Admin wallet withdrawals */}
+            <BankAccountsPanel />
 
             <Panel>
               <PanelHeader title="Change password" />

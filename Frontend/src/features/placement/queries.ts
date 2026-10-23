@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query"
 
-import { lookupPincode } from "@/features/placement/api"
+import { lookupPincode, registerWithOrder } from "@/features/placement/api"
+import { useApiMutation } from "@/lib/mutation"
 
 export const isPincode = (value: string) => /^[1-9]\d{5}$/.test(value)
 
@@ -16,3 +17,10 @@ export function usePincodeLookup(pincode: string) {
     gcTime: Infinity,
   })
 }
+
+/** Add Partner with a paid joining order. Refreshes everything a registration + order touches. */
+export const useRegisterWithOrder = () =>
+  useApiMutation(registerWithOrder, {
+    success: (r) => (r.status === "COMPLETED" ? r.message : "Opening Razorpay…"),
+    invalidate: [["genealogy"], ["wallet"], ["orders"], ["stock"], ["products"]],
+  })

@@ -22,10 +22,18 @@ const vedoraId = z
 export const forgotSchema = z.object({ vedoraId })
 export type ForgotValues = z.infer<typeof forgotSchema>
 
-/** POST /api/auth/reset-password — the backend needs 6+ characters. */
-export const resetSchema = z
+/** Forgot password, step 2: the 6-digit OTP sent by SMS. */
+export const otpSchema = z.object({
+  otp: z
+    .string()
+    .trim()
+    .regex(/^\d{6}$/, "Enter the 6-digit OTP"),
+})
+export type OtpValues = z.infer<typeof otpSchema>
+
+/** Forgot password, step 3 (POST /api/auth/reset-password) — the backend needs 6+ characters. */
+export const newPasswordSchema = z
   .object({
-    resetToken: z.string().trim().min(4, "Enter the code you received"),
     newPassword: z.string().min(6, "At least 6 characters"),
     confirmPassword: z.string(),
   })
@@ -33,4 +41,4 @@ export const resetSchema = z
     path: ["confirmPassword"],
     message: "Passwords don't match",
   })
-export type ResetValues = z.infer<typeof resetSchema>
+export type NewPasswordValues = z.infer<typeof newPasswordSchema>
