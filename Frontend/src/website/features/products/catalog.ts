@@ -157,7 +157,25 @@ export const BRACELETS: readonly Bracelet[] = [
 ]
 
 /** "Pyrite · Tiger Eye · Black Onyx" */
-export const stoneLine = (b: Bracelet) => b.stones.map((s) => s.name).join(" · ")
+export const stoneLine = (b: { stones: readonly Gemstone[] }) =>
+  b.stones.map((s) => s.name).join(" · ")
+
+const COUNT_WORDS = [
+  "No",
+  "One",
+  "Two",
+  "Three",
+  "Four",
+  "Five",
+  "Six",
+  "Seven",
+  "Eight",
+  "Nine",
+  "Ten",
+]
+
+/** 4 → "Four" — headings that count the bracelets Admin has on sale. */
+export const countWord = (n: number) => COUNT_WORDS[n] ?? String(n)
 
 export const PREMIUM_FEATURES = [
   "100% natural gemstone beads",

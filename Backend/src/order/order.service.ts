@@ -24,6 +24,7 @@ import { WalletTransaction, TransactionType, TransactionCategory } from '../wall
 import { NotificationService } from '../notification/notification.service';
 import { NotificationKey } from '../notification/notification.constants';
 import { CreateOrderDto } from './dto/create-order.dto';
+import { queueInvoice } from '../invoice/invoice-queue';
 import { AdminCreateCashOrderDto } from './dto/admin-create-cash-order.dto';
 
 /** Commission structure: level → { rate (basis points), category, flat amount in paise or null } */
@@ -90,90 +91,7 @@ export class OrderService {
 
     // For WALLET purchases, atomically debit wallet, record stock OUT, and distribute commissions
     if (dto.paymentMethod === PaymentMethod.WALLET) {
-      return this.dataSource.transaction(async (manager) => {
-        // Re-verify stock inside transaction
-        const inStockInTx = await getAvailableStock(manager, Number(product.id));
-        if (inStockInTx < quantity) {
-          throw new BadRequestException(
-            inStockInTx <= 0 ? 'This product is out of stock.' : `Only ${inStockInTx} left in stock.`,
-          );
-        }
-
-        // Debit buyer's wallet (locks row and validates sufficient balance)
-        const walletTxn = await this.walletService.debit(
-          userId,
-          totalAmount,
-          TransactionCategory.ORDER_PAYMENT,
-          `Purchase: ${product.name} × ${quantity} (Order payment)`,
-          'ORDER',
-          undefined,
-          manager,
-        );
-
-        const orderRepo = manager.getRepository(Order);
-        const order = orderRepo.create({
-          userId,
-          productId: product.id,
-          quantity,
-          unitPrice,
-          totalAmount,
-          bvTotal,
-          paymentMethod: PaymentMethod.WALLET,
-          paymentStatus: PaymentStatus.PAID,
-          orderStatus: OrderStatus.CONFIRMED,
-        });
-
-        const savedOrder = await orderRepo.save(order);
-
-        // Update referenceId on the wallet transaction
-        if (walletTxn) {
-          await manager.getRepository(WalletTransaction).update(walletTxn.id, {
-            referenceId: String(savedOrder.id),
-          });
-        }
-
-        // Record stock movement OUT
-        await manager.getRepository(StockMovement).save(
-          manager.getRepository(StockMovement).create({
-            productId: Number(product.id),
-            type: StockMovementType.OUT,
-            quantity,
-            note: `Wallet order #${savedOrder.id}`,
-            createdBy: userId,
-          }),
-        );
-
-        // Distribute upline commissions
-        await this.distributeCommissions(Number(savedOrder.id), manager);
-
-        // In-app Notification: PAYMENT_SUCCESS
-        const formattedAmount = `₹${(totalAmount / 100).toFixed(2)}`;
-        await this.notificationService.create(
-          userId,
-          NotificationKey.PAYMENT_SUCCESS,
-          `Order #${savedOrder.id} confirmed`,
-          `Paid ${formattedAmount} via wallet for ${product.name} × ${quantity}.`,
-          { orderId: Number(savedOrder.id), amountPaise: totalAmount },
-          manager,
-        );
-
-        return {
-          message: 'Order placed and paid successfully using wallet balance.',
-          order: {
-            id: Number(savedOrder.id),
-            productName: product.name,
-            quantity,
-            unitPrice,
-            totalAmount,
-            totalAmountFormatted: formattedAmount,
-            bvTotal,
-            paymentMethod: savedOrder.paymentMethod,
-            paymentStatus: savedOrder.paymentStatus,
-            orderStatus: savedOrder.orderStatus,
-            createdAt: savedOrder.createdAt,
-          },
-        };
-      });
+      return this.dataSource.transaction((manager) => this.placeWalletOrder(manager, userId, product, quantity));
     }
 
     // For RAZORPAY, create pending order and return details so caller can initiate payment
@@ -540,6 +458,9 @@ export class OrderService {
     order.commissionsDistributed = true;
     await orderRepo.save(order);
 
+    // Every paid order passes here once — its GST invoice is issued and emailed after the commit.
+    queueInvoice(manager, orderId);
+
     // In-app Notification: COMMISSION_CREDITED (single aggregated notification per earner)
     for (const [beneficiaryUserId, earned] of earnedByBeneficiary.entries()) {
       const totalFormatted = `₹${(earned.totalPaise / 100).toFixed(0)}`;
@@ -578,87 +499,193 @@ export class OrderService {
     orderId: number,
     razorpayPaymentId?: string,
   ): Promise<void> {
-    await this.dataSource.transaction(async (manager) => {
-      const orderRepo = manager.getRepository(Order);
-      const order = await orderRepo.findOne({
-        where: { id: orderId },
-        lock: { mode: 'pessimistic_write' },
-      });
+    await this.dataSource.transaction((manager) =>
+      this.confirmOrderPaymentInTx(manager, orderId, razorpayPaymentId),
+    );
+  }
 
-      if (!order) throw new NotFoundException('Order not found.');
-      if (order.paymentStatus === PaymentStatus.PAID) {
-        this.logger.warn(`Order #${orderId} already paid. Skipping.`);
-        return;
-      }
+  /**
+   * Marks a Razorpay order paid inside the caller's transaction (one order, or every order of a
+   * cart paid together). OVERSOLD: cancelled and refunded to the wallet; ALREADY_PAID: nothing done.
+   */
+  async confirmOrderPaymentInTx(
+    manager: EntityManager,
+    orderId: number,
+    razorpayPaymentId?: string,
+  ): Promise<'CONFIRMED' | 'ALREADY_PAID' | 'OVERSOLD'> {
+    const orderRepo = manager.getRepository(Order);
+    const order = await orderRepo.findOne({
+      where: { id: orderId },
+      lock: { mode: 'pessimistic_write' },
+    });
 
-      if (razorpayPaymentId) {
-        order.razorpayPaymentId = razorpayPaymentId;
-      }
+    if (!order) throw new NotFoundException('Order not found.');
+    if (order.paymentStatus === PaymentStatus.PAID) {
+      this.logger.warn(`Order #${orderId} already paid. Skipping.`);
+      return 'ALREADY_PAID';
+    }
 
-      // Re-verify stock inside transaction to prevent oversell race condition
-      const inStock = await getAvailableStock(manager, Number(order.productId));
-      if (inStock < order.quantity) {
-        this.logger.error(
-          `Oversell detected: Order #${orderId} (Product #${order.productId}) paid via Razorpay, but only ${inStock} items in stock (ordered: ${order.quantity}).`,
-        );
-        order.paymentStatus = PaymentStatus.PAID;
-        order.orderStatus = OrderStatus.CANCELLED;
-        await orderRepo.save(order);
+    if (razorpayPaymentId) {
+      order.razorpayPaymentId = razorpayPaymentId;
+    }
 
-        // Notify admins immediately of the oversold order
-        await this.notificationService.notifyAllAdmins(
-          NotificationKey.ADMIN_ORDER_CANCELLED,
-          `Oversell alert: Order #${order.id} cancelled`,
-          `Order #${order.id} was paid via Razorpay (${razorpayPaymentId || 'TXN'}) but product is out of stock. Automatic refund credited to wallet.`,
-          { orderId: Number(order.id), productId: Number(order.productId), quantity: order.quantity },
-          manager,
-        );
-
-        // Refund buyer directly to their wallet so their funds are immediately returned
-        await this.walletService.credit(
-          order.userId,
-          Number(order.totalAmount),
-          TransactionCategory.REFUND,
-          `Automatic refund for out-of-stock order #${order.id}`,
-          'ORDER',
-          String(order.id),
-          manager,
-        );
-
-        return;
-      }
-
+    // Re-verify stock inside transaction to prevent oversell race condition
+    const inStock = await getAvailableStock(manager, Number(order.productId));
+    if (inStock < order.quantity) {
+      this.logger.error(
+        `Oversell detected: Order #${orderId} (Product #${order.productId}) paid via Razorpay, but only ${inStock} items in stock (ordered: ${order.quantity}).`,
+      );
       order.paymentStatus = PaymentStatus.PAID;
-      order.orderStatus = OrderStatus.CONFIRMED;
+      order.orderStatus = OrderStatus.CANCELLED;
       await orderRepo.save(order);
 
-      // Record stock movement OUT for paid Razorpay order
-      await manager.getRepository(StockMovement).save(
-        manager.getRepository(StockMovement).create({
-          productId: Number(order.productId),
-          type: StockMovementType.OUT,
-          quantity: order.quantity,
-          note: `Razorpay order #${order.id} confirmed`,
-          createdBy: order.userId,
-        }),
-      );
-
-      // Distribute commissions
-      await this.distributeCommissions(Number(order.id), manager);
-
-      // In-app Notification: PAYMENT_SUCCESS (to buyer)
-      const product = await manager.getRepository(Product).findOne({ where: { id: order.productId } });
-      const productName = product ? product.name : 'Product';
-      const formattedAmount = `₹${(Number(order.totalAmount) / 100).toFixed(2)}`;
-      await this.notificationService.create(
-        order.userId,
-        NotificationKey.PAYMENT_SUCCESS,
-        `Payment received — #${order.id} confirmed`,
-        `We received ${formattedAmount} for ${productName} × ${order.quantity} (${order.bvTotal} BV). Ships in 24–48 business hours.`,
-        { orderId: Number(order.id), razorpayPaymentId },
+      // Notify admins immediately of the oversold order
+      await this.notificationService.notifyAllAdmins(
+        NotificationKey.ADMIN_ORDER_CANCELLED,
+        `Oversell alert: Order #${order.id} cancelled`,
+        `Order #${order.id} was paid via Razorpay (${razorpayPaymentId || 'TXN'}) but product is out of stock. Automatic refund credited to wallet.`,
+        { orderId: Number(order.id), productId: Number(order.productId), quantity: order.quantity },
         manager,
       );
+
+      // Refund buyer directly to their wallet so their funds are immediately returned
+      await this.walletService.credit(
+        order.userId,
+        Number(order.totalAmount),
+        TransactionCategory.REFUND,
+        `Automatic refund for out-of-stock order #${order.id}`,
+        'ORDER',
+        String(order.id),
+        manager,
+      );
+
+      return 'OVERSOLD';
+    }
+
+    order.paymentStatus = PaymentStatus.PAID;
+    order.orderStatus = OrderStatus.CONFIRMED;
+    await orderRepo.save(order);
+
+    // Record stock movement OUT for paid Razorpay order
+    await manager.getRepository(StockMovement).save(
+      manager.getRepository(StockMovement).create({
+        productId: Number(order.productId),
+        type: StockMovementType.OUT,
+        quantity: order.quantity,
+        note: `Razorpay order #${order.id} confirmed`,
+        createdBy: order.userId,
+      }),
+    );
+
+    // Distribute commissions
+    await this.distributeCommissions(Number(order.id), manager);
+
+    // In-app Notification: PAYMENT_SUCCESS (to buyer)
+    const product = await manager.getRepository(Product).findOne({ where: { id: order.productId } });
+    const productName = product ? product.name : 'Product';
+    const formattedAmount = `₹${(Number(order.totalAmount) / 100).toFixed(2)}`;
+    await this.notificationService.create(
+      order.userId,
+      NotificationKey.PAYMENT_SUCCESS,
+      `Payment received — #${order.id} confirmed`,
+      `We received ${formattedAmount} for ${productName} × ${order.quantity} (${order.bvTotal} BV). Ships in 24–48 business hours.`,
+      { orderId: Number(order.id), razorpayPaymentId },
+      manager,
+    );
+    return 'CONFIRMED';
+  }
+
+  /**
+   * A paid wallet order inside the caller's transaction: debit, order, stock OUT, commissions.
+   * Used for one product (createOrder) and for every product of a cart checkout.
+   */
+  async placeWalletOrder(manager: EntityManager, userId: number, product: Product, quantity: number) {
+    const unitPrice = Number(product.salePrice);
+    const totalAmount = unitPrice * quantity;
+    const bvTotal = Number(product.bvAmount) * quantity;
+
+    // Re-verify stock inside transaction
+    const inStockInTx = await getAvailableStock(manager, Number(product.id));
+    if (inStockInTx < quantity) {
+      throw new BadRequestException(
+        inStockInTx <= 0 ? 'This product is out of stock.' : `Only ${inStockInTx} left in stock.`,
+      );
+    }
+
+    // Debit buyer's wallet (locks row and validates sufficient balance)
+    const walletTxn = await this.walletService.debit(
+      userId,
+      totalAmount,
+      TransactionCategory.ORDER_PAYMENT,
+      `Purchase: ${product.name} × ${quantity} (Order payment)`,
+      'ORDER',
+      undefined,
+      manager,
+    );
+
+    const orderRepo = manager.getRepository(Order);
+    const order = orderRepo.create({
+      userId,
+      productId: product.id,
+      quantity,
+      unitPrice,
+      totalAmount,
+      bvTotal,
+      paymentMethod: PaymentMethod.WALLET,
+      paymentStatus: PaymentStatus.PAID,
+      orderStatus: OrderStatus.CONFIRMED,
     });
+
+    const savedOrder = await orderRepo.save(order);
+
+    // Update referenceId on the wallet transaction
+    if (walletTxn) {
+      await manager.getRepository(WalletTransaction).update(walletTxn.id, {
+        referenceId: String(savedOrder.id),
+      });
+    }
+
+    // Record stock movement OUT
+    await manager.getRepository(StockMovement).save(
+      manager.getRepository(StockMovement).create({
+        productId: Number(product.id),
+        type: StockMovementType.OUT,
+        quantity,
+        note: `Wallet order #${savedOrder.id}`,
+        createdBy: userId,
+      }),
+    );
+
+    // Distribute upline commissions
+    await this.distributeCommissions(Number(savedOrder.id), manager);
+
+    // In-app Notification: PAYMENT_SUCCESS
+    const formattedAmount = `₹${(totalAmount / 100).toFixed(2)}`;
+    await this.notificationService.create(
+      userId,
+      NotificationKey.PAYMENT_SUCCESS,
+      `Order #${savedOrder.id} confirmed`,
+      `Paid ${formattedAmount} via wallet for ${product.name} × ${quantity}.`,
+      { orderId: Number(savedOrder.id), amountPaise: totalAmount },
+      manager,
+    );
+
+    return {
+      message: 'Order placed and paid successfully using wallet balance.',
+      order: {
+        id: Number(savedOrder.id),
+        productName: product.name,
+        quantity,
+        unitPrice,
+        totalAmount,
+        totalAmountFormatted: formattedAmount,
+        bvTotal,
+        paymentMethod: savedOrder.paymentMethod,
+        paymentStatus: savedOrder.paymentStatus,
+        orderStatus: savedOrder.orderStatus,
+        createdAt: savedOrder.createdAt,
+      },
+    };
   }
 
   // ─── Fail Payment ───────────────────────────────────────────────────

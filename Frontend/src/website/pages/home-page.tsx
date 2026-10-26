@@ -8,14 +8,19 @@ import { Kicker, Section, SectionHeading } from "@/website/components/common/sec
 import { Button } from "@/website/components/ui/button"
 import { FOUNDER_SHORT_NAMES, FOUNDERS_QUOTE } from "@/website/features/about/content"
 import { Price } from "@/website/features/products/components/price"
-import { ProductCard } from "@/website/features/products/components/product-card"
-import { BRACELETS, stoneLine, WARRANTY_DAYS } from "@/website/features/products/catalog"
+import {
+  ProductCard,
+  ProductCardSkeleton,
+} from "@/website/features/products/components/product-card"
+import { countWord, stoneLine, WARRANTY_DAYS } from "@/website/features/products/catalog"
+import { type SiteProduct, useSiteProducts } from "@/website/features/products/use-site-products"
 
-const HERO_STATS = [
+/** Hero numbers — the bracelet count is what Admin has on sale (null while loading). */
+const heroStats = (bracelets: number | null) => [
   { value: "100%", label: "Natural gemstone beads" },
-  { value: String(BRACELETS.length), label: "Signature bracelets" },
+  { value: bracelets === null ? "—" : String(bracelets), label: "Signature bracelets" },
   { value: `${WARRANTY_DAYS}-day`, label: "Defect warranty" },
-] as const
+]
 
 const WHY_VEDORA = [
   {
@@ -36,25 +41,44 @@ const WHY_VEDORA = [
   },
 ] as const
 
-function HeroImage() {
-  const featured = BRACELETS[0]
+/** The first product on sale, big in the hero (a placeholder while loading). */
+function HeroImage({ featured }: { featured: SiteProduct | undefined }) {
+  if (!featured) {
+    return (
+      <div
+        aria-hidden
+        className="mx-auto aspect-[5/4] w-full max-w-[34rem] animate-pulse rounded-2xl border border-border bg-muted"
+      />
+    )
+  }
   return (
     <div className="relative mx-auto w-full max-w-[34rem] overflow-hidden rounded-2xl border border-border shadow-2xl shadow-black/50">
       <img src={featured.image} alt={featured.name} className="aspect-[5/4] w-full object-cover" />
       <div className="absolute inset-x-3 bottom-3 flex items-center justify-between gap-3 rounded-xl border border-border bg-background/85 px-4 py-3 backdrop-blur-md md:inset-x-4 md:bottom-4">
         <div className="min-w-0">
           <p className="truncate text-[0.8125rem] font-bold">{featured.name}</p>
-          <p className="mt-0.5 truncate text-[0.6875rem] text-muted-foreground">
-            {stoneLine(featured)}
-          </p>
+          {featured.stones.length ? (
+            <p className="mt-0.5 truncate text-[0.6875rem] text-muted-foreground">
+              {stoneLine(featured)}
+            </p>
+          ) : null}
         </div>
-        <Price className="shrink-0 font-display text-[1.5rem] leading-none text-gold" />
+        <Price
+          price={featured.price}
+          mrp={featured.mrp}
+          className="shrink-0 font-display text-[1.5rem] leading-none text-gold"
+        />
       </div>
     </div>
   )
 }
 
 export function HomePage() {
+  // The collection comes from the backend — whatever Admin has put live in Products.
+  const { products, isPending } = useSiteProducts()
+  const HERO_STATS = heroStats(isPending ? null : products.length)
+  const designs = countWord(products.length)
+
   return (
     <>
       <PageHero
@@ -84,13 +108,17 @@ export function HomePage() {
             ))}
           </dl>
         }
-        aside={<HeroImage />}
+        aside={<HeroImage featured={products[0]} />}
       />
 
       <Section>
         <SectionHeading
           kicker="The collection"
-          title="Four stones. Four designs."
+          title={
+            isPending || products.length === 4
+              ? "Four stones. Four designs."
+              : `${designs} design${products.length === 1 ? "" : "s"}, natural stones.`
+          }
           aside={
             <Link
               to={ROUTES.products}
@@ -101,10 +129,15 @@ export function HomePage() {
           }
         />
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {BRACELETS.map((b) => (
-            <ProductCard key={b.slug} bracelet={b} />
-          ))}
+          {isPending
+            ? [0, 1, 2, 3].map((i) => <ProductCardSkeleton key={i} />)
+            : products.map((b) => <ProductCard key={b.id} bracelet={b} />)}
         </div>
+        {!isPending && products.length === 0 ? (
+          <p className="text-[0.875rem] text-muted-foreground">
+            New bracelets are on their way — check back soon.
+          </p>
+        ) : null}
       </Section>
 
       <Section tone="cream">

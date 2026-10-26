@@ -6,7 +6,9 @@ import {
   getProduct,
   getProducts,
   getPublicProducts,
+  removeProductImage,
   updateProduct,
+  uploadProductImage,
 } from "@/features/products/api"
 import { useApiMutation } from "@/lib/mutation"
 
@@ -33,6 +35,20 @@ export const useCreateProduct = () =>
 export const useUpdateProduct = () =>
   useApiMutation(updateProduct, {
     success: (p) => `${p.name} saved`,
+    invalidate: [productKeys.all],
+  })
+
+/** [Admin] Upload / replace a product's photo — shows on the website straight away. */
+export const useUploadProductImage = () =>
+  useApiMutation(uploadProductImage, {
+    success: (p) => `Photo of ${p.name} updated`,
+    error: "Couldn't upload the photo. Try again.",
+    invalidate: [productKeys.all],
+  })
+
+export const useRemoveProductImage = () =>
+  useApiMutation(removeProductImage, {
+    success: (p) => `Photo of ${p.name} removed`,
     invalidate: [productKeys.all],
   })
 

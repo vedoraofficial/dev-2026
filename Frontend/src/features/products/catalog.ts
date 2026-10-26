@@ -1,4 +1,5 @@
 import { braceletArtwork } from "@/features/products/artwork"
+import { productImageUrl } from "@/features/products/api"
 import type { ApiProduct, Product } from "@/features/products/types"
 import { paiseToRupees } from "@/lib/money"
 
@@ -21,6 +22,8 @@ export function toCatalogProduct(p: ApiProduct, unitsSold = 0): Product {
   const art = productArt(p.name)
   return {
     ...art,
+    // The photo Admin uploaded, otherwise the bracelet artwork
+    image: productImageUrl(p) ?? art.image,
     id: p.id,
     sku: productCode(p),
     name: p.name,

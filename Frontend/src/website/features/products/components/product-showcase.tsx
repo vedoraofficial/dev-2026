@@ -1,12 +1,14 @@
 import { Kicker } from "@/website/components/common/section"
 import { Button } from "@/website/components/ui/button"
-import { type Bracelet, stoneLine } from "@/website/features/products/catalog"
+import { stoneLine } from "@/website/features/products/catalog"
 import { Price } from "@/website/features/products/components/price"
+import { OutOfStock } from "@/website/features/products/components/product-card"
+import type { SiteProduct } from "@/website/features/products/use-site-products"
 import { whatsappLink } from "@/website/lib/site"
 import { cn } from "@/website/lib/utils"
 
 type Props = {
-  bracelet: Bracelet
+  bracelet: SiteProduct
   /** Put the image on the right (every other row). */
   reverse?: boolean
 }
@@ -20,10 +22,11 @@ export function ProductShowcase({ bracelet, reverse = false }: Props) {
     >
       <div
         className={cn(
-          "overflow-hidden rounded-2xl border border-border shadow-2xl shadow-black/40",
+          "relative overflow-hidden rounded-2xl border border-border shadow-2xl shadow-black/40",
           reverse && "md:order-2",
         )}
       >
+        {bracelet.inStock ? null : <OutOfStock />}
         <img
           src={bracelet.image}
           alt={bracelet.name}
@@ -41,21 +44,29 @@ export function ProductShowcase({ bracelet, reverse = false }: Props) {
           {bracelet.description}
         </p>
 
-        <p className="mt-2 text-[0.75rem] text-muted-foreground">{stoneLine(bracelet)}</p>
+        {bracelet.stones.length ? (
+          <p className="mt-2 text-[0.75rem] text-muted-foreground">{stoneLine(bracelet)}</p>
+        ) : null}
 
-        <dl className="mt-6 space-y-3 rounded-xl border border-border bg-card/60 p-4">
-          {bracelet.details.map((d) => (
-            <div key={d.label}>
-              <dt className="text-[0.75rem] font-bold text-gold">{d.label}</dt>
-              <dd className="mt-1 text-[0.8125rem] leading-relaxed text-muted-foreground">
-                {d.text}
-              </dd>
-            </div>
-          ))}
-        </dl>
+        {bracelet.details.length ? (
+          <dl className="mt-6 space-y-3 rounded-xl border border-border bg-card/60 p-4">
+            {bracelet.details.map((d) => (
+              <div key={d.label}>
+                <dt className="text-[0.75rem] font-bold text-gold">{d.label}</dt>
+                <dd className="mt-1 text-[0.8125rem] leading-relaxed text-muted-foreground">
+                  {d.text}
+                </dd>
+              </div>
+            ))}
+          </dl>
+        ) : null}
 
         <div className="mt-6 flex flex-wrap items-center gap-x-4 gap-y-3 border-t border-border pt-6">
-          <Price className="font-display text-[1.75rem] leading-none text-foreground/90" />
+          <Price
+            price={bracelet.price}
+            mrp={bracelet.mrp}
+            className="font-display text-[1.75rem] leading-none text-foreground/90"
+          />
           <Button asChild>
             <a
               href={whatsappLink(`Hi VEDORA, I'd like to know more about the ${bracelet.name}.`)}

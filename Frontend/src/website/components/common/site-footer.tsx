@@ -20,10 +20,13 @@ function FooterColumn({ title, children }: { title: string; children: ReactNode 
   )
 }
 
-/** Site footer: brand blurb, link columns, contact, direct-selling disclaimer. */
+/**
+ * Site footer: brand blurb, link columns, contact, direct-selling disclaimer.
+ * `surface-deep` makes the text light so it reads on the dark green.
+ */
 export function SiteFooter() {
   return (
-    <footer className="border-t border-border bg-deep">
+    <footer className="border-t border-border surface-deep">
       <Container className="py-14 md:py-16">
         <div className="grid gap-10 sm:grid-cols-2 lg:grid-cols-[1.3fr_1fr_1fr_1fr]">
           <div>

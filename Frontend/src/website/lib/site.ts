@@ -2,7 +2,7 @@ import { env } from "@/website/lib/env"
 
 /** Company contact details shown in the footer, contact page and policies. */
 export const SITE = {
-  legalName: "Prashant Dongre",
+  legalName: "Prashant Dongare",
   phone: "+91 91365 39436",
   email: "support@vedoraofficial.com",
   website: "www.vedoraofficial.com",

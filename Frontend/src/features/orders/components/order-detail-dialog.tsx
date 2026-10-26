@@ -11,6 +11,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
+import { DownloadInvoiceButton } from "@/features/orders/components/download-invoice-button"
 import { orderNo, orderStage, paymentMethodLabel, stagePill } from "@/features/orders/labels"
 import { useOrder } from "@/features/orders/queries"
 import type { OrderDetail } from "@/features/orders/types"
@@ -124,7 +125,13 @@ export function OrderDetailDialog({ orderId, onClose, actions, extra }: Props) {
           ) : null}
         </QueryState>
 
-        {o && actions ? <DialogFooter>{actions(o)}</DialogFooter> : null}
+        {o && (actions || o.paymentStatus === "PAID") ? (
+          <DialogFooter>
+            {/* Every paid order has a GST invoice — the buyer and Admin can save it */}
+            {o.paymentStatus === "PAID" ? <DownloadInvoiceButton orderId={o.id} /> : null}
+            {actions?.(o)}
+          </DialogFooter>
+        ) : null}
       </DialogContent>
     </Dialog>
   )

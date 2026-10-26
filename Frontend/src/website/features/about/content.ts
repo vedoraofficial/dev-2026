@@ -19,12 +19,12 @@ export const PILLARS = [
 export type Founder = { id?: string; name: string; role: string }
 
 /** Owner of VEDORA — shown first in the leadership section. */
-export const OWNER: Founder = { name: "Prashant Dongre", role: "Owner" }
+export const OWNER: Founder = { name: "Prashant Dongare", role: "Owner" }
 
 export const FOUNDERS: readonly Founder[] = [
-  { id: "VED000001", name: "Poonam Amit Medhavi", role: "Founder" },
-  { id: "VED000002", name: "Neelam Prashant Dongare", role: "Founder" },
-  { id: "VED000003", name: "Shital Pravin Bhor", role: "Founder" },
+  { id: "VED000001", name: "Poonam Medhavi", role: "Founder" },
+  { id: "VED000002", name: "Neelam Dongare", role: "Founder" },
+  { id: "VED000003", name: "Shital Bhor", role: "Founder" },
 ]
 
 /** Short names used under the founders' quote on the home page. */

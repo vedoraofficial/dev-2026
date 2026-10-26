@@ -2,11 +2,16 @@ import type {
   ApiOrder,
   CancelOrderInput,
   CashOrderInput,
+  CheckoutInput,
+  CheckoutResult,
   CreatedOrder,
   CreateOrderInput,
   OrderDetail,
 } from "@/features/orders/types"
-import { api } from "@/lib/api"
+import axios from "axios"
+
+import { api, apiErrorMessage } from "@/lib/api"
+import { downloadBlob } from "@/lib/download"
 
 // bigint columns can arrive as strings — normalise the numbers we do maths / formatting on.
 const toOrder = (o: ApiOrder): ApiOrder => ({
@@ -58,4 +63,35 @@ export async function cancelOrder({
     reason,
   })
   return data
+}
+
+/** POST /api/order/checkout — the cart: one payment, one invoice, one email. */
+export async function checkoutCart(input: CheckoutInput): Promise<CheckoutResult> {
+  const { data } = await api.post<CheckoutResult>("/order/checkout", input)
+  return data
+}
+
+/** GET /api/invoice/order/:id — the GST invoice PDF of a paid order, saved by the browser. */
+export async function downloadInvoice(orderId: number): Promise<void> {
+  try {
+    const res = await api.get<Blob>(`/invoice/order/${orderId}`, { responseType: "blob" })
+    const disposition = String(res.headers["content-disposition"] ?? "")
+    const name =
+      /filename="([^"]+)"/.exec(disposition)?.[1] ?? `VEDORA-invoice-order-${orderId}.pdf`
+    downloadBlob(name, res.data)
+  } catch (err) {
+    // With responseType "blob" the backend's error message arrives as a blob too.
+    if (axios.isAxiosError(err) && err.response?.data instanceof Blob) {
+      const body = await err.response.data.text().catch(() => "")
+      const message = (() => {
+        try {
+          return (JSON.parse(body) as { message?: string }).message
+        } catch {
+          return undefined
+        }
+      })()
+      if (message) throw new Error(message)
+    }
+    throw new Error(apiErrorMessage(err, "Couldn't download the invoice. Try again."))
+  }
 }

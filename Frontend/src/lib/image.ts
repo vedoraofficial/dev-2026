@@ -76,3 +76,29 @@ export async function makeAvatar(
   }
   throw new AppError("This photo can't be made small enough — try a simpler one")
 }
+
+/**
+ * A product photo ready to upload: at most `maxSide` px on its longest side (not cropped), as WebP
+ * (JPEG where the browser can't encode WebP) — sharp on the website, light enough to load fast.
+ */
+export async function makeProductPhoto(file: File, maxSide = 1400): Promise<Blob> {
+  const img = await loadImage(file)
+  const scale = Math.min(1, maxSide / Math.max(img.width, img.height))
+  const canvas = document.createElement("canvas")
+  canvas.width = Math.round(img.width * scale)
+  canvas.height = Math.round(img.height * scale)
+  const ctx = canvas.getContext("2d")
+  if (!ctx) throw new AppError("Canvas isn't available in this browser")
+  ctx.imageSmoothingQuality = "high"
+  ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
+
+  const encode = (type: string, quality: number) =>
+    new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, type, quality))
+  for (const quality of [0.86, 0.75, 0.6]) {
+    let blob = await encode("image/webp", quality)
+    if (!blob || blob.type !== "image/webp") blob = await encode("image/jpeg", quality)
+    // The backend takes up to 3 MB
+    if (blob && blob.size <= 2.5 * 1024 * 1024) return blob
+  }
+  throw new AppError("This photo can't be made small enough — try another one")
+}

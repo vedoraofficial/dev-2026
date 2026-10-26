@@ -1,4 +1,6 @@
 import { zodResolver } from "@hookform/resolvers/zod"
+import { Camera, Loader2 } from "lucide-react"
+import { useRef, type ChangeEvent } from "react"
 import { Controller, useForm, useWatch } from "react-hook-form"
 
 import { ConfirmDialog } from "@/components/common/confirm-dialog"
@@ -9,8 +11,15 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Switch } from "@/components/ui/switch"
 import { Textarea } from "@/components/ui/textarea"
+import { productImageUrl } from "@/features/products/api"
 import { productArt, productCode } from "@/features/products/catalog"
-import { useCreateProduct, useDeleteProduct, useUpdateProduct } from "@/features/products/queries"
+import {
+  useCreateProduct,
+  useDeleteProduct,
+  useRemoveProductImage,
+  useUpdateProduct,
+  useUploadProductImage,
+} from "@/features/products/queries"
 import {
   blankProduct,
   formToProduct,
@@ -54,6 +63,18 @@ export function ProductEditor({ product, soldLabel, onDone }: Props) {
   const art = productArt(name ?? "")
   const saving = create.isPending || update.isPending
 
+  // Photo: the one Admin uploaded (shown on the website too), otherwise the bracelet artwork
+  const uploadPhoto = useUploadProductImage()
+  const removePhoto = useRemoveProductImage()
+  const photoInput = useRef<HTMLInputElement>(null)
+  const uploadedPhoto = product ? productImageUrl(product) : null
+  const photoBusy = uploadPhoto.isPending || removePhoto.isPending
+  const onPickPhoto = (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    e.target.value = "" // picking the same file again still uploads it
+    if (file && product) uploadPhoto.mutate({ id: product.id, file })
+  }
+
   const onSubmit = (v: ProductFormValues) => {
     if (isNew) create.mutate(formToProduct(v), { onSuccess: () => onDone?.() })
     else update.mutate({ id, ...formToProduct(v) })
@@ -63,14 +84,60 @@ export function ProductEditor({ product, soldLabel, onDone }: Props) {
 
   return (
     <Panel className="grid gap-4 sm:grid-cols-[minmax(0,16rem)_minmax(0,1fr)] md:gap-5 lg:grid-cols-[minmax(0,18rem)_minmax(0,1fr)]">
-      <img
-        src={art.image}
-        alt={name || "New product"}
-        loading="lazy"
-        width={1000}
-        height={750}
-        className="aspect-[4/3] w-full rounded-xl border border-border object-cover"
-      />
+      <div className="space-y-2.5">
+        <div className="relative">
+          <img
+            src={uploadedPhoto ?? art.image}
+            alt={name || "New product"}
+            loading="lazy"
+            width={1000}
+            height={750}
+            className="aspect-[4/3] w-full rounded-xl border border-border object-cover"
+          />
+          {photoBusy ? (
+            <div className="absolute inset-0 grid place-items-center rounded-xl bg-background/60">
+              <Loader2 className="size-6 animate-spin text-gold" aria-label="Saving photo" />
+            </div>
+          ) : null}
+        </div>
+        {isNew ? (
+          <p className="text-[0.6875rem] text-muted-foreground">
+            Save the product first, then add its photo.
+          </p>
+        ) : (
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={photoBusy}
+              onClick={() => photoInput.current?.click()}
+            >
+              <Camera aria-hidden />
+              {uploadedPhoto ? "Change photo" : "Upload photo"}
+            </Button>
+            {uploadedPhoto ? (
+              <Button
+                type="button"
+                variant="quiet"
+                size="sm"
+                disabled={photoBusy}
+                onClick={() => removePhoto.mutate(id)}
+              >
+                Remove photo
+              </Button>
+            ) : null}
+            <input
+              ref={photoInput}
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+              className="hidden"
+              aria-label={`Photo of ${name || "the product"}`}
+              onChange={onPickPhoto}
+            />
+          </div>
+        )}
+      </div>
 
       <form className="flex min-w-0 flex-col gap-3" onSubmit={handleSubmit(onSubmit)} noValidate>
         <div className="flex items-center justify-between gap-3">

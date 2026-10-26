@@ -11,6 +11,8 @@ export type ApiProduct = {
   salePrice: number
   bvAmount: number
   status: ProductStatus
+  /** When Admin last uploaded a photo; null / missing = no photo (the built-in artwork is used) */
+  imageUpdatedAt?: string | null
   /** Units left — 0 (out of stock) until Admin adds stock */
   stockAvailable?: number | null
   createdAt: string

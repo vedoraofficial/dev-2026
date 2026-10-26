@@ -3,6 +3,12 @@ import { ConfigService } from '@nestjs/config';
 import * as nodemailer from 'nodemailer';
 import { OAuth2Client } from 'google-auth-library';
 
+export interface MailAttachment {
+  filename: string;
+  content: Buffer;
+  contentType?: string;
+}
+
 export interface SendMailResult {
   success: boolean;
   message: string;
@@ -86,7 +92,12 @@ export class MailService implements OnModuleInit {
   }
 
 
-  async sendMail(to: string, subject: string, text: string): Promise<SendMailResult> {
+  async sendMail(
+    to: string,
+    subject: string,
+    text: string,
+    attachments: MailAttachment[] = [],
+  ): Promise<SendMailResult> {
     const sender = this.configService.get<string>('SMTP_USER')?.trim() || 'info@vedoraofficial.com';
 
     if (!this.isConfigured || !this.transporter) {
@@ -107,6 +118,7 @@ export class MailService implements OnModuleInit {
         to,
         subject,
         text,
+        attachments,
       });
 
       this.logger.log(`[MailService] Email sent successfully! MessageId: ${info.messageId}`);
@@ -125,6 +137,37 @@ export class MailService implements OnModuleInit {
     }
   }
 
+
+  /** Order(s) paid — one email with the GST invoice PDF attached (a cart is one invoice). */
+  async sendInvoiceEmail(
+    to: string,
+    data: { name: string; invoiceNumber: string; orderIds: number[]; products: string[]; amountFormatted: string },
+    pdf: { filename: string; content: Buffer },
+  ): Promise<SendMailResult> {
+    const orderNos = data.orderIds.map((id) => `#${id}`).join(', ');
+    const text = `Dear ${data.name},
+
+Thank you for your order with VEDORA.
+
+Your payment of ${data.amountFormatted} has been received for:
+${data.products.map((p) => `  - ${p}`).join('\n')}
+
+Order${data.orderIds.length > 1 ? 's' : ''}: ${orderNos}
+
+Your invoice ${data.invoiceNumber} is attached to this email.
+
+You can also download it any time from My Orders in your partner portal.
+
+If you have any questions, please reach out to us at info@vedoraofficial.com.
+
+Warm regards,
+Team VEDORA
+www.vedoraofficial.com`;
+
+    return this.sendMail(to, `Your VEDORA invoice ${data.invoiceNumber} - Order${data.orderIds.length > 1 ? 's' : ''} ${orderNos}`, text, [
+      { filename: pdf.filename, content: pdf.content, contentType: 'application/pdf' },
+    ]);
+  }
 
   async sendRegistrationEmail(
     to: string,

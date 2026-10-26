@@ -1,3 +1,5 @@
+import type { InitiatePaymentResponse } from "@/features/payments/api"
+
 /** Amounts in paise; `totalAmountFormatted` is the backend's ₹ text. */
 export type PaymentMethod = "RAZORPAY" | "WALLET" | "CASH"
 export type PaymentStatus = "PENDING" | "PAID" | "FAILED" | "REFUNDED"
@@ -50,6 +52,30 @@ export type CreateOrderInput = {
   quantity: number
   paymentMethod: Exclude<PaymentMethod, "CASH">
 }
+
+/** POST /api/order/checkout — the whole cart in one payment (one invoice, one email). */
+export type CheckoutInput = {
+  items: { productId: number; quantity: number }[]
+  paymentMethod: "WALLET" | "RAZORPAY"
+}
+
+export type CheckoutResult =
+  | {
+      /** Wallet: every order is paid */
+      status: "PAID"
+      message: string
+      orders: CreatedOrder["order"][]
+      totalAmount: number
+    }
+  | {
+      /** Razorpay: one payment for the total confirms every order */
+      status: "PAYMENT_REQUIRED"
+      message: string
+      razorpayOrderId: string
+      checkout: InitiatePaymentResponse
+      amount: number
+      orderIds: number[]
+    }
 
 export type CreatedOrder = {
   message: string

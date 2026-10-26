@@ -7,7 +7,7 @@ const tones = {
   /** Page green */
   default: "",
   /** Darker band (founders' quote) */
-  deep: "bg-deep",
+  deep: "surface-deep",
   /** Lifted green band (income plan, compliance strip) */
   forest: "bg-linear-to-b from-card to-background",
   /** Light cream band — switches every token inside to the light palette */

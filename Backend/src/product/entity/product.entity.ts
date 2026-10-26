@@ -20,6 +20,10 @@ export class Product {
   @Column({ type: 'text', nullable: true })
   description: string;
 
+  /** When Admin last uploaded a photo (null = no photo); also versions the photo's link */
+  @Column({ name: 'image_updated_at', type: 'timestamptz', nullable: true })
+  imageUpdatedAt: Date | null;
+
   @Column({ type: 'bigint' })
   mrp: number;
 

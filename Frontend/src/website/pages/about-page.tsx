@@ -35,16 +35,7 @@ export function AboutPage() {
       </Section>
 
       <Section tone="cream" id="founders" className="scroll-mt-16">
-        <SectionHeading
-          kicker="Leadership"
-          title="Owner & founders of VEDORA"
-          aside={
-            <p className="text-[0.8125rem] leading-relaxed font-semibold text-foreground/80">
-              Three founders hold the first three VEDORA IDs — permanently, at the top of the
-              network.
-            </p>
-          }
-        />
+        <SectionHeading kicker="Leadership" title="Owner & founders of VEDORA" />
         <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
           <FounderCard founder={OWNER} />
           {FOUNDERS.map((f) => (

@@ -9,13 +9,15 @@ import { Panel } from "@/components/common/panel"
 import { PriceTag } from "@/components/common/price-tag"
 import { QueryState } from "@/components/common/query-state"
 import { Button } from "@/components/ui/button"
-import { useCreateOrder, useMyOrders } from "@/features/orders/queries"
-import { usePayOrder } from "@/features/payments/queries"
+import { checkoutCart } from "@/features/orders/api"
+import { useMyOrders } from "@/features/orders/queries"
+import { startRazorpayCartCheckout } from "@/features/payments/api"
 import { toCatalogProduct, unitsByProduct } from "@/features/products/catalog"
 import { ProductCard } from "@/features/products/components/product-card"
 import { useProducts } from "@/features/products/queries"
 import { useWalletSummary } from "@/features/wallet/queries"
 import { formatBV, formatINR, formatNumber } from "@/lib/format"
+import { apiErrorMessage } from "@/lib/api"
 import { paiseToRupees } from "@/lib/money"
 
 /** The backend's plan: sponsor gets ₹200 flat + 10% of BV; levels 2–5 get 10 / 10 / 5 / 5%. */
@@ -34,8 +36,6 @@ export function PartnerProductsPage() {
   const productsQuery = useProducts()
   const myOrders = useMyOrders()
   const walletSummary = useWalletSummary()
-  const createOrder = useCreateOrder()
-  const payOrder = usePayOrder()
   const [cart, setCart] = useState<Cart>({})
   const [busy, setBusy] = useState(false)
   const [paymentMethod, setPaymentMethod] = useState<"RAZORPAY" | "WALLET">("RAZORPAY")
@@ -63,46 +63,57 @@ export function PartnerProductsPage() {
     })
   const remove = (id: number) => setCart((c) => ({ ...c, [id]: Math.max(0, (c[id] ?? 0) - 1) }))
 
+  const refresh = () => {
+    void queryClient.invalidateQueries({ queryKey: ["wallet"] })
+    void queryClient.invalidateQueries({ queryKey: ["orders"] })
+  }
+
+  // The whole cart is one checkout: one payment (wallet or Razorpay), one invoice, one email.
   const checkout = async () => {
     setBusy(true)
     try {
-      const created: number[] = []
-      for (const l of lines) {
-        const r = await createOrder.mutateAsync({
-          productId: l.product.id,
-          quantity: l.qty,
-          paymentMethod: paymentMethod,
-        })
-        created.push(Number(r.order.id))
-      }
+      const result = await checkoutCart({
+        items: lines.map((l) => ({ productId: l.product.id, quantity: l.qty })),
+        paymentMethod,
+      })
       setCart({})
+      refresh()
 
-      if (paymentMethod === "WALLET") {
+      if (result.status === "PAID") {
         toast.success(
-          `${created.length > 1 ? `${created.length} orders` : "Order"} confirmed!`,
+          `${result.orders.length > 1 ? `${result.orders.length} orders` : "Order"} confirmed!`,
           {
-            description: "Paid directly from your wallet balance. Commissions have been distributed.",
+            description:
+              "Paid from your wallet balance. Your invoice is emailed to you and in My Orders.",
           },
         )
-        // Refresh wallet balance and orders
-        void queryClient.invalidateQueries({ queryKey: ["wallet"] })
-        void queryClient.invalidateQueries({ queryKey: ["orders"] })
-      } else {
-        if (created.length > 1) {
-          toast.success(`${created.length} orders created`, {
-            description: "Paying the first now — pay the others from My Orders.",
-          })
-        }
-        payOrder.mutate(created[0])
+        return
       }
-    } catch {
-      // The failed call already showed its error; orders created so far are in My Orders.
+
+      await startRazorpayCartCheckout(result.checkout, result.orderIds[0], {
+        onSuccess: () => {
+          toast.success("Payment received — your orders are confirmed.", {
+            description: "Your invoice is emailed to you and in My Orders.",
+          })
+          refresh()
+        },
+        onDismiss: () =>
+          toast.info("Payment cancelled — your orders are waiting in My Orders.", {
+            description: "Pay them from My Orders whenever you're ready.",
+          }),
+        onError: () =>
+          toast.error("The payment didn't go through. Check My Orders before trying again."),
+      }).catch(() => {
+        // onError above already told the user
+      })
+    } catch (err) {
+      toast.error(apiErrorMessage(err, "Couldn't place the order. Try again."))
     } finally {
       setBusy(false)
     }
   }
 
-  const working = busy || payOrder.isPending
+  const working = busy
 
   return (
     <>

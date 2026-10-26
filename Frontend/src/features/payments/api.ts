@@ -316,6 +316,28 @@ export async function startRazorpayTopup(
 }
 
 /**
+ * Cart checkout: one Razorpay payment for every order in the cart (the backend already created it)
+ * — remember the payment, then open the Razorpay popup.
+ */
+export function startRazorpayCartCheckout(
+  checkout: InitiatePaymentResponse,
+  firstOrderId: number,
+  callbacks?: {
+    onSuccess?: (verifyRes: VerifyPaymentResponse) => void
+    onError?: (error: any) => void
+    onDismiss?: () => void
+  },
+): Promise<void> {
+  savePendingPayment({ merchantOrderId: checkout.orderId, type: "ORDER", orderId: firstOrderId })
+  return openRazorpayCheckout({
+    initiateData: checkout,
+    onSuccess: (res) => callbacks?.onSuccess?.(res),
+    onError: (err) => callbacks?.onError?.(err),
+    onDismiss: () => callbacks?.onDismiss?.(),
+  })
+}
+
+/**
  * Add Partner (paid joining order): the backend already created the Razorpay order and returned
  * its checkout details — remember the payment, then open the Razorpay popup.
  */

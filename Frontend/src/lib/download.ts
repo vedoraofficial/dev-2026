@@ -1,6 +1,10 @@
 /** Triggers a browser download of `content` as a plain-text file named `filename`. */
 export function downloadTextFile(filename: string, content: string): void {
-  const blob = new Blob([content], { type: "text/plain;charset=utf-8;" })
+  downloadBlob(filename, new Blob([content], { type: "text/plain;charset=utf-8;" }))
+}
+
+/** Triggers a browser download of a file the app already has (e.g. a PDF from the API). */
+export function downloadBlob(filename: string, blob: Blob): void {
   const url = URL.createObjectURL(blob)
 
   const link = document.createElement("a")

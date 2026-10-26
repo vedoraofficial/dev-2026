@@ -15,6 +15,8 @@ import { StockModule } from './stock/stock.module';
 import { ShiprocketModule } from './shiprocket/shiprocket.module';
 import { PayoutModule } from './payout/payout.module';
 import { OnboardingModule } from './onboarding/onboarding.module';
+import { InvoiceModule } from './invoice/invoice.module';
+import { CheckoutModule } from './checkout/checkout.module';
 
 @Module({
   imports: [
@@ -42,6 +44,8 @@ import { OnboardingModule } from './onboarding/onboarding.module';
     StockModule,
     ShiprocketModule,
     OnboardingModule,
+    InvoiceModule,
+    CheckoutModule,
   ],
   controllers: [AppController],
   providers: [AppService],
