@@ -1,3 +1,4 @@
+import { LogOut, Settings } from "lucide-react"
 import { NavLink, Outlet } from "react-router-dom"
 
 import type { NavItem } from "@/app/navigation"
@@ -7,6 +8,7 @@ import { PersonAvatar } from "@/components/common/person-avatar"
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet"
 import { PortalUserProvider, type PortalUser } from "@/lib/portal-user"
 import { useShellStore } from "@/lib/shell-store"
+import { useLogOut } from "@/lib/use-log-out"
 import { cn } from "@/lib/utils"
 
 type Props = {
@@ -16,7 +18,19 @@ type Props = {
   user: PortalUser
 }
 
-function SidebarBody({ sectionLabel, nav, user, onNavigate }: Props & { onNavigate?: () => void }) {
+function SidebarBody({
+  sectionLabel,
+  nav,
+  user,
+  onNavigate,
+  accountActions = false,
+}: Props & {
+  onNavigate?: () => void
+  /** Settings + Log out under the profile card — phones have no avatar menu in the header */
+  accountActions?: boolean
+}) {
+  const logOut = useLogOut()
+
   return (
     <div className="flex h-full flex-col">
       <div className="flex h-[4.5rem] shrink-0 items-center border-b border-sidebar-border px-5">
@@ -74,6 +88,29 @@ function SidebarBody({ sectionLabel, nav, user, onNavigate }: Props & { onNaviga
             </MonoId>
           </div>
         </NavLink>
+        {accountActions ? (
+          <div className="mt-2 grid grid-cols-2 gap-2">
+            <NavLink
+              to={user.settingsHref}
+              onClick={onNavigate}
+              className="flex items-center justify-center gap-2 rounded-xl border border-border bg-white/5 px-3 py-2.5 text-[0.8125rem] transition-colors hover:border-gold/40"
+            >
+              <Settings aria-hidden className="size-4" />
+              Settings
+            </NavLink>
+            <button
+              type="button"
+              onClick={() => {
+                onNavigate?.()
+                logOut()
+              }}
+              className="flex items-center justify-center gap-2 rounded-xl border border-border bg-white/5 px-3 py-2.5 text-[0.8125rem] text-danger-on-deep transition-colors hover:border-danger-on-deep/50"
+            >
+              <LogOut aria-hidden className="size-4" />
+              Log out
+            </button>
+          </div>
+        ) : null}
       </div>
     </div>
   )
@@ -98,11 +135,12 @@ export function AppShell(props: Props) {
         <SheetContent
           side="left"
           showCloseButton={false}
-          className="w-[18.5rem] max-w-[85vw] gap-0 border-sidebar-border p-0 surface-deep sm:max-w-[18.5rem]"
+          // text-foreground replaces the sheet's dark popover text, so plain text reads on the green
+          className="w-[18.5rem] max-w-[85vw] gap-0 border-sidebar-border p-0 surface-deep text-foreground sm:max-w-[18.5rem]"
         >
           <SheetTitle className="sr-only">Navigation</SheetTitle>
           <SheetDescription className="sr-only">Main navigation menu</SheetDescription>
-          <SidebarBody {...props} onNavigate={() => setOpen(false)} />
+          <SidebarBody {...props} onNavigate={() => setOpen(false)} accountActions />
         </SheetContent>
       </Sheet>
 

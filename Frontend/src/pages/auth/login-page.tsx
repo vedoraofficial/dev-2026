@@ -13,7 +13,6 @@ import { Label } from "@/components/ui/label"
 import { login } from "@/features/auth/api"
 import { AuthBrandPanel } from "@/features/auth/components/auth-brand-panel"
 import { loginSchema, type LoginValues } from "@/features/auth/schemas"
-import { JoinPartnerDialog } from "@/features/genealogy/components/join-partner-dialog"
 import { apiErrorMessage } from "@/lib/api"
 import { useSession } from "@/lib/session"
 import type { UserRole } from "@/types/session"
@@ -164,18 +163,6 @@ export function LoginPage() {
           <Button type="submit" size="lg" className="w-full" disabled={loginMutation.isPending}>
             {loginMutation.isPending ? "Signing in…" : "Sign in"}
           </Button>
-
-          <p className="text-center text-xs text-muted-foreground">
-            New partner? <JoinPartnerDialog onJoined={prefillId} />
-          </p>
-
-          <p className="rounded-xl border border-border bg-card/70 p-3.5 text-center text-[0.6875rem] leading-relaxed text-muted-foreground">
-            One login for everyone — your ID opens the right portal.
-            <br />
-            Admin <span className="font-mono text-gold">VED108</span> · Founders{" "}
-            <span className="font-mono text-gold">VED000001–03</span> · Partners from{" "}
-            <span className="font-mono text-gold">VED000004</span>
-          </p>
         </form>
       </section>
     </div>

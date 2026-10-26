@@ -121,7 +121,14 @@ export function PersonalDetailsForm() {
             </FormField>
             <div className="grid grid-cols-2 gap-3">
               <FormField label="Date of birth" htmlFor="dateOfBirth">
-                <Input id="dateOfBirth" type="date" {...register("dateOfBirth")} />
+                {/* iPhone Safari ignores a date input's height and width unless its native look is
+                    turned off — then it lines up with the other inputs */}
+                <Input
+                  id="dateOfBirth"
+                  type="date"
+                  className="block appearance-none text-left [&::-webkit-date-and-time-value]:min-h-[1.5em] [&::-webkit-date-and-time-value]:text-left"
+                  {...register("dateOfBirth")}
+                />
               </FormField>
               <FormField label="Gender" htmlFor="gender">
                 <Controller
@@ -129,7 +136,10 @@ export function PersonalDetailsForm() {
                   name="gender"
                   render={({ field }) => (
                     <Select value={field.value || undefined} onValueChange={field.onChange}>
-                      <SelectTrigger id="gender" className="w-full">
+                      <SelectTrigger
+                        id="gender"
+                        className="h-11 w-full rounded-xl bg-field px-3.5 text-[16px] data-[size=default]:h-11 md:h-10 md:text-sm md:data-[size=default]:h-10"
+                      >
                         <SelectValue placeholder="Select" />
                       </SelectTrigger>
                       <SelectContent>
