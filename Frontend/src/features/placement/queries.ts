@@ -21,6 +21,6 @@ export function usePincodeLookup(pincode: string) {
 /** Add Partner with a paid joining order. Refreshes everything a registration + order touches. */
 export const useRegisterWithOrder = () =>
   useApiMutation(registerWithOrder, {
-    success: (r) => (r.status === "COMPLETED" ? r.message : "Opening Razorpay…"),
+    success: (r) => (r.status === "PAYMENT_REQUIRED" ? "Opening Razorpay…" : r.message),
     invalidate: [["genealogy"], ["wallet"], ["orders"], ["stock"], ["products"]],
   })

@@ -17,6 +17,8 @@ import {
   JoiningPayment,
   type JoiningPaymentMethod,
 } from "@/features/placement/components/joining-payment"
+import { InactiveIdNotice } from "@/features/account/components/inactive-id-notice"
+import { useIsPendingPayment } from "@/features/account/queries"
 import { MobileOtpVerify } from "@/features/placement/components/mobile-otp-verify"
 import { PartnerDetailsFields } from "@/features/placement/components/partner-details-fields"
 import {
@@ -64,7 +66,7 @@ function firstFree(taken: Map<number, string>): number {
 function blankForm(slot: number, upline: string): DefaultValues<PlacementInput> {
   return {
     fullName: "",
-    age: "",
+    dateOfBirth: "",
     mobile: "",
     email: "",
     aadhaar: "",
@@ -102,6 +104,8 @@ export function PartnerManualPlacementPage() {
   // The signed-in user is always the sponsor (earns the ₹200 direct commission). The partner is
   // placed under them, or under a team member whose VEDORA ID is typed in "Place under".
   const me = useSession((s) => s.user)
+  // An ID still waiting for its joining payment can't add partners yet
+  const pendingPayment = useIsPendingPayment()
   const slotsQuery = useMySlots()
   // The joining product is picked from what Admin has put live in Products.
   const productsQuery = useProducts()
@@ -220,7 +224,8 @@ export function PartnerManualPlacementPage() {
       setError("productSku", { message: "Choose a product" })
       return
     }
-    // The partner is created only once the payment goes through (wallet now, Razorpay once verified).
+    // Wallet / Razorpay: the partner is created once the payment goes through. Pay later: created
+    // now with an inactive ID; their joining order waits in their My Orders.
     registerWithOrder.mutate(
       {
         ...partnerDetailsPayload(values),
@@ -274,6 +279,17 @@ export function PartnerManualPlacementPage() {
     setVerifiedMobile(null)
     setCompleted(null)
     window.scrollTo({ top: 0, behavior: "smooth" })
+  }
+
+  if (pendingPayment) {
+    return (
+      <>
+        <PageHeader title="Add Partner" subtitle="Available once your ID is active" />
+        <PageBody>
+          <InactiveIdNotice />
+        </PageBody>
+      </>
+    )
   }
 
   if (completed) {
@@ -523,17 +539,24 @@ export function PartnerManualPlacementPage() {
                   onChange={setPayWith}
                   walletBalance={walletBalance}
                   price={product?.price}
+                  allowPayLater
                 />
               }
               submitLabel={
                 paymentMethod === "WALLET"
                   ? `Pay ${product ? formatINR(product.price) : ""} from wallet & register`
-                  : "Pay online & register"
+                  : paymentMethod === "PAY_LATER"
+                    ? "Register now · pay later"
+                    : "Pay online & register"
               }
-              pendingLabel={paymentMethod === "WALLET" ? "Registering…" : "Opening Razorpay…"}
+              pendingLabel={paymentMethod === "RAZORPAY" ? "Opening Razorpay…" : "Registering…"}
               pending={registerWithOrder.isPending}
               disabled={allSlotsFull || !placementData || !!uplineProblem}
-              footnote="The partner is registered only after the payment succeeds. Their joining order ships to the registered address — Admin books the courier from Orders."
+              footnote={
+                paymentMethod === "PAY_LATER"
+                  ? "The partner is registered now with an inactive ID. They pay the joining order from My Orders — then the ID activates, the commissions go out and the order ships."
+                  : "The partner is registered only after the payment succeeds. Their joining order ships to the registered address — Admin books the courier from Orders."
+              }
             />
           </div>
         </form>

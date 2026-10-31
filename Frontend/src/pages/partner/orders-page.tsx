@@ -11,6 +11,7 @@ import { QueryState } from "@/components/common/query-state"
 import { StatCard, StatGrid } from "@/components/common/stat-card"
 import { StatusPill } from "@/components/common/status-pill"
 import { Button } from "@/components/ui/button"
+import { useIsPendingPayment } from "@/features/account/queries"
 import { CancelOrderDialog } from "@/features/orders/components/cancel-order-dialog"
 import { OrderDetailDialog } from "@/features/orders/components/order-detail-dialog"
 import {
@@ -41,6 +42,7 @@ export function PartnerOrdersPage() {
   const orders = useMyOrders()
   const payOrder = usePayOrder()
   const checkPayment = useCheckPayment()
+  const pendingPayment = useIsPendingPayment()
   const [tab, setTab] = useState<Tab>("all")
   const [openId, setOpenId] = useState<number | null>(null)
 
@@ -212,7 +214,8 @@ export function PartnerOrdersPage() {
         extra={(o) => (hasShipment(o) ? <OrderTrackingSection orderId={o.id} /> : null)}
         actions={(o) => (
           <>
-            {canCancel(o) ? (
+            {/* A "pay later" partner's joining order activates their ID — no cancelling it */}
+            {canCancel(o) && !pendingPayment ? (
               <CancelOrderDialog
                 order={o}
                 onCancelled={() => setOpenId(null)}

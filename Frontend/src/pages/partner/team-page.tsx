@@ -39,7 +39,7 @@ type TeamRow = {
 
 const statusPill: Record<string, { label: string; variant: PillVariant }> = {
   ACTIVE: { label: "Active", variant: "success" },
-  PENDING: { label: "Pending", variant: "pending" },
+  PENDING: { label: "Payment pending", variant: "pending" },
   INACTIVE: { label: "Inactive", variant: "neutral" },
   BLOCKED: { label: "Blocked", variant: "danger" },
   SUSPENDED: { label: "Suspended", variant: "danger" },

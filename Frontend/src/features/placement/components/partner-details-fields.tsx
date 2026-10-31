@@ -15,14 +15,14 @@ import { Textarea } from "@/components/ui/textarea"
 import { AreaSelect, PincodeHint } from "@/features/placement/components/pincode-lookup"
 import { formatAadhaar, limitDigits } from "@/features/placement/partner-details"
 import { isPincode, usePincodeLookup } from "@/features/placement/queries"
-import { GENDERS, type PartnerDetailsInput } from "@/features/placement/schemas"
+import { GENDERS, todayIso, type PartnerDetailsInput } from "@/features/placement/schemas"
 import { useEmailInputLock } from "@/hooks/use-email-input-lock"
 
 export const textareaClass =
   "min-h-20 rounded-xl bg-field px-3.5 py-2.5 focus-visible:border-gold/60 focus-visible:ring-gold/20"
 
 /**
- * The new partner's own details: name, age, gender, mobile, email, Aadhaar, PAN, address with
+ * The new partner's own details: name, date of birth, gender, mobile, email, Aadhaar, PAN, address with
  * pincode lookup, and password. Shared by Add Partner and the public referral join form — pass
  * the form whose values include these fields.
  */
@@ -39,6 +39,7 @@ export function PartnerDetailsFields<T extends PartnerDetailsInput>({
     register,
     control,
     setValue,
+    trigger,
     formState: { errors },
   } = form as unknown as UseFormReturn<PartnerDetailsInput>
   const emailLock = useEmailInputLock()
@@ -70,17 +71,17 @@ export function PartnerDetailsFields<T extends PartnerDetailsInput>({
             {...register("fullName")}
           />
         </Field>
-        <Field label="Age" htmlFor="age" error={errors.age?.message}>
+        <Field label="Date of birth" htmlFor="dateOfBirth" error={errors.dateOfBirth?.message}>
+          {/* iPhone Safari needs the native look off to keep the input's size; checked as soon
+              as a date is picked, so an under-18 date warns straight away */}
           <Input
-            id="age"
-            inputMode="numeric"
-            maxLength={2}
-            aria-invalid={!!errors.age}
-            {...register("age", {
-              onChange: (e: ChangeEvent<HTMLInputElement>) => {
-                e.target.value = limitDigits(e.target.value, 2)
-              },
-            })}
+            id="dateOfBirth"
+            type="date"
+            min="1900-01-01"
+            max={todayIso()}
+            className="block appearance-none text-left [&::-webkit-date-and-time-value]:min-h-[1.5em] [&::-webkit-date-and-time-value]:text-left"
+            aria-invalid={!!errors.dateOfBirth}
+            {...register("dateOfBirth", { onChange: () => void trigger("dateOfBirth") })}
           />
         </Field>
         <Field label="Gender" htmlFor="gender" error={errors.gender?.message}>

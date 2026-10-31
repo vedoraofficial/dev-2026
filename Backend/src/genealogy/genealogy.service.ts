@@ -33,6 +33,17 @@ import { NotificationKey } from '../notification/notification.constants';
 import { MailService } from '../notification/mail.service';
 import { OrderService } from '../order/order.service';
 
+/** Completed years on today's date in India — someone turns 18 only on their 18th birthday. */
+function ageToday(dateOfBirth: string): number {
+  const [y, m, d] = dateOfBirth.slice(0, 10).split('-').map(Number);
+  const [ty, tm, td] = new Date()
+    .toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' })
+    .split('-')
+    .map(Number);
+  const beforeBirthday = tm < m || (tm === m && td < d);
+  return ty - y - (beforeBirthday ? 1 : 0);
+}
+
 @Injectable()
 export class GenealogyService {
   constructor(
@@ -840,6 +851,22 @@ export class GenealogyService {
 
     if (sponsor.status === UserStatus.BLOCKED) {
       throw new BadRequestException('Your account is currently blocked.');
+    }
+
+    // Partners must be 18 or older on the day they register.
+    if (dto.dateOfBirth) {
+      const age = ageToday(dto.dateOfBirth);
+      if (Number.isNaN(age) || age > 100) throw new BadRequestException('Enter a valid date of birth.');
+      if (age < 18) {
+        throw new BadRequestException('The partner must be 18 years or older to register.');
+      }
+    }
+
+    // "Pay later" partners build a team only once their joining order is paid.
+    if (sponsor.status === UserStatus.PENDING) {
+      throw new ForbiddenException(
+        'Your ID is not active yet. Pay for your joining order from My Orders to start adding partners.',
+      );
     }
 
     // 1b. Placement: under the sponsor, or under someone in the sponsor's own downline.

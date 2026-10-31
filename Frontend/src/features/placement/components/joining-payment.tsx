@@ -1,10 +1,11 @@
-import { CreditCard, Wallet } from "lucide-react"
+import { Clock, CreditCard, Wallet } from "lucide-react"
 import type { ReactNode } from "react"
 
 import { formatINR } from "@/lib/format"
 import { cn } from "@/lib/utils"
 
-export type JoiningPaymentMethod = "WALLET" | "RAZORPAY"
+/** PAY_LATER: the partner is created now with an inactive ID and pays from My Orders */
+export type JoiningPaymentMethod = "WALLET" | "RAZORPAY" | "PAY_LATER"
 
 type Props = {
   value: JoiningPaymentMethod
@@ -15,6 +16,8 @@ type Props = {
   price: number | undefined
   /** Set when there's no wallet to pay from (referral join page) — the wallet option is greyed out */
   walletUnavailable?: string
+  /** Add Partner: offer "Pay later" — the partner pays from My Orders and the ID activates then */
+  allowPayLater?: boolean
 }
 
 function Option({
@@ -61,6 +64,7 @@ export function JoiningPayment({
   walletBalance,
   price,
   walletUnavailable,
+  allowPayLater = false,
 }: Props) {
   const walletShort = walletBalance !== undefined && price !== undefined && walletBalance < price
 
@@ -91,6 +95,15 @@ export function JoiningPayment({
           title="Pay online"
           hint="UPI, cards or net banking (Razorpay)"
         />
+        {allowPayLater ? (
+          <Option
+            selected={value === "PAY_LATER"}
+            onSelect={() => onChange("PAY_LATER")}
+            icon={<Clock className="size-4" aria-hidden />}
+            title="Pay later"
+            hint="The partner pays from My Orders · their ID activates once paid"
+          />
+        ) : null}
       </div>
     </div>
   )

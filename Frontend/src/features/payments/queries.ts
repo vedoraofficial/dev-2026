@@ -12,7 +12,7 @@ import {
 import { useApiMutation } from "@/lib/mutation"
 
 /** Payments change orders and wallets — refresh both. */
-const AFFECTED = [["orders"], ["wallet"]]
+const AFFECTED = [["orders"], ["wallet"], ["account"]]
 
 /** Pay an existing order with Razorpay checkout modal. */
 export const usePayOrder = () =>

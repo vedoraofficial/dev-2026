@@ -140,14 +140,21 @@ export type RegisterWithOrderInput = ReturnType<typeof partnerDetailsPayload> & 
   parentVedId?: string
   productId: number
   quantity?: number
-  /** WALLET pays from the sponsor's wallet now; RAZORPAY returns Razorpay checkout details */
-  paymentMethod: "WALLET" | "RAZORPAY"
+  /**
+   * WALLET pays from the sponsor's wallet now; RAZORPAY returns Razorpay checkout details;
+   * PAY_LATER creates the partner now (ID inactive) — they pay the joining order from My Orders
+   */
+  paymentMethod: "WALLET" | "RAZORPAY" | "PAY_LATER"
 }
 
 export type RegisterWithOrderResult =
   | {
-      /** Paid from the wallet — the partner and their PAID joining order exist */
-      status: "COMPLETED"
+      /**
+       * COMPLETED: paid from the wallet — the partner (active) and their PAID joining order exist.
+       * PENDING_PAYMENT: pay later — the partner exists with an inactive ID; the joining order waits
+       * in their My Orders and activates the ID once paid.
+       */
+      status: "COMPLETED" | "PENDING_PAYMENT"
       message: string
       partner: RegisteredPartner & { id: number }
       order: {
@@ -158,6 +165,7 @@ export type RegisterWithOrderResult =
         totalAmountFormatted: string
         bvTotal: number
         paymentMethod: "WALLET" | "RAZORPAY"
+        paymentStatus?: "PAID" | "PENDING"
       }
     }
   | {

@@ -48,7 +48,7 @@ import { normalizeVedId } from "@/lib/ved-id"
 
 const blank: DefaultValues<ReferralJoinInput> = {
   fullName: "",
-  age: "",
+  dateOfBirth: "",
   mobile: "",
   email: "",
   aadhaar: "",

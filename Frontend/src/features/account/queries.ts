@@ -33,6 +33,9 @@ export const accountKeys = {
 
 export const useMe = () => useQuery({ queryKey: accountKeys.me, queryFn: getMe })
 
+/** True while the signed-in partner's ID waits for its joining payment ("pay later"). */
+export const useIsPendingPayment = () => useMe().data?.status === "PENDING"
+
 export const useProfileDetails = () =>
   useQuery({ queryKey: accountKeys.profileDetails, queryFn: getProfileDetails })
 

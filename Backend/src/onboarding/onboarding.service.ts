@@ -22,7 +22,7 @@ import { TransactionCategory, WalletTransaction } from '../wallet/entity/wallet-
 import { NotificationService } from '../notification/notification.service';
 import { NotificationKey } from '../notification/notification.constants';
 import { ExternalPaymentHandler, PaymentRequester, PaymentService } from '../payment/payment.service';
-import { RegisterWithOrderDto } from './dto/register-with-order.dto';
+import { PAY_LATER, RegisterWithOrderDto } from './dto/register-with-order.dto';
 import { MobileOtpService } from './mobile-otp.service';
 import {
   PendingRegistration,
@@ -30,6 +30,10 @@ import {
   RegistrationPayer,
 } from './entity/pending-registration.entity';
 import { JoinWithOrderDto, VerifyJoinPaymentDto } from './dto/join-with-order.dto';
+
+/** Shown when a "pay later" partner (ID not active yet) tries to add partners or share their link */
+export const INACTIVE_ID_MESSAGE =
+  'Your ID is not active yet. Pay for your joining order from My Orders to start adding partners.';
 
 /** Razorpay receipt prefix of a partner-registration payment */
 const JOIN_PREFIX = 'JOIN_';
@@ -81,7 +85,74 @@ export class OnboardingService implements OnModuleInit, ExternalPaymentHandler {
     if (paymentMethod === PaymentMethod.WALLET) {
       return this.registerWithWallet(sponsorUserId, details, product, quantity, amount);
     }
+    if (paymentMethod === PAY_LATER) {
+      return this.registerPayLater(sponsorUserId, details, product, quantity, amount);
+    }
     return this.startRazorpayRegistration(sponsorUserId, details, product, quantity, amount);
+  }
+
+  /** "Pay later" partners can add partners only once their own joining order is paid. */
+  async assertCanAddPartners(userId: number) {
+    const user = await this.dataSource.getRepository(User).findOne({ where: { id: userId } });
+    if (user?.status === UserStatus.PENDING) {
+      throw new ForbiddenException(INACTIVE_ID_MESSAGE);
+    }
+  }
+
+  // ─── Pay later: the partner exists now with an inactive ID and pays from My Orders ───
+
+  private async registerPayLater(
+    sponsorUserId: number,
+    details: RegistrationDetails,
+    product: Product,
+    quantity: number,
+    amount: number,
+  ) {
+    try {
+      return await this.dataSource.transaction(async (manager) => {
+        // Created PENDING; the first paid order activates the ID (see OrderService.distributeCommissions).
+        const registered = await this.genealogyService.registerPartnerInTransaction(
+          manager,
+          sponsorUserId,
+          details,
+          undefined,
+          JOINING_ORDER_HERE,
+        );
+        // The joining order waits in the partner's My Orders; stock is taken when it is paid.
+        const orderRepo = manager.getRepository(Order);
+        const order = await orderRepo.save(
+          orderRepo.create({
+            userId: registered.partner.id,
+            productId: product.id,
+            quantity,
+            unitPrice: Number(product.salePrice),
+            totalAmount: amount,
+            bvTotal: Number(product.bvAmount) * quantity,
+            paymentMethod: PaymentMethod.RAZORPAY,
+            paymentStatus: PaymentStatus.PENDING,
+            orderStatus: OrderStatus.PENDING,
+          }),
+        );
+
+        await this.notificationService.create(
+          registered.partner.id,
+          NotificationKey.ORDER_AWAITING_PAYMENT,
+          `Pay joining order #${order.id} to activate your ID`,
+          `${product.name} × ${quantity} · ${formatPaise(amount)}. Your VEDORA ID becomes active — you start earning and can add partners — once this is paid. Pay from My Orders.`,
+          { orderId: Number(order.id), amountPaise: amount },
+          manager,
+        );
+
+        return {
+          status: 'PENDING_PAYMENT' as const,
+          message: `${registered.partner.name} registered as ${registered.partner.vedId}. The ID activates once joining order #${order.id} is paid from My Orders.`,
+          partner: { ...registered.partner, status: UserStatus.PENDING },
+          order: this.orderSummary(order, product),
+        };
+      });
+    } catch (error: any) {
+      throw this.genealogyService.toRegistrationError(error);
+    }
   }
 
   // ─── Referral join page: the new partner verifies their mobile and pays online themselves ───
@@ -96,6 +167,11 @@ export class OnboardingService implements OnModuleInit, ExternalPaymentHandler {
     }
     if (sponsor.status === UserStatus.BLOCKED) {
       throw new BadRequestException("This sponsor's account is blocked. Ask your sponsor for help.");
+    }
+    if (sponsor.status === UserStatus.PENDING) {
+      throw new BadRequestException(
+        "This sponsor's ID isn't active yet, so their referral link can't be used. Ask your sponsor for help.",
+      );
     }
     return sponsor;
   }

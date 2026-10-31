@@ -13,6 +13,7 @@ import { QueryState } from "@/components/common/query-state"
 import { StatCard, StatGrid } from "@/components/common/stat-card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { InactiveIdNotice } from "@/features/account/components/inactive-id-notice"
 import { useMe } from "@/features/account/queries"
 import { useMySlots } from "@/features/genealogy/queries"
 import { productArt } from "@/features/products/catalog"
@@ -85,6 +86,7 @@ export function PartnerDashboardPage() {
         }
       />
       <PageBody>
+        {me.data?.status === "PENDING" ? <InactiveIdNotice /> : null}
         <StatGrid>
           <StatCard
             href={ROUTES.partner.wallet}

@@ -30,6 +30,7 @@ export function limitDigits(value: string, max: number): string {
 export function partnerDetailsPayload(values: PartnerDetailsValues) {
   return {
     name: values.fullName,
+    dateOfBirth: values.dateOfBirth,
     email: values.email,
     mobile: toMobile10(values.mobile),
     password: values.password,

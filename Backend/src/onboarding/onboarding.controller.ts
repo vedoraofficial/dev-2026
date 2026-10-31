@@ -22,6 +22,8 @@ export class OnboardingController {
   @ApiOperation({ summary: "Send an OTP to the new partner's mobile number (Add Partner)" })
   @ApiResponse({ status: 409, description: 'Mobile number already registered.' })
   async sendMobileOtp(@Request() req: any, @Body() dto: SendMobileOtpDto) {
+    // No SMS for someone who can't add partners yet
+    await this.onboardingService.assertCanAddPartners(req.user.sub);
     return this.mobileOtpService.send(req.user.sub, dto.mobile);
   }
 
@@ -48,7 +50,10 @@ export class OnboardingController {
       'RAZORPAY: returns Razorpay checkout details — the partner is created only once the payment ' +
       'is verified (POST /api/payment/verify, or GET /api/payment/status/:razorpayOrderId).',
   })
-  @ApiResponse({ status: 201, description: 'COMPLETED (wallet) or PAYMENT_REQUIRED (Razorpay).' })
+  @ApiResponse({
+    status: 201,
+    description: 'COMPLETED (wallet), PAYMENT_REQUIRED (Razorpay) or PENDING_PAYMENT (pay later — ID inactive).',
+  })
   @ApiResponse({ status: 400, description: 'Mobile not verified with OTP, insufficient balance, out of stock, slot taken or 20-partner limit.' })
   @ApiResponse({ status: 409, description: 'Email or mobile already in use.' })
   async registerWithOrder(@Request() req: any, @Body() dto: RegisterWithOrderDto) {

@@ -22,17 +22,34 @@ export const toMobile10 = (value: string) => digits(value).replace(/^91(?=\d{10}
 
 export const GENDERS = ["Male", "Female", "Other"] as const
 
+/** Today as YYYY-MM-DD (the device's date) — the latest date the birth-date picker allows. */
+export function todayIso(now = new Date()): string {
+  const pad = (n: number) => String(n).padStart(2, "0")
+  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`
+}
+
+/** Completed years on today's date — someone turns 18 only on their 18th birthday itself. */
+export function ageOn(dateOfBirth: string, now = new Date()): number {
+  const [y, m, d] = dateOfBirth.split("-").map(Number)
+  const month = now.getMonth() + 1
+  const beforeBirthday = month < m || (month === m && now.getDate() < d)
+  return now.getFullYear() - y - (beforeBirthday ? 1 : 0)
+}
+
 /**
  * The new partner's own details — shared by Add Partner and the public referral join form.
- * Age, Aadhaar and PAN are checked here but the backend has no fields for them yet.
+ * Aadhaar and PAN are checked here but the backend has no fields for them yet; the date of birth
+ * is saved to the partner's profile (and the backend also refuses anyone under 18).
  */
 const partnerDetailsShape = {
   fullName: z.string().trim().min(3, "Enter the full name"),
-  age: z
+  dateOfBirth: z
     .string()
     .trim()
-    .regex(/^\d{1,2}$/, "Enter age in years")
-    .refine((v) => Number(v) >= 18 && Number(v) <= 99, "Partner must be 18 or older"),
+    .regex(/^\d{4}-\d{2}-\d{2}$/, "Enter the date of birth")
+    .refine((v) => !Number.isNaN(Date.parse(v)) && v <= todayIso(), "Enter a valid date of birth")
+    .refine((v) => ageOn(v) >= 18, "Not 18 yet — partners must be 18 or older to register")
+    .refine((v) => ageOn(v) <= 100, "Enter a valid date of birth"),
   gender: z.enum(GENDERS, { message: "Choose a gender" }),
   mobile,
   email: emailSchema,

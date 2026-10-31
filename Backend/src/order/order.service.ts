@@ -281,6 +281,9 @@ export class OrderService {
       return;
     }
 
+    // Every paid order passes here once — a "pay later" partner's ID becomes active with it.
+    await this.activateIfPending(manager, order.userId, orderId);
+
     // Get buyer's commission uplines
     const upline = await manager.getRepository(CommissionUpline).findOne({
       where: { userId: order.userId },
@@ -492,6 +495,41 @@ export class OrderService {
     }
 
     this.logger.log(`Commissions distributed for order #${orderId}`);
+  }
+
+  /**
+   * A partner added with "pay later" is PENDING until their first paid order: activate the ID (they
+   * now earn and can add partners) and tell them and their sponsor. Deactivated (INACTIVE) or
+   * blocked accounts are never switched back on by a payment.
+   */
+  private async activateIfPending(manager: EntityManager, userId: number, orderId: number) {
+    const userRepo = manager.getRepository(User);
+    const result = await userRepo.update({ id: userId, status: UserStatus.PENDING }, { status: UserStatus.ACTIVE });
+    if (!result.affected) return;
+
+    const user = await userRepo.findOne({ where: { id: userId } });
+    if (!user) return;
+    await this.notificationService.create(
+      userId,
+      NotificationKey.ACCOUNT_STATUS_CHANGED,
+      'Your VEDORA ID is active',
+      `Order #${orderId} is paid — ${user.vedId} is now active. You earn income on your team and can add partners.`,
+      { orderId, vedId: user.vedId },
+      manager,
+    );
+
+    const node = await manager.getRepository(GenealogyNode).findOne({ where: { userId } });
+    if (node?.sponsorUserId) {
+      await this.notificationService.create(
+        node.sponsorUserId,
+        NotificationKey.TEAM_DIRECT_JOINED,
+        `${user.name} is now active`,
+        `${user.name} (${user.vedId}) paid their joining order #${orderId} — their ID is active.`,
+        { vedId: user.vedId, orderId },
+        manager,
+      );
+    }
+    this.logger.log(`User #${userId} (${user.vedId}) activated by paid order #${orderId}`);
   }
 
   // ─── Confirm Payment (called by PaymentService) ─────────────────────
@@ -861,6 +899,15 @@ export class OrderService {
 
       // If pending (unpaid), cancel without financial refund
       if (order.paymentStatus === PaymentStatus.PENDING) {
+        // A "pay later" partner's joining order is what activates their ID — they can't drop it.
+        if (!isAdmin) {
+          const buyer = await manager.getRepository(User).findOne({ where: { id: order.userId } });
+          if (buyer?.status === UserStatus.PENDING) {
+            throw new BadRequestException(
+              'This order activates your ID, so it can\'t be cancelled. Pay for it from My Orders, or ask Admin for help.',
+            );
+          }
+        }
         order.orderStatus = OrderStatus.CANCELLED;
         order.paymentStatus = PaymentStatus.FAILED;
         await orderRepo.save(order);

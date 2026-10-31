@@ -14,7 +14,7 @@ import type { UserStatus } from "@/types/user"
 
 const statusPill: Record<UserStatus, { label: string; variant: PillVariant }> = {
   ACTIVE: { label: "Active", variant: "success" },
-  PENDING: { label: "Pending activation", variant: "pending" },
+  PENDING: { label: "Payment pending", variant: "pending" },
   INACTIVE: { label: "Inactive", variant: "neutral" },
   BLOCKED: { label: "Blocked", variant: "danger" },
 }

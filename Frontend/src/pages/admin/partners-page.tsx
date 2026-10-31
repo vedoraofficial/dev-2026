@@ -33,7 +33,7 @@ import { cn } from "@/lib/utils"
 /** Placement status from the genealogy (ACTIVE / PENDING / SUSPENDED). */
 const statusLabel: Record<string, { text: string; variant: PillVariant }> = {
   ACTIVE: { text: "Active", variant: "success" },
-  PENDING: { text: "Pending", variant: "pending" },
+  PENDING: { text: "Payment pending", variant: "pending" },
   SUSPENDED: { text: "Suspended", variant: "danger" },
 }
 const pill = (status: string) => statusLabel[status] ?? { text: status, variant: "neutral" }
@@ -42,7 +42,7 @@ const TABS = [
   { value: "all", label: "All" },
   { value: "founders", label: "Founders" },
   { value: "ACTIVE", label: "Active" },
-  { value: "PENDING", label: "Pending" },
+  { value: "PENDING", label: "Payment pending" },
   { value: "SUSPENDED", label: "Suspended" },
 ]
 const LEVEL_OPTIONS = ["Any", "Level 1", "Level 2", "Level 3", "Level 4", "Level 5", "Level 6+"]

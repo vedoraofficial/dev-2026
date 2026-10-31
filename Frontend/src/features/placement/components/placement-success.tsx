@@ -34,6 +34,8 @@ export type JoiningOrder = {
   id: number
   totalAmountFormatted: string
   paymentMethod: "WALLET" | "RAZORPAY"
+  /** PENDING: added with "pay later" — the partner pays from My Orders */
+  paymentStatus?: "PAID" | "PENDING"
 }
 
 type Props = {
@@ -58,6 +60,7 @@ export function PlacementSuccess({ partner, values, product, order, onPlaceAnoth
   const parentVedId = partner.placedUnderVedId ?? partner.sponsorVedId
   const parentName = partner.placedUnderName ?? partner.sponsorName
   const underYou = parentVedId === partner.sponsorVedId
+  const payLater = order.paymentStatus === "PENDING"
   return (
     <div className="space-y-4 md:space-y-5">
       <Panel className="flex flex-wrap items-center gap-4 border-success/40 bg-success-soft/20">
@@ -66,6 +69,9 @@ export function PlacementSuccess({ partner, values, product, order, onPlaceAnoth
           <h2 className="font-display text-2xl leading-tight md:text-3xl">Partner registered</h2>
           <p className="mt-1 text-xs text-muted-foreground">
             {partner.name} can now sign in with this ID and the password you set.
+            {payLater
+              ? " The ID activates once they pay for the joining order from My Orders."
+              : ""}
           </p>
         </div>
         <div className="text-right">
@@ -82,7 +88,7 @@ export function PlacementSuccess({ partner, values, product, order, onPlaceAnoth
             title="Placed in the tree"
             aside={
               <StatusPill variant={partner.status === "ACTIVE" ? "success" : "pending"}>
-                {partner.status}
+                {partner.status === "ACTIVE" ? "Active" : "Payment pending"}
               </StatusPill>
             }
           />
@@ -140,7 +146,13 @@ export function PlacementSuccess({ partner, values, product, order, onPlaceAnoth
         <Panel>
           <PanelHeader
             title={`Joining order ORD-${String(order.id).padStart(5, "0")}`}
-            aside={<StatusPill variant="success">Paid</StatusPill>}
+            aside={
+              payLater ? (
+                <StatusPill variant="pending">Payment pending</StatusPill>
+              ) : (
+                <StatusPill variant="success">Paid</StatusPill>
+              )
+            }
           />
           <div className="flex gap-3">
             <img
@@ -172,11 +184,20 @@ export function PlacementSuccess({ partner, values, product, order, onPlaceAnoth
               {partner.mobile}
             </p>
           </div>
-          <p className="mt-4 text-[0.6875rem] leading-relaxed text-muted-foreground">
-            {order.totalAmountFormatted} paid{" "}
-            {order.paymentMethod === "WALLET" ? "from your wallet" : "online (Razorpay)"}. The order
-            is confirmed and the commissions have gone out — Admin books the courier from Orders.
-          </p>
+          {payLater ? (
+            <p className="mt-4 text-[0.6875rem] leading-relaxed text-muted-foreground">
+              {order.totalAmountFormatted} to be paid by {partner.name} — they sign in, open My
+              Orders and tap Pay now. Their ID activates, the commissions go out and the order ships
+              once it&apos;s paid.
+            </p>
+          ) : (
+            <p className="mt-4 text-[0.6875rem] leading-relaxed text-muted-foreground">
+              {order.totalAmountFormatted} paid{" "}
+              {order.paymentMethod === "WALLET" ? "from your wallet" : "online (Razorpay)"}. The
+              order is confirmed and the commissions have gone out — Admin books the courier from
+              Orders.
+            </p>
+          )}
         </Panel>
       </div>
 
