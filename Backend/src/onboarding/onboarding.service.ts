@@ -178,7 +178,7 @@ export class OnboardingService implements OnModuleInit, ExternalPaymentHandler {
 
   /** Placed in the sponsor's lowest free slot once the Razorpay payment succeeds. */
   async joinWithOrder(dto: JoinWithOrderDto) {
-    const { referralId, productId, quantity = 1, ...details } = dto;
+    const { referralId, productId, quantity = 1, paymentMethod, ...details } = dto;
     const sponsor = await this.findReferralSponsor(referralId);
     await this.mobileOtpService.assertVerified(Number(sponsor.id), details.mobile, 'JOIN');
 
@@ -195,6 +195,10 @@ export class OnboardingService implements OnModuleInit, ExternalPaymentHandler {
         );
       }
       throw error;
+    }
+    // Pay later: the ID is created now, inactive, and the joiner pays from My Orders.
+    if (paymentMethod === PAY_LATER) {
+      return this.registerPayLater(Number(sponsor.id), details, product, quantity, amount);
     }
     return this.startRazorpayRegistration(Number(sponsor.id), details, product, quantity, amount, 'SELF');
   }

@@ -40,6 +40,7 @@ import {
   type ReferralJoinInput,
   type ReferralJoinValues,
 } from "@/features/placement/schemas"
+import { AllPoliciesDialog } from "@/features/policies/components/all-policies-dialog"
 import { toCatalogProduct } from "@/features/products/catalog"
 import { usePublicProducts } from "@/features/products/queries"
 import { formatINR } from "@/lib/format"
@@ -101,6 +102,8 @@ type Welcome = {
   slotNumber?: number
   sponsorName?: string
   sponsorVedId: string
+  /** Joined with "pay later": the ID is inactive until the joining order is paid */
+  pendingPayment?: boolean
 }
 
 /**
@@ -119,6 +122,8 @@ export function JoinPage() {
   const [shipSameAsRegistered, setShipSameAsRegistered] = useState(false)
   // The mobile number, once verified with OTP — needed before paying
   const [verifiedMobile, setVerifiedMobile] = useState<string | null>(null)
+  // Pay now, or join now with an inactive ID and pay from My Orders
+  const [payWith, setPayWith] = useState<"RAZORPAY" | "PAY_LATER">("RAZORPAY")
   // A paid join still being confirmed (also picked up again after a refresh)
   const [checkingOrder, setCheckingOrder] = useState<string | null>(() =>
     readPendingJoin(sponsorId),
@@ -134,7 +139,10 @@ export function JoinPage() {
   const [productSku, mobile] = useWatch({ control: form.control, name: ["productSku", "mobile"] })
   const product = products.find((p) => p.sku === productSku)
 
-  const join = useApiMutation(joinWithOrder, { success: "Opening payment…" })
+  const join = useApiMutation(joinWithOrder, {
+    success: (r) =>
+      r.status === "PENDING_PAYMENT" ? "Your VEDORA ID is created" : "Opening payment…",
+  })
 
   /** What the backend says about the payment: registered, still confirming, or not registered. */
   const showResult = (res: PaymentStatusResponse, razorpayOrderId: string) => {
@@ -190,16 +198,30 @@ export function JoinPage() {
       form.setError("productSku", { message: "Choose a product" })
       return
     }
-    // Nothing is created until the payment goes through.
+    // Pay now: nothing is created until the payment goes through. Pay later: the ID is created
+    // now, inactive, and the joining order waits in their My Orders.
     join.mutate(
       {
         ...partnerDetailsPayload(values),
         referralId: sponsorId,
         productId: chosen.id,
         quantity: 1,
+        paymentMethod: payWith,
       },
       {
         onSuccess: (result) => {
+          if (result.status === "PENDING_PAYMENT") {
+            setJoined({
+              name: result.partner.name,
+              vedId: result.partner.vedId,
+              slotNumber: result.partner.slotNumber,
+              sponsorName: result.partner.sponsorName,
+              sponsorVedId: result.partner.sponsorVedId ?? sponsorId,
+              pendingPayment: true,
+            })
+            window.scrollTo({ top: 0, behavior: "smooth" })
+            return
+          }
           const razorpayOrderId = result.razorpayOrderId
           savePendingJoin({ razorpayOrderId, sponsorId })
           // The join page checks the payment with its own public API, which answers with the status.
@@ -267,14 +289,26 @@ export function JoinPage() {
         <Panel className="flex flex-col items-center gap-4 py-10 text-center">
           <CircleCheck className="size-12 text-success" aria-hidden />
           <h1 className="font-display text-3xl">Welcome to VEDORA, {joined.name}</h1>
-          <p className="max-w-md text-sm text-muted-foreground">
-            Payment received. You&apos;re placed under{" "}
-            {joined.sponsorName
-              ? `${joined.sponsorName} (${joined.sponsorVedId})`
-              : joined.sponsorVedId}
-            {joined.slotNumber ? ` in slot ${joined.slotNumber}` : ""}, and your joining order ships
-            to your address. Sign in with your new ID and the password you just set.
-          </p>
+          {joined.pendingPayment ? (
+            <p className="max-w-md text-sm text-muted-foreground">
+              You&apos;re placed under{" "}
+              {joined.sponsorName
+                ? `${joined.sponsorName} (${joined.sponsorVedId})`
+                : joined.sponsorVedId}
+              {joined.slotNumber ? ` in slot ${joined.slotNumber}` : ""}. Your ID is inactive until
+              you pay: sign in with your new ID and the password you just set, open My Orders and
+              tap Pay now. Then your ID activates, you start earning and your joining order ships.
+            </p>
+          ) : (
+            <p className="max-w-md text-sm text-muted-foreground">
+              Payment received. You&apos;re placed under{" "}
+              {joined.sponsorName
+                ? `${joined.sponsorName} (${joined.sponsorVedId})`
+                : joined.sponsorVedId}
+              {joined.slotNumber ? ` in slot ${joined.slotNumber}` : ""}, and your joining order
+              ships to your address. Sign in with your new ID and the password you just set.
+            </p>
+          )}
           <div className="rounded-xl border border-gold/40 bg-gold/10 px-6 py-4">
             <p className="eyebrow text-[0.625rem]">Your VEDORA ID</p>
             <MonoId tone="gold" className="text-2xl">
@@ -373,20 +407,51 @@ export function JoinPage() {
                 }
                 payment={
                   <JoiningPayment
-                    value="RAZORPAY"
-                    onChange={() => {}}
+                    value={payWith}
+                    onChange={(m) => {
+                      if (m !== "WALLET") setPayWith(m)
+                    }}
                     walletBalance={undefined}
                     price={product?.price}
                     walletUnavailable="Available after you join — you don't have a wallet yet"
+                    allowPayLater
+                    payLaterHint="Join now, then pay from My Orders after signing in · your ID activates once paid"
                   />
                 }
-                agreement="My details are correct, and I accept the VEDORA Partner Agreement, Terms & Conditions and Privacy Policy."
-                submitLabel={
-                  product ? `Pay ${formatINR(product.price)} & join` : "Pay online & join"
+                agreement={
+                  <>
+                    My details are correct, and I accept the VEDORA Partner Agreement, Terms &amp;
+                    Conditions and{" "}
+                    {/* Opens every policy over the form (nothing to sign in to); the click must not
+                        tick the box */}
+                    <AllPoliciesDialog
+                      trigger={
+                        <button
+                          type="button"
+                          onClick={(e) => e.stopPropagation()}
+                          className="font-medium text-gold hover:underline"
+                        >
+                          Privacy Policy
+                        </button>
+                      }
+                    />
+                    .
+                  </>
                 }
-                pendingLabel="Opening payment…"
+                submitLabel={
+                  payWith === "PAY_LATER"
+                    ? "Join now · pay later"
+                    : product
+                      ? `Pay ${formatINR(product.price)} & join`
+                      : "Pay online & join"
+                }
+                pendingLabel={payWith === "PAY_LATER" ? "Joining…" : "Opening payment…"}
                 pending={join.isPending}
-                footnote="Your VEDORA ID is created only after the payment succeeds. Your joining order ships to your registered address in 24–48 business hours."
+                footnote={
+                  payWith === "PAY_LATER"
+                    ? "Your VEDORA ID is created now but stays inactive until you pay for your joining order from My Orders. Then it activates and your order ships."
+                    : "Your VEDORA ID is created only after the payment succeeds. Your joining order ships to your registered address in 24–48 business hours."
+                }
               />
             </div>
           </form>

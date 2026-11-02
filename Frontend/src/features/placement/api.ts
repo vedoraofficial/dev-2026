@@ -101,17 +101,35 @@ export type JoinWithOrderInput = ReturnType<typeof partnerDetailsPayload> & {
   referralId: string
   productId: number
   quantity?: number
+  /** RAZORPAY (default): pay now · PAY_LATER: the ID is created now, inactive, paid from My Orders */
+  paymentMethod?: "RAZORPAY" | "PAY_LATER"
 }
 
-/** POST /api/public/join — nothing is created until the Razorpay payment succeeds. */
-export async function joinWithOrder(input: JoinWithOrderInput): Promise<{
-  status: "PAYMENT_REQUIRED"
-  message: string
-  razorpayOrderId: string
-  checkout: InitiatePaymentResponse
-  amount: number
-  partnerName: string
-}> {
+export type JoinWithOrderResult =
+  | {
+      /** Pay now: nothing is created until the Razorpay payment succeeds */
+      status: "PAYMENT_REQUIRED"
+      message: string
+      razorpayOrderId: string
+      checkout: InitiatePaymentResponse
+      amount: number
+      partnerName: string
+    }
+  | {
+      /** Pay later: the ID exists now (inactive); the joining order waits in their My Orders */
+      status: "PENDING_PAYMENT"
+      message: string
+      partner: {
+        vedId: string
+        name: string
+        slotNumber?: number
+        sponsorVedId?: string
+        sponsorName?: string
+      }
+    }
+
+/** POST /api/public/join — pay now (Razorpay) or pay later (ID created now, inactive). */
+export async function joinWithOrder(input: JoinWithOrderInput): Promise<JoinWithOrderResult> {
   const { data } = await api.post("/public/join", input)
   return data
 }

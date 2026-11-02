@@ -18,6 +18,8 @@ type Props = {
   walletUnavailable?: string
   /** Add Partner: offer "Pay later" — the partner pays from My Orders and the ID activates then */
   allowPayLater?: boolean
+  /** Wording of the "Pay later" choice (the join page speaks to the joiner) */
+  payLaterHint?: string
 }
 
 function Option({
@@ -65,6 +67,7 @@ export function JoiningPayment({
   price,
   walletUnavailable,
   allowPayLater = false,
+  payLaterHint = "The partner pays from My Orders · their ID activates once paid",
 }: Props) {
   const walletShort = walletBalance !== undefined && price !== undefined && walletBalance < price
 
@@ -101,7 +104,7 @@ export function JoiningPayment({
             onSelect={() => onChange("PAY_LATER")}
             icon={<Clock className="size-4" aria-hidden />}
             title="Pay later"
-            hint="The partner pays from My Orders · their ID activates once paid"
+            hint={payLaterHint}
           />
         ) : null}
       </div>

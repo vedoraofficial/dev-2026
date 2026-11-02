@@ -1,6 +1,7 @@
 import { ApiProperty, OmitType } from '@nestjs/swagger';
-import { IsNotEmpty, IsString } from 'class-validator';
-import { RegisterWithOrderDto } from './register-with-order.dto';
+import { IsIn, IsNotEmpty, IsOptional, IsString } from 'class-validator';
+import { PaymentMethod } from '../../order/entity/order.entity';
+import { PAY_LATER, RegisterWithOrderDto } from './register-with-order.dto';
 import { SendMobileOtpDto, VerifyMobileOtpDto } from './mobile-otp.dto';
 
 /**
@@ -17,6 +18,16 @@ export class JoinWithOrderDto extends OmitType(RegisterWithOrderDto, [
   @IsString()
   @IsNotEmpty()
   referralId: string;
+
+  @ApiProperty({
+    enum: [PaymentMethod.RAZORPAY, PAY_LATER],
+    required: false,
+    default: PaymentMethod.RAZORPAY,
+    description: 'RAZORPAY (default): pay now. PAY_LATER: the ID is created now, inactive, and paid from My Orders',
+  })
+  @IsOptional()
+  @IsIn([PaymentMethod.RAZORPAY, PAY_LATER])
+  paymentMethod?: typeof PaymentMethod.RAZORPAY | typeof PAY_LATER;
 }
 
 export class JoinSendOtpDto extends SendMobileOtpDto {
