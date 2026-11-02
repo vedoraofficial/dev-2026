@@ -29,6 +29,8 @@ export type NetworkMember = {
   direct: number
   /** Everyone below, all levels */
   team: number
+  /** When they joined — Founders (added here, not from the API) have none */
+  joinedAt?: string
 }
 
 /**
@@ -78,6 +80,7 @@ async function crawlTeams(
           isFounder: false,
           direct: 0,
           team: 0,
+          joinedAt: p.joinedAt,
         }
         members.set(p.vedId, member)
         if (member.level < maxLevel) next.push(member)

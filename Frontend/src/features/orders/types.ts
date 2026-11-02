@@ -99,3 +99,28 @@ export type CashOrderInput = { userId: number; productId: number; quantity: numb
 
 /** POST /api/order/:id/cancel */
 export type CancelOrderInput = { id: number; reason?: string }
+
+/** GET /api/invoice/admin/sales-register — one paid order with its GST split (amounts in paise). */
+export type SalesRegisterRow = {
+  invoiceNumber: string | null
+  invoiceDate: string | null
+  orderId: number
+  orderDate: string
+  customerName: string
+  vedId: string
+  placeOfSupply: string
+  product: string
+  hsn: string
+  quantity: number
+  unitPrice: number
+  taxableValue: number
+  gstRate: number
+  cgst: number
+  sgst: number
+  igst: number
+  total: number
+  paymentMethod: PaymentMethod
+  paymentReference: string | null
+  paymentStatus: PaymentStatus
+  orderStatus: OrderStatus
+}

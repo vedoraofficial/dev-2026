@@ -354,6 +354,8 @@ export class GenealogyService {
       slotNumber: child.slotNumber,
       depth: child.depth,
       status: child.placementStatus,
+      // When they joined (placed in the tree) — Admin › Partners filters by it
+      joinedAt: child.createdAt,
     }));
   }
 

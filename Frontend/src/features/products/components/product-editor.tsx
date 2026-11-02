@@ -167,7 +167,7 @@ export function ProductEditor({ product, soldLabel, onDone }: Props) {
           <FormField label="SKU" htmlFor={field("sku")} error={errors.sku?.message}>
             <Input
               id={field("sku")}
-              placeholder="Auto-generated if empty"
+              placeholder="e.g. VED-PL-01"
               autoComplete="off"
               className="font-mono uppercase placeholder:normal-case"
               aria-invalid={!!errors.sku}

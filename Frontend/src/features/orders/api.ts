@@ -4,6 +4,7 @@ import type {
   CashOrderInput,
   CheckoutInput,
   CheckoutResult,
+  SalesRegisterRow,
   CreatedOrder,
   CreateOrderInput,
   OrderDetail,
@@ -68,6 +69,14 @@ export async function cancelOrder({
 /** POST /api/order/checkout — the cart: one payment, one invoice, one email. */
 export async function checkoutCart(input: CheckoutInput): Promise<CheckoutResult> {
   const { data } = await api.post<CheckoutResult>("/order/checkout", input)
+  return data
+}
+
+/** GET /api/invoice/admin/sales-register — [Admin] paid orders from `from` to `to` (YYYY-MM-DD, both included). */
+export async function getSalesRegister(from: string, to: string): Promise<SalesRegisterRow[]> {
+  const { data } = await api.get<SalesRegisterRow[]>("/invoice/admin/sales-register", {
+    params: { from, to },
+  })
   return data
 }
 

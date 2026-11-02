@@ -17,6 +17,7 @@ export const productSchema = z
     sku: z
       .string()
       .trim()
+      .min(1, "Enter the SKU")
       .max(40, "SKU can be at most 40 characters")
       .regex(/^[A-Za-z0-9_-]*$/, "Use only letters, numbers, - and _ (no spaces)"),
     description: z.string().trim(),
@@ -53,7 +54,6 @@ export const productToForm = (p: ApiProduct): ProductFormValues => ({
 
 export const formToProduct = (v: ProductFormValues): ProductInput => ({
   name: v.name,
-  // Sent even when empty: the backend then generates one (also when Admin clears it)
   sku: v.sku.toUpperCase(),
   description: v.description || undefined,
   mrp: rupeesToPaise(Number(v.mrp)),

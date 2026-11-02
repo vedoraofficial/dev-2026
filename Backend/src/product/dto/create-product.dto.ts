@@ -10,14 +10,13 @@ export class CreateProductDto {
 
   @ApiProperty({
     example: 'VED-PYRITE-003',
-    required: false,
-    description: 'Product SKU (unique). Leave empty to auto-generate VED-<name>-<number>.',
+    description: 'Product SKU (unique), typed by Admin.',
   })
   @IsString()
-  @IsOptional()
+  @IsNotEmpty({ message: 'Enter the SKU.' })
   @MaxLength(40)
   @Matches(/^[A-Za-z0-9_-]*$/, { message: 'SKU can only use letters, numbers, - and _ (no spaces).' })
-  sku?: string;
+  sku: string;
 
   @ApiProperty({ example: 'A premium health supplement to boost immunity.', required: false })
   @IsString()

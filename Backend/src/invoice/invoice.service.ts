@@ -2,6 +2,7 @@ import { BadRequestException, ForbiddenException, Injectable, Logger, NotFoundEx
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import {
+  Between,
   DataSource,
   EntitySubscriberInterface,
   In,
@@ -205,6 +206,69 @@ export class InvoiceService implements EntitySubscriberInterface {
     if (result.success && !result.simulated) {
       await this.invoiceRepo.update(invoice.id, { emailedAt: new Date() });
     }
+  }
+
+  // ─── Sales register for the CA ───
+
+  /**
+   * [Admin] Every sale in the period — paid orders, plus ones paid then refunded — with the same GST
+   * split as its invoice PDF (rate and company state from .env; same state → CGST + SGST, else IGST).
+   * Amounts in paise. Orders paid before invoices existed have no invoice number.
+   */
+  async salesRegister(from: Date, to: Date) {
+    const orders = await this.orderRepo.find({
+      where: {
+        paymentStatus: In([PaymentStatus.PAID, PaymentStatus.REFUNDED]),
+        createdAt: Between(from, to),
+      },
+      relations: { user: true, product: true },
+      order: { createdAt: 'ASC', id: 'ASC' },
+    });
+    if (!orders.length) return [];
+
+    const links = await this.invoiceOrderRepo.find({ where: { orderId: In(orders.map((o) => o.id)) } });
+    const invoiceIds = [...new Set(links.map((l) => l.invoiceId))];
+    const invoices = invoiceIds.length ? await this.invoiceRepo.find({ where: { id: In(invoiceIds) } }) : [];
+    const invoiceById = new Map(invoices.map((i) => [i.id, i]));
+    const invoiceByOrder = new Map(links.map((l) => [Number(l.orderId), invoiceById.get(l.invoiceId)]));
+
+    const userIds = [...new Set(orders.map((o) => o.userId))];
+    const profiles = await this.profileRepo.find({ where: { user: { id: In(userIds) } }, relations: { user: true } });
+    const stateByUser = new Map(profiles.map((p) => [Number(p.user.id), p.state]));
+
+    const company = this.company();
+    return orders.map((o) => {
+      const total = Number(o.totalAmount);
+      const taxable = Math.round((total * 100) / (100 + company.gstRate));
+      const tax = total - taxable;
+      const buyerState = stateByUser.get(Number(o.userId)) || null;
+      const intraState = !buyerState || sameState(buyerState, company.state);
+      const cgst = intraState ? Math.floor(tax / 2) : 0;
+      const invoice = invoiceByOrder.get(Number(o.id));
+      return {
+        invoiceNumber: invoice?.invoiceNumber ?? null,
+        invoiceDate: invoice?.issuedAt ?? null,
+        orderId: Number(o.id),
+        orderDate: o.createdAt,
+        customerName: o.user?.name ?? '',
+        vedId: o.user?.vedId ?? '',
+        placeOfSupply: buyerState || company.state,
+        product: o.product?.name ?? '',
+        hsn: company.hsn,
+        quantity: o.quantity,
+        unitPrice: Number(o.unitPrice),
+        taxableValue: taxable,
+        gstRate: company.gstRate,
+        cgst,
+        sgst: intraState ? tax - cgst : 0,
+        igst: intraState ? 0 : tax,
+        total,
+        paymentMethod: o.paymentMethod,
+        paymentReference: o.razorpayPaymentId ?? null,
+        paymentStatus: o.paymentStatus,
+        orderStatus: o.orderStatus,
+      };
+    });
   }
 
   // ─── PDF ───

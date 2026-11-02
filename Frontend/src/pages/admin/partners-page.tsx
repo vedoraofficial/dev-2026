@@ -26,6 +26,7 @@ import { Input } from "@/components/ui/input"
 import { PartnerAccountActions } from "@/features/account/components/partner-account-actions"
 import { useNetwork, type NetworkMember } from "@/features/genealogy/use-network"
 import { downloadCsv } from "@/lib/csv"
+import { formatDate } from "@/lib/date"
 import { formatNumber } from "@/lib/format"
 import { useSession } from "@/lib/session"
 import { cn } from "@/lib/utils"
@@ -46,6 +47,7 @@ const TABS = [
   { value: "SUSPENDED", label: "Suspended" },
 ]
 const LEVEL_OPTIONS = ["Any", "Level 1", "Level 2", "Level 3", "Level 4", "Level 5", "Level 6+"]
+const JOINED_OPTIONS = ["All time", "This month", "Last month", "Last 3 months", "Last 12 weeks"]
 const PAGE_SIZE = 10
 
 function matchesTab(m: NetworkMember, tab: string): boolean {
@@ -71,6 +73,42 @@ function matchesLevel(m: NetworkMember, level: string): boolean {
   if (level === "Any") return true
   if (level === "Level 6+") return m.level >= 6
   return m.level === Number(level.replace("Level ", ""))
+}
+
+/**
+ * The joining window of a "Joined" choice, from `from` (inclusive) to `to` (exclusive):
+ * this month = 1st of the month → now · last month = the whole previous month ·
+ * last 3 months / 12 weeks = rolling, up to now. Null = all time.
+ */
+function joinedWindow(option: string, now = new Date()): { from: Date; to: Date } | null {
+  const startOfDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate())
+  switch (option) {
+    case "This month":
+      return { from: new Date(now.getFullYear(), now.getMonth(), 1), to: now }
+    case "Last month":
+      return {
+        from: new Date(now.getFullYear(), now.getMonth() - 1, 1),
+        to: new Date(now.getFullYear(), now.getMonth(), 1),
+      }
+    case "Last 3 months":
+      return {
+        from: startOfDay(new Date(now.getFullYear(), now.getMonth() - 3, now.getDate())),
+        to: now,
+      }
+    case "Last 12 weeks":
+      return { from: startOfDay(new Date(now.getTime() - 84 * 24 * 60 * 60 * 1000)), to: now }
+    default:
+      return null
+  }
+}
+
+/** Founders have no joining date, so they only show under "All time". */
+function matchesJoined(m: NetworkMember, option: string): boolean {
+  const window = joinedWindow(option)
+  if (!window) return true
+  if (!m.joinedAt) return false
+  const joined = new Date(m.joinedAt)
+  return joined >= window.from && joined < window.to
 }
 
 function DetailRow({ label, value }: { label: string; value: React.ReactNode }) {
@@ -177,6 +215,11 @@ const columns: Column<NetworkMember>[] = [
     cell: (r) => <span className="text-muted-foreground">{formatNumber(r.team)}</span>,
   },
   {
+    key: "joined",
+    header: "Joined on",
+    cell: (r) => <span className="text-muted-foreground">{formatDate(r.joinedAt)}</span>,
+  },
+  {
     key: "mobile",
     header: "Mobile",
     cell: (r) => <span className="font-mono text-[0.8125rem]">{r.mobile || "—"}</span>,
@@ -200,18 +243,23 @@ export function AdminPartnersPage() {
   const [tab, setTab] = useState("all")
   const [query, setQuery] = useState("")
   const [level, setLevel] = useState("Any")
+  // Joining period — narrows the list, the tab counts and the CSV
+  const [joined, setJoined] = useState("All time")
   const isSearching = query.trim().length > 0
 
   const all = network.data ?? []
-  const rows = all.filter(
-    (m) => matchesTab(m, tab) && matchesQuery(m, query) && matchesLevel(m, level),
+  // Period, level and search narrow everything; the tabs then split what is left by status,
+  // so each tab's count is exactly what that tab lists.
+  const filtered = all.filter(
+    (m) => matchesJoined(m, joined) && matchesLevel(m, level) && matchesQuery(m, query),
   )
+  const rows = filtered.filter((m) => matchesTab(m, tab))
   const tabs = TABS.map((t) => ({
     ...t,
-    label: `${t.label} ${all.filter((m) => matchesTab(m, t.value)).length}`,
+    label: `${t.label} ${filtered.filter((m) => matchesTab(m, t.value)).length}`,
   }))
 
-  const filterKey = `${tab}|${level}|${query}`
+  const filterKey = `${tab}|${level}|${joined}|${query}`
   const [page, setPage] = useState(1)
   const [syncedFilterKey, setSyncedFilterKey] = useState(filterKey)
   if (filterKey !== syncedFilterKey) {
@@ -225,7 +273,7 @@ export function AdminPartnersPage() {
 
   const exportCsv = () =>
     downloadCsv(
-      `vedora-partners-${tab.toLowerCase()}.csv`,
+      `vedora-partners-${tab.toLowerCase()}-${joined.toLowerCase().replace(/\s+/g, "-")}.csv`,
       [
         "VEDORA ID",
         "Name",
@@ -238,6 +286,7 @@ export function AdminPartnersPage() {
         "Slots used",
         "Team",
         "Status",
+        "Joined on",
       ],
       rows.map((r) => [
         r.vedId,
@@ -251,6 +300,7 @@ export function AdminPartnersPage() {
         r.direct,
         r.team,
         pill(r.status).text,
+        formatDate(r.joinedAt),
       ]),
     )
 
@@ -285,7 +335,13 @@ export function AdminPartnersPage() {
               onValueChange={setTab}
               aria-label="Partner status"
             />
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <FilterSelect
+                label="Joined"
+                options={JOINED_OPTIONS}
+                defaultValue={joined}
+                onValueChange={setJoined}
+              />
               <FilterSelect
                 label="Level"
                 options={LEVEL_OPTIONS}

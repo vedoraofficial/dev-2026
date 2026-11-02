@@ -9,21 +9,6 @@ import { UpdateProductDto } from './dto/update-product.dto';
 import { NotificationService } from '../notification/notification.service';
 import { NotificationKey } from '../notification/notification.constants';
 
-/**
- * Auto SKU: VED-<first word of the name, without "VEDORA">-<product number>,
- * e.g. "VEDORA PYRITE LEGACY" #3 → VED-PYRITE-003. The product number keeps it unique.
- */
-export function generateSku(name: string, id: number): string {
-  const word = name
-    .replace(/\bvedora\b/gi, ' ')
-    .replace(/[^a-z0-9 ]/gi, ' ')
-    .trim()
-    .split(/\s+/)[0]
-    ?.toUpperCase()
-    .slice(0, 20);
-  return `VED-${word || 'PRD'}-${String(id).padStart(3, '0')}`;
-}
-
 @Injectable()
 export class ProductService {
   constructor(
@@ -37,8 +22,10 @@ export class ProductService {
       throw new BadRequestException('Sale price cannot exceed Maximum Retail Price (MRP).');
     }
 
+    // Admin types the SKU — there is no automatic one
     const sku = this.normalizeSku(dto.sku);
-    if (sku) await this.assertSkuFree(sku);
+    if (!sku) throw new BadRequestException('Enter the SKU.');
+    await this.assertSkuFree(sku);
 
     const product = this.productRepo.create({
       ...dto,
@@ -47,10 +34,6 @@ export class ProductService {
       updatedBy: userId,
     });
     const saved = await this.productRepo.save(product);
-    if (!saved.sku) {
-      saved.sku = generateSku(saved.name, Number(saved.id));
-      await this.productRepo.save(saved);
-    }
 
     if (saved.status === ProductStatus.ACTIVE) {
       const priceFormatted = `₹${(Number(saved.salePrice) / 100).toFixed(2)}`;
@@ -105,8 +88,9 @@ export class ProductService {
     Object.assign(product, rest);
     if (skuInput !== undefined) {
       const sku = this.normalizeSku(skuInput);
-      if (sku) await this.assertSkuFree(sku, Number(product.id));
-      product.sku = sku ?? generateSku(product.name, Number(product.id));
+      if (!sku) throw new BadRequestException('Enter the SKU.');
+      await this.assertSkuFree(sku, Number(product.id));
+      product.sku = sku;
     }
     product.updatedBy = userId;
 
@@ -141,7 +125,7 @@ export class ProductService {
     return { message: 'Product deleted successfully' };
   }
 
-  /** Trimmed and upper-cased; empty means "generate one". */
+  /** Trimmed and upper-cased; null when empty. */
   private normalizeSku(sku?: string | null): string | null {
     const value = sku?.trim().toUpperCase();
     return value ? value : null;

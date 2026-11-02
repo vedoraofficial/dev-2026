@@ -11,6 +11,8 @@ export type DirectPartner = {
   slotNumber: number
   depth: number
   status: string
+  /** When they were placed in the tree (joined) */
+  joinedAt?: string
 }
 
 type UserRef = { id: number; vedId: string; name: string }
