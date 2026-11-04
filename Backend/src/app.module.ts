@@ -12,6 +12,7 @@ import { OrderModule } from './order/order.module';
 import { PaymentModule } from './payment/payment.module';
 import { NotificationModule } from './notification/notification.module';
 import { StockModule } from './stock/stock.module';
+import { EnquiryModule } from './enquiry/enquiry.module';
 import { ShiprocketModule } from './shiprocket/shiprocket.module';
 import { PayoutModule } from './payout/payout.module';
 import { OnboardingModule } from './onboarding/onboarding.module';
@@ -46,6 +47,7 @@ import { CheckoutModule } from './checkout/checkout.module';
     OnboardingModule,
     InvoiceModule,
     CheckoutModule,
+    EnquiryModule,
   ],
   controllers: [AppController],
   providers: [AppService],

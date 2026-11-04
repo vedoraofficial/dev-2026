@@ -1,37 +1,17 @@
 import { GoldDiamond } from "@/website/components/common/gold-diamond"
-import { PageHero } from "@/website/components/common/page-hero"
+import { GoldWord } from "@/website/components/common/gold-word"
 import { Section, SectionHeading } from "@/website/components/common/section"
 import { Button } from "@/website/components/ui/button"
 import { ProductShowcase } from "@/website/features/products/components/product-showcase"
+import { ProductsHero } from "@/website/features/products/components/products-hero"
 import {
   CARE_INSTRUCTIONS,
   countWord,
   NATURAL_VARIATION_NOTE,
   PREMIUM_FEATURES,
   WARRANTY_AND_ORDERING,
-  WARRANTY_DAYS,
 } from "@/website/features/products/catalog"
-import { Price } from "@/website/features/products/components/price"
 import { lowestPrice, useSiteProducts } from "@/website/features/products/use-site-products"
-
-function HeroStats({ price }: { price: { price: number; mrp: number } | null }) {
-  return (
-    <dl className="flex gap-10">
-      <div className="flex flex-col-reverse">
-        <dt className="mt-1.5 text-[0.6875rem] text-muted-foreground">
-          Offer price · GST inclusive
-        </dt>
-        <dd className="font-display text-[2rem] leading-none">
-          {price ? <Price price={price.price} mrp={price.mrp} /> : <Price />}
-        </dd>
-      </div>
-      <div className="flex flex-col-reverse">
-        <dt className="mt-1.5 text-[0.6875rem] text-muted-foreground">Defect warranty</dt>
-        <dd className="font-display text-[2rem] leading-none">{WARRANTY_DAYS} days</dd>
-      </div>
-    </dl>
-  )
-}
 
 /** The bracelets come from the backend — whatever Admin has put live in Products. */
 export function ProductsPage() {
@@ -40,23 +20,23 @@ export function ProductsPage() {
 
   return (
     <>
-      <PageHero
-        kicker="The collection"
+      <ProductsHero
         title={
           <>
             {isPending ? "Our bracelets" : `${countWord(count)} bracelet${count === 1 ? "" : "s"}`},
             <br />
-            one standard.
+            one <GoldWord sparkle>standard.</GoldWord>
           </>
         }
         description="Each design combines three natural gemstones in a symmetrical, hand-strung layout. Same craftsmanship, same price, same warranty."
-        aside={<HeroStats price={lowestPrice(products)} />}
-        asideAlign="end"
+        products={products}
+        isPending={isPending}
+        price={lowestPrice(products)}
       />
 
-      <Section className="md:py-20">
+      <Section>
         {isPending ? (
-          <div className="space-y-20 md:space-y-28" aria-busy="true">
+          <div className="space-y-10 md:space-y-14" aria-busy="true">
             {[0, 1].map((i) => (
               <div key={i} aria-hidden className="grid items-center gap-8 md:grid-cols-2 lg:gap-12">
                 <div className="aspect-square w-full animate-pulse rounded-2xl bg-muted" />
@@ -82,7 +62,7 @@ export function ProductsPage() {
             New bracelets are on their way — check back soon.
           </p>
         ) : (
-          <div className="space-y-20 md:space-y-28">
+          <div className="space-y-10 md:space-y-14">
             {products.map((b, i) => (
               <ProductShowcase key={b.id} bracelet={b} reverse={i % 2 === 1} />
             ))}

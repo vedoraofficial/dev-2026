@@ -1,6 +1,7 @@
 import { ApiProperty, OmitType } from '@nestjs/swagger';
+import { Transform } from 'class-transformer';
 import { IsDateString, IsIn, IsInt, IsNotEmpty, IsOptional, IsString, Matches, Max, Min } from 'class-validator';
-import { RegisterPartnerBySponsorDto } from '../../genealogy/dto/register-partner-by-sponsor.dto';
+import { PAN_PATTERN, RegisterPartnerBySponsorDto } from '../../genealogy/dto/register-partner-by-sponsor.dto';
 import { PaymentMethod } from '../../order/entity/order.entity';
 
 /** PAY_LATER: the partner is created now with an inactive ID and pays the joining order from My Orders */
@@ -14,6 +15,7 @@ export type JoiningPaymentMethod = (typeof JOINING_PAYMENT_METHODS)[number];
  * joining order ships to it; the date of birth because partners must be 18 or older.
  */
 export class RegisterWithOrderDto extends OmitType(RegisterPartnerBySponsorDto, [
+  'pan',
   'dateOfBirth',
   'addressLine1',
   'city',
@@ -41,6 +43,11 @@ export class RegisterWithOrderDto extends OmitType(RegisterPartnerBySponsorDto, 
   })
   @IsIn(JOINING_PAYMENT_METHODS)
   paymentMethod: JoiningPaymentMethod;
+
+  @ApiProperty({ example: 'ABCDE1234F', description: 'PAN card — one PAN per VEDORA ID' })
+  @Transform(({ value }) => (typeof value === 'string' ? value.trim().toUpperCase() : value))
+  @Matches(PAN_PATTERN, { message: 'Enter a valid PAN, e.g. ABCDE1234F.' })
+  pan: string;
 
   @ApiProperty({ example: '1996-07-15', description: 'Date of birth (YYYY-MM-DD) — must be 18 or older today' })
   @IsDateString({}, { message: 'Enter a valid date of birth.' })

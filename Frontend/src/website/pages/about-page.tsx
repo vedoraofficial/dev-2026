@@ -1,25 +1,68 @@
+import { Gem, Hand, ReceiptText, ShieldCheck, Sparkles } from "lucide-react"
+
 import logoImage from "@/assets/images/vedora-logo.jpg"
 import { BulletList } from "@/website/components/common/bullet-list"
+import { GoldWord } from "@/website/components/common/gold-word"
 import { InfoCard } from "@/website/components/common/info-card"
-import { PageHero } from "@/website/components/common/page-hero"
+import { HeroChips, HeroStatCards, PageHero } from "@/website/components/common/page-hero"
 import { Kicker, Section, SectionHeading } from "@/website/components/common/section"
 import { FounderCard } from "@/website/features/about/components/founder-card"
 import { COMPLIANCE, FOUNDERS, OWNER, PILLARS, VALUES } from "@/website/features/about/content"
+import { WARRANTY_DAYS } from "@/website/features/products/catalog"
+import { ON_PHOTO } from "@/website/lib/hero"
+
+const TRUST = [
+  { icon: Gem, label: "Natural stones only" },
+  { icon: Hand, label: "Handcrafted in India" },
+  { icon: ReceiptText, label: "GST invoice on every order" },
+  { icon: ShieldCheck, label: `${WARRANTY_DAYS}-day warranty` },
+] as const
+
+const STATS = [
+  { value: "100%", label: "Natural gemstones" },
+  { value: "1", label: "Honest price for all" },
+  { value: `${WARRANTY_DAYS}-day`, label: "Defect warranty" },
+] as const
 
 export function AboutPage() {
   return (
     <>
       <PageHero
         kicker="About VEDORA"
-        title="A gemstone brand built on quality."
+        title={
+          <>
+            A gemstone brand <br className="hidden sm:block" />
+            built on <GoldWord sparkle>quality.</GoldWord>
+          </>
+        }
         description="VEDORA designs and sells premium natural gemstone bracelets. We make one thing carefully, price it honestly, and stand behind every piece."
+        tone="portal"
+        footer={
+          <>
+            <HeroChips items={TRUST} />
+            <HeroStatCards stats={STATS} />
+          </>
+        }
         aside={
-          <div className="overflow-hidden rounded-2xl border border-border shadow-2xl shadow-black/50">
-            <img
-              src={logoImage}
-              alt="VEDORA — Wear your energy"
-              className="aspect-[3/2] w-full object-cover"
+          <div className="relative mx-auto w-full max-w-[34rem]">
+            {/* Gold frame peeking out behind the logo, as on the home page */}
+            <div
+              aria-hidden
+              className="absolute inset-0 translate-x-3 translate-y-3 rotate-2 rounded-2xl border border-gold/60"
             />
+            <div className="relative overflow-hidden rounded-2xl border border-gold/30 shadow-2xl shadow-deep/30">
+              <img
+                src={logoImage}
+                alt="VEDORA — Wear your energy"
+                className="aspect-[3/2] w-full object-cover"
+              />
+              <span
+                className={`absolute top-3 left-3 inline-flex items-center gap-1.5 rounded-full bg-deep/80 px-3 py-1 text-[0.6875rem] font-semibold backdrop-blur-md ${ON_PHOTO} text-gold-light`}
+              >
+                <Sparkles aria-hidden className="size-3" />
+                Wear your energy
+              </span>
+            </div>
           </div>
         }
       />

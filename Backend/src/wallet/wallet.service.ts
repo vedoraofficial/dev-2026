@@ -655,6 +655,8 @@ export class WalletService {
         id: w.user.id,
         vedId: w.user.vedId,
         name: w.user.name,
+        status: w.user.status,
+        pan: w.user.panNumber,
       },
       bank: w.bank
         ? {

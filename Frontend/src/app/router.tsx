@@ -126,6 +126,10 @@ export const router = createBrowserRouter([
         ...page(() => import("@/pages/admin/products-page"), "AdminProductsPage"),
       },
       { path: "stock", ...page(() => import("@/pages/admin/stock-page"), "AdminStockPage") },
+      {
+        path: "enquiries",
+        ...page(() => import("@/pages/admin/enquiries-page"), "AdminEnquiriesPage"),
+      },
       { path: "orders", ...page(() => import("@/pages/admin/orders-page"), "AdminOrdersPage") },
       { path: "wallet", ...page(() => import("@/pages/admin/wallet-page"), "AdminWalletPage") },
       {

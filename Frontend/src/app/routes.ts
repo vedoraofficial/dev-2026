@@ -19,6 +19,7 @@ export const ROUTES = {
     genealogy: "/admin/genealogy",
     products: "/admin/products",
     stock: "/admin/stock",
+    enquiries: "/admin/enquiries",
     orders: "/admin/orders",
     wallet: "/admin/wallet",
     withdrawals: "/admin/withdrawals",

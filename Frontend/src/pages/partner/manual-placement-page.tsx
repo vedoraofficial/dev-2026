@@ -35,6 +35,7 @@ import {
 } from "@/features/placement/components/placement-steps"
 import {
   copyRegisteredToShipping,
+  panErrorMessage,
   partnerDetailsPayload,
 } from "@/features/placement/partner-details"
 import { useRegisterWithOrder } from "@/features/placement/queries"
@@ -236,6 +237,11 @@ export function PartnerManualPlacementPage() {
         paymentMethod,
       },
       {
+        // A PAN already linked to another ID: say so under the PAN field too (the toast shows it as well)
+        onError: (err) => {
+          const panProblem = panErrorMessage(err)
+          if (panProblem) setError("pan", { message: panProblem }, { shouldFocus: true })
+        },
         onSuccess: (result) => {
           if (result.status === "PAYMENT_REQUIRED") {
             const statusUrl = `${ROUTES.paymentStatus}?merchantOrderId=${encodeURIComponent(result.razorpayOrderId)}`

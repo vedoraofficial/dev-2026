@@ -6,6 +6,7 @@ import {
   type JoiningFormInput,
   type PartnerDetailsValues,
 } from "@/features/placement/schemas"
+import { apiErrorMessage } from "@/lib/api"
 import type { Gender } from "@/types/user"
 
 /** Form labels → the backend's gender values. */
@@ -33,6 +34,7 @@ export function partnerDetailsPayload(values: PartnerDetailsValues) {
     dateOfBirth: values.dateOfBirth,
     email: values.email,
     mobile: toMobile10(values.mobile),
+    pan: values.pan,
     password: values.password,
     gender: GENDER_API[values.gender],
     addressLine1: values.address,
@@ -41,6 +43,12 @@ export function partnerDetailsPayload(values: PartnerDetailsValues) {
     state: values.state,
     pincode: values.pincode,
   }
+}
+
+/** The backend's message when the PAN card is already used by another ID (null for other errors). */
+export function panErrorMessage(err: unknown): string | null {
+  const message = apiErrorMessage(err, "")
+  return /PAN card/i.test(message) ? message : null
 }
 
 /** "Same as registered address" → the registered name, mobile and address become the shipping ones. */

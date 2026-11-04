@@ -2,6 +2,8 @@ export type Policy = {
   title: string
   detail: string
   body: string[]
+  /** The official PDF in public/ — when set, "Download PDF" gives this file instead of a generated one */
+  file?: string
 }
 
 export const policies: Policy[] = [
@@ -97,12 +99,17 @@ export const policies: Policy[] = [
   },
   {
     title: "Consumer Grievance Redressal Mechanism",
-    detail: "Complaint intake, SLAs and Grievance Officer",
+    detail: "How to complain, timelines and Grievance Officer",
+    file: "/policies/vedora-consumer-grievance-redressal-mechanism.pdf",
     body: [
-      "Any consumer — partner or end customer — may file a complaint about a product, order or payout through the support channel or directly with the Grievance Officer.",
-      "Every complaint is logged with a unique reference number and acknowledged within 48 hours of receipt.",
-      "Complaints are resolved within 30 days as required under the Consumer Protection (Direct Selling) Rules; the complainant is kept informed of status at each stage.",
-      "If unresolved after 30 days, the complainant may escalate to the appropriate Consumer Disputes Redressal Commission.",
+      "1. Consumer Grievance Policy — VEDORA is committed to providing a transparent, fair, and timely grievance redressal mechanism for all customers and partners. Every complaint will be handled professionally, fairly, and confidentially.",
+      "2. How to Submit a Complaint — Customers or partners can raise a complaint through the official VEDORA support channels by providing the following details: Full Name; Order ID or Partner ID; Registered Mobile Number; Email Address; Details of the Complaint; Supporting Photos or Videos (if applicable).",
+      "3. Types of Grievances — VEDORA accepts grievances related to: product quality or manufacturing defects; wrong or damaged products received; shipping and delivery issues; payment-related issues; return and refund requests; partner account, activation, or commission-related queries.",
+      "4. Resolution Timeline — Order & Shipping Issues: 3–5 Business Days. Payment Issues: 3–7 Business Days. Return & Refund Requests: 7–10 Business Days. Partner & Commission Queries: Up to 7 Business Days.",
+      "All registered consumer complaints will be acknowledged within 48 hours and resolved within a maximum period of 30 days from the date of receipt, in accordance with applicable laws.",
+      "5. Escalation Process — If a customer or partner is not satisfied with the initial resolution, or if the complaint remains unresolved, they may escalate the matter directly to the designated Grievance Officer through the official support email. VEDORA will review the complaint and take appropriate action to resolve the matter fairly and transparently.",
+      "6. Grievance Officer Details — Name: Sheetal Bhor. Designation: Grievance Officer – VEDORA. Official Email: info@vedoraofficial.com. Business Address: Badlapur, Maharashtra, India. Working Hours: Monday to Saturday, 10:00 AM to 6:00 PM (IST).",
+      "7. Acknowledgement and Final Resolution — Every registered complaint will receive a formal acknowledgement within 48 hours. A complaint reference or ticket number will be provided for tracking purposes. VEDORA will conduct an appropriate internal review and verification. All consumer grievances will be resolved within a maximum period of 30 days from the date of receipt, in accordance with applicable laws.",
     ],
   },
 ]

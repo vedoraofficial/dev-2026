@@ -117,6 +117,8 @@ function rangeDays(range: string): { from: string; to: string } {
 // ─── CSV for the CA: plain numbers (so Excel can add them up) and DD-MM-YYYY dates ───
 
 const csvAmount = (paise: number) => (Number(paise) / 100).toFixed(2)
+/** TDS on commission payouts in the CA's payouts register (2%) */
+const PAYOUT_TDS_RATE = 0.02
 const csvDate = (iso: string | null | undefined) => {
   if (!iso) return ""
   const d = new Date(iso)
@@ -285,12 +287,12 @@ export function AdminTransactionsPage() {
           "Product",
           "HSN",
           "Qty",
-          "Unit price (incl. GST)",
           "Taxable value",
           "GST %",
           "CGST",
           "SGST",
           "IGST",
+          "TOTAL",
           "Total (incl. GST)",
           "Payment method",
           "Payment reference",
@@ -309,12 +311,12 @@ export function AdminTransactionsPage() {
             r.product,
             r.hsn,
             r.quantity,
-            csvAmount(r.unitPrice),
             csvAmount(r.taxableValue),
             r.gstRate,
             csvAmount(r.cgst),
             csvAmount(r.sgst),
             csvAmount(r.igst),
+            csvAmount(r.taxableValue + r.cgst + r.sgst + r.igst),
             csvAmount(r.total),
             paymentMethodLabel[r.paymentMethod] ?? r.paymentMethod,
             r.paymentReference ?? "",
@@ -332,12 +334,12 @@ export function AdminTransactionsPage() {
             "",
             "",
             sum((r) => r.quantity),
-            "",
             csvAmount(sum((r) => r.taxableValue)),
             "",
             csvAmount(sum((r) => r.cgst)),
             csvAmount(sum((r) => r.sgst)),
             csvAmount(sum((r) => r.igst)),
+            csvAmount(sum((r) => r.taxableValue + r.cgst + r.sgst + r.igst)),
             csvAmount(sum((r) => r.total)),
             "",
             "",
@@ -363,17 +365,24 @@ export function AdminTransactionsPage() {
       return
     }
     const paid = payouts.filter((w) => w.status === "APPROVED" || w.status === "COMPLETED")
+    const tds = (paise: number) => Math.round(Number(paise) * PAYOUT_TDS_RATE)
+    const paidTotal = paid.reduce((s, w) => s + Number(w.amount), 0)
+    const paidTds = paid.reduce((s, w) => s + tds(w.amount), 0)
     downloadCsv(
       `vedora-payouts-register-${fileSlug(range)}.csv`,
       [
         "Request date",
         "Withdrawal no",
         "Partner name",
+        "PAN",
+        "ACTIVE/INACTIVE",
         "VEDORA ID",
         "Bank",
         "IFSC",
         "Account (last 4)",
         "Amount",
+        "Net amount (after TDS)",
+        "TDS (2%)",
         "Status",
         "Processed date",
         "Remarks / UTR",
@@ -383,11 +392,16 @@ export function AdminTransactionsPage() {
           csvDate(w.createdAt),
           `WD-${String(w.id).padStart(5, "0")}`,
           w.user.name,
+          // Partners registered before PAN was collected have none
+          w.user.pan ?? "",
+          w.user.status ? (w.user.status === "ACTIVE" ? "ACTIVE" : "INACTIVE") : "",
           w.user.vedId,
           w.bank?.bankName ?? "",
           w.bank?.ifscCode ?? "",
           w.bank ? `XXXX${w.bank.accountNumber.slice(-4)}` : "",
           csvAmount(w.amount),
+          csvAmount(Number(w.amount) - tds(w.amount)),
+          csvAmount(tds(w.amount)),
           WITHDRAWAL_STATUS[w.status] ?? w.status,
           csvDate(w.processedAt),
           w.adminRemarks ?? "",
@@ -400,7 +414,11 @@ export function AdminTransactionsPage() {
           "",
           "",
           "",
-          csvAmount(paid.reduce((s, w) => s + Number(w.amount), 0)),
+          "",
+          "",
+          csvAmount(paidTotal),
+          csvAmount(paidTotal - paidTds),
+          csvAmount(paidTds),
           "",
           "",
           "",

@@ -79,7 +79,8 @@ export type Withdrawal = {
 
 /** GET /api/wallet/admin/withdrawals — [Admin] */
 export type AdminWithdrawal = Withdrawal & {
-  user: { id: number; vedId: string; name: string }
+  /** `status` is the partner's account status (ACTIVE, PENDING, INACTIVE, BLOCKED) */
+  user: { id: number; vedId: string; name: string; status?: string; pan?: string | null }
   adminUser: { id: number; vedId: string; name: string } | null
 }
 

@@ -1,7 +1,18 @@
+import {
+  Clock,
+  Mail,
+  MapPin,
+  MessageCircle,
+  Phone,
+  ReceiptText,
+  ShieldCheck,
+  Timer,
+} from "lucide-react"
 import type { ReactNode } from "react"
 
 import { GoldDiamond } from "@/website/components/common/gold-diamond"
-import { PageHero } from "@/website/components/common/page-hero"
+import { GoldWord } from "@/website/components/common/gold-word"
+import { HeroChips, PageHero } from "@/website/components/common/page-hero"
 import { Kicker, Section, SectionHeading } from "@/website/components/common/section"
 import {
   Accordion,
@@ -12,8 +23,25 @@ import {
 import { Button } from "@/website/components/ui/button"
 import { ContactForm } from "@/website/features/enquiries/components/contact-form"
 import { FAQS, GRIEVANCE_CHECKLIST, RESOLUTION_TIMELINES } from "@/website/features/support/content"
+import { HERO_CARD } from "@/website/lib/hero"
 import { SITE, whatsappLink } from "@/website/lib/site"
 import { cn } from "@/website/lib/utils"
+
+const TEL = `tel:${SITE.phone.replace(/s/g, "")}`
+
+const TRUST = [
+  { icon: Timer, label: "Replies within published timelines" },
+  { icon: ShieldCheck, label: "Named Grievance Officer" },
+  { icon: ReceiptText, label: "Help with orders & invoices" },
+] as const
+
+/** Quick ways to reach us, shown as glass cards in the hero. */
+const REACH = [
+  { icon: Phone, label: "Call us", value: SITE.phone, href: TEL },
+  { icon: Mail, label: "Email", value: SITE.email, href: `mailto:${SITE.email}` },
+  { icon: Clock, label: "Hours", value: SITE.hours },
+  { icon: MapPin, label: "Based in", value: "Badlapur, Thane, Maharashtra" },
+] as const
 
 function DetailRow({
   label,
@@ -83,8 +111,67 @@ export function ContactPage() {
     <>
       <PageHero
         kicker="Contact & support"
-        title="We're here to help."
+        title={
+          <>
+            We&apos;re here <br className="hidden sm:block" />
+            to <GoldWord sparkle>help.</GoldWord>
+          </>
+        }
         description="Questions about a bracelet, an order or your partner account — write to us and we'll respond within published timelines."
+        tone="portal"
+        actions={
+          <>
+            <Button size="lg" asChild className="bg-gold text-gold-foreground hover:bg-gold/90">
+              <a
+                href={whatsappLink("Hi VEDORA, I need help with…")}
+                target="_blank"
+                rel="noreferrer"
+              >
+                <MessageCircle aria-hidden data-icon="inline-start" />
+                Chat on WhatsApp
+              </a>
+            </Button>
+            <Button size="lg" variant="outline" asChild>
+              <a href={TEL}>
+                <Phone aria-hidden data-icon="inline-start" />
+                Call us
+              </a>
+            </Button>
+          </>
+        }
+        footer={<HeroChips items={TRUST} />}
+        aside={
+          <ul className="mx-auto grid w-full max-w-[34rem] gap-3 sm:grid-cols-2">
+            {REACH.map(({ icon: Icon, label, value, ...rest }) => {
+              const href = "href" in rest ? rest.href : undefined
+              const body = (
+                <>
+                  <span className="grid size-9 place-items-center rounded-full border border-gold/30 bg-gold/10 text-gold-light">
+                    <Icon aria-hidden className="size-4" />
+                  </span>
+                  <p className="mt-4 text-[0.6875rem] tracking-[0.12em] text-muted-foreground uppercase">
+                    {label}
+                  </p>
+                  <p className="mt-1 text-[0.875rem] font-semibold break-words">{value}</p>
+                </>
+              )
+              return (
+                <li key={label}>
+                  {href ? (
+                    <a
+                      href={href}
+                      className={`block h-full rounded-xl p-4 transition-colors hover:border-gold/60 md:p-5 ${HERO_CARD}`}
+                    >
+                      {body}
+                    </a>
+                  ) : (
+                    <div className={`h-full rounded-xl p-4 md:p-5 ${HERO_CARD}`}>{body}</div>
+                  )}
+                </li>
+              )
+            })}
+          </ul>
+        }
       />
 
       <Section containerClassName="grid items-start gap-5 lg:grid-cols-2">

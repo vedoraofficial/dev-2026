@@ -1,4 +1,4 @@
-import { useEffect, type ChangeEvent, type ReactNode } from "react"
+import { useEffect, useState, type ChangeEvent, type ReactNode } from "react"
 import { Controller, useWatch, type UseFormReturn } from "react-hook-form"
 
 import { FieldError, FormField as Field } from "@/components/common/form-field"
@@ -14,6 +14,7 @@ import { ProductPicker, type PickerProduct } from "@/features/placement/componen
 import { limitDigits } from "@/features/placement/partner-details"
 import { isPincode, usePincodeLookup } from "@/features/placement/queries"
 import type { JoiningFormInput } from "@/features/placement/schemas"
+import { DeclarationDialog } from "@/features/policies/components/declaration-dialog"
 import { formatBV } from "@/lib/format"
 
 /** Any form that has the partner details + joining order fields (Add Partner, referral join). */
@@ -273,8 +274,12 @@ export function ConfirmStep<T extends JoiningFormInput>({
 }) {
   const {
     control,
+    setValue,
     formState: { errors },
   } = fieldsOf(form)
+  // Ticking the agreement first opens the Voluntary Participation Declaration; the box is only
+  // ticked once that is accepted.
+  const [declaring, setDeclaring] = useState(false)
   return (
     <Step n={n} title="Confirm">
       <dl className="space-y-2.5 rounded-xl border border-border bg-field/60 p-3.5 text-[0.8125rem]">
@@ -318,7 +323,7 @@ export function ConfirmStep<T extends JoiningFormInput>({
               id="agree"
               className="mt-0.5"
               checked={field.value}
-              onCheckedChange={(v) => field.onChange(v === true)}
+              onCheckedChange={(v) => (v === true ? setDeclaring(true) : field.onChange(false))}
               aria-invalid={!!errors.agree}
             />
             <span>{agreement}</span>
@@ -326,6 +331,13 @@ export function ConfirmStep<T extends JoiningFormInput>({
         )}
       />
       <FieldError message={errors.agree?.message} />
+      <DeclarationDialog
+        open={declaring}
+        onAccept={() => {
+          setDeclaring(false)
+          setValue("agree", true, { shouldValidate: true })
+        }}
+      />
 
       <Button type="submit" size="lg" className="w-full" disabled={pending || disabled}>
         {pending ? pendingLabel : submitLabel}

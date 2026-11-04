@@ -32,7 +32,7 @@ export function Section({
 }: SectionProps) {
   return (
     <section
-      className={cn("py-16 md:py-24", tones[tone], divided && "border-t border-border", className)}
+      className={cn("py-6 md:py-8", tones[tone], divided && "border-t border-border", className)}
       {...props}
     >
       <Container className={containerClassName}>{children}</Container>
@@ -67,7 +67,7 @@ export function SectionHeading({
   return (
     <div
       className={cn(
-        "mb-10 flex flex-col gap-4 md:mb-12",
+        "mb-5 flex flex-col gap-3 md:mb-6",
         aside && "md:flex-row md:items-end md:justify-between",
         align === "center" && "items-center text-center",
         className,
@@ -75,7 +75,7 @@ export function SectionHeading({
     >
       <div className="max-w-2xl">
         <Kicker>{kicker}</Kicker>
-        <h2 className="mt-4 font-display text-[2.25rem] leading-[1.08] font-normal text-balance md:text-[2.75rem]">
+        <h2 className="mt-3 font-display text-[2.25rem] leading-[1.08] font-normal text-balance md:text-[2.75rem]">
           {title}
         </h2>
         {description ? (

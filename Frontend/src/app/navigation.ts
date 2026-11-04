@@ -6,6 +6,7 @@ import {
   Crown,
   FileText,
   House,
+  Inbox,
   LayoutDashboard,
   Network,
   Package,
@@ -35,6 +36,7 @@ export const ADMIN_NAV: NavItem[] = [
   { label: "Withdrawals", to: ROUTES.admin.withdrawals, icon: Wallet },
   { label: "Income Reports", to: ROUTES.admin.incomeReports, icon: ChartColumn },
   { label: "Transactions", to: ROUTES.admin.transactions, icon: ArrowLeftRight },
+  { label: "Enquiries", to: ROUTES.admin.enquiries, icon: Inbox },
   // "Settings" is deliberately not in the sidebar — it's reached from the profile menu
   // next to the notification bell (see components/common/user-menu.tsx).
 ]

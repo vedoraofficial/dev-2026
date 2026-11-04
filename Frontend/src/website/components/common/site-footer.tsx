@@ -27,7 +27,7 @@ function FooterColumn({ title, children }: { title: string; children: ReactNode 
 export function SiteFooter() {
   return (
     <footer className="border-t border-border surface-deep">
-      <Container className="py-14 md:py-16">
+      <Container className="py-10 md:py-12">
         <div className="grid gap-10 sm:grid-cols-2 lg:grid-cols-[1.3fr_1fr_1fr_1fr]">
           <div>
             <Link to={ROUTES.home} aria-label="VEDORA home" className="inline-block">
@@ -84,7 +84,7 @@ export function SiteFooter() {
           </FooterColumn>
         </div>
 
-        <div className="mt-12 flex flex-col gap-4 border-t border-border pt-6 md:flex-row md:items-start md:justify-between">
+        <div className="mt-8 flex flex-col gap-4 border-t border-border pt-6 md:flex-row md:items-start md:justify-between">
           <p className="max-w-3xl text-[0.6875rem] leading-relaxed text-muted-foreground/80">
             {DIRECT_SELLING_DISCLAIMER}
           </p>

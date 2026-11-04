@@ -26,6 +26,9 @@ import { RegisterPartnerBySponsorDto } from './dto/register-partner-by-sponsor.d
 
 /** What a registration needs; the password can be left out when a hash is passed instead. */
 export type RegistrationDetails = Omit<RegisterPartnerBySponsorDto, 'password'> & { password?: string };
+
+/** Shown when a PAN card is already linked to another VEDORA ID */
+export const PAN_TAKEN_MESSAGE = 'This PAN card is already registered with another VEDORA ID. One PAN card can be used for only one ID.';
 import { generateNextVedId } from '../common/utils/ved-id.generator';
 import { WalletService } from '../wallet/wallet.service';
 import { NotificationService } from '../notification/notification.service';
@@ -611,6 +614,7 @@ export class GenealogyService {
         name: dto.name,
         email: dto.email,
         mobile: dto.mobile,
+        panNumber: dto.pan ?? null,
         passwordHash: passwordHash ?? (await bcrypt.hash(dto.password as string, 10)),
         role: UserRole.PARTNER,
         status: UserStatus.PENDING,
@@ -809,6 +813,9 @@ export class GenealogyService {
   /** Unique-key violations from a registration, as readable errors. */
   toRegistrationError(error: any) {
     if (error?.code === '23505') {
+      if (error.detail?.includes('pan_number') || error.constraint === 'UQ_users_pan_number') {
+        return new ConflictException(PAN_TAKEN_MESSAGE);
+      }
       if (error.detail?.includes('email')) {
         return new ConflictException('Email is already registered.');
       }
@@ -896,6 +903,10 @@ export class GenealogyService {
     });
     if (existing) {
       throw new ConflictException('Email or mobile number is already registered.');
+    }
+    // One PAN card per VEDORA ID
+    if (dto.pan && (await userRepo.exists({ where: { panNumber: dto.pan } }))) {
+      throw new ConflictException(PAN_TAKEN_MESSAGE);
     }
 
     // 3. Verify total direct partners capacity (Max 20)

@@ -23,7 +23,7 @@ export function CtaPanel({
     <div
       className={cn(
         "flex flex-col gap-6 rounded-2xl border border-border bg-linear-to-br from-card to-background md:flex-row md:items-center md:justify-between",
-        compact ? "p-5 md:px-6" : "p-7 md:p-12",
+        compact ? "p-5 md:px-6" : "p-6 md:p-9",
         className,
       )}
     >

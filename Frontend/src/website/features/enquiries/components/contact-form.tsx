@@ -1,12 +1,15 @@
 import { zodResolver } from "@hookform/resolvers/zod"
-import { useState } from "react"
+import { useCallback, useState } from "react"
 import { Controller, useForm } from "react-hook-form"
 
+import { useSendEnquiry } from "@/features/enquiries/queries"
+import { apiErrorMessage } from "@/lib/api"
 import { FormField } from "@/website/components/common/form-field"
 import { PhoneInput } from "@/website/components/common/phone-input"
 import { Button } from "@/website/components/ui/button"
 import { Input } from "@/website/components/ui/input"
 import { Textarea } from "@/website/components/ui/textarea"
+import { ThankYouPopup } from "@/website/features/enquiries/components/thank-you-popup"
 import {
   CONTACT_TOPICS,
   contactSchema,
@@ -25,7 +28,10 @@ const blank: ContactValues = {
 
 /** "Send us a message" on the contact page. */
 export function ContactForm({ className }: { className?: string }) {
-  const [sent, setSent] = useState(false)
+  // First name of the last person who sent the form — the thank-you pop-up is open while set
+  const [thanked, setThanked] = useState<string | null>(null)
+  const closeThanks = useCallback(() => setThanked(null), [])
+  const send = useSendEnquiry()
   const {
     register,
     control,
@@ -34,16 +40,22 @@ export function ContactForm({ className }: { className?: string }) {
     formState: { errors },
   } = useForm<ContactValues>({ resolver: zodResolver(contactSchema), defaultValues: blank })
 
-  // Frontend only for now: validate, clear the form and thank the visitor.
-  const onSubmit = () => {
-    reset(blank)
-    setSent(true)
-  }
+  // Saved for Admin (Admin › Enquiries); the visitor sees a pop-up that closes after 3 seconds.
+  const onSubmit = (values: ContactValues) =>
+    send.mutate(
+      { ...values, reference: values.reference || undefined },
+      {
+        onSuccess: () => {
+          reset(blank)
+          setThanked(values.name.split(/\s+/)[0] ?? "")
+        },
+      },
+    )
 
   return (
     <form
       onSubmit={handleSubmit(onSubmit)}
-      onChange={() => setSent(false)}
+      onChange={() => send.reset()}
       noValidate
       className={cn("rounded-2xl border border-border bg-card p-5 md:p-7", className)}
     >
@@ -126,14 +138,15 @@ export function ContactForm({ className }: { className?: string }) {
           />
         </FormField>
       </div>
-      <Button type="submit" size="lg" className="mt-6 w-full">
-        Send message
+      <Button type="submit" size="lg" className="mt-6 w-full" disabled={send.isPending}>
+        {send.isPending ? "Sending…" : "Send message"}
       </Button>
-      {sent ? (
-        <p role="status" className="mt-4 text-center text-[0.8125rem] font-semibold text-gold">
-          Thank you — our team will contact you shortly.
+      {send.isError ? (
+        <p role="alert" className="mt-4 text-center text-[0.8125rem] font-semibold text-danger">
+          {apiErrorMessage(send.error, "Couldn't send your message. Please try again.")}
         </p>
       ) : null}
+      <ThankYouPopup open={thanked !== null} onClose={closeThanks} name={thanked ?? undefined} />
       <p className="mt-4 text-center text-[0.6875rem] text-muted-foreground">
         Attach photos or video by replying to our email. Protected by reCAPTCHA.
       </p>

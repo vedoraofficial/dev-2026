@@ -32,6 +32,7 @@ import {
 } from "@/features/placement/components/placement-steps"
 import {
   copyRegisteredToShipping,
+  panErrorMessage,
   partnerDetailsPayload,
 } from "@/features/placement/partner-details"
 import {
@@ -209,6 +210,11 @@ export function JoinPage() {
         paymentMethod: payWith,
       },
       {
+        // A PAN already linked to another ID: say so under the PAN field too (the toast shows it as well)
+        onError: (err) => {
+          const panProblem = panErrorMessage(err)
+          if (panProblem) form.setError("pan", { message: panProblem }, { shouldFocus: true })
+        },
         onSuccess: (result) => {
           if (result.status === "PENDING_PAYMENT") {
             setJoined({

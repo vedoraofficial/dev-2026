@@ -1,6 +1,10 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsDateString, IsEmail, IsEnum, IsInt, IsNotEmpty, IsOptional, IsString, Max, Min, MinLength } from 'class-validator';
+import { Transform } from 'class-transformer';
+import { IsDateString, IsEmail, IsEnum, IsInt, IsNotEmpty, IsOptional, IsString, Matches, Max, Min, MinLength } from 'class-validator';
 import { Gender } from '../../user/dto/profile-details.dto';
+
+/** PAN card format: 5 letters, 4 digits, 1 letter */
+export const PAN_PATTERN = /^[A-Z]{5}\d{4}[A-Z]$/;
 
 export class RegisterPartnerBySponsorDto {
   @ApiProperty({ example: 'Alice Smith', description: 'Full name of the new partner' })
@@ -17,6 +21,12 @@ export class RegisterPartnerBySponsorDto {
   @IsString()
   @IsNotEmpty()
   mobile: string;
+
+  @ApiProperty({ example: 'ABCDE1234F', description: 'PAN card — one PAN per VEDORA ID', required: false })
+  @Transform(({ value }) => (typeof value === 'string' ? value.trim().toUpperCase() : value))
+  @Matches(PAN_PATTERN, { message: 'Enter a valid PAN, e.g. ABCDE1234F.' })
+  @IsOptional()
+  pan?: string;
 
   @ApiProperty({ example: 'Secret@123', description: 'Password' })
   @IsString()

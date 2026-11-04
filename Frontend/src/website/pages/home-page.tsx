@@ -3,17 +3,16 @@ import { Link } from "react-router-dom"
 import { ROUTES } from "@/website/app/routes"
 import { CtaPanel } from "@/website/components/common/cta-panel"
 import { GoldDiamond } from "@/website/components/common/gold-diamond"
-import { PageHero } from "@/website/components/common/page-hero"
 import { Kicker, Section, SectionHeading } from "@/website/components/common/section"
 import { Button } from "@/website/components/ui/button"
 import { FOUNDER_SHORT_NAMES, FOUNDERS_QUOTE } from "@/website/features/about/content"
-import { Price } from "@/website/features/products/components/price"
+import { HomeHero } from "@/website/features/home/components/home-hero"
 import {
   ProductCard,
   ProductCardSkeleton,
 } from "@/website/features/products/components/product-card"
-import { countWord, stoneLine, WARRANTY_DAYS } from "@/website/features/products/catalog"
-import { type SiteProduct, useSiteProducts } from "@/website/features/products/use-site-products"
+import { countWord, WARRANTY_DAYS } from "@/website/features/products/catalog"
+import { useSiteProducts } from "@/website/features/products/use-site-products"
 
 /** Hero numbers — the bracelet count is what Admin has on sale (null while loading). */
 const heroStats = (bracelets: number | null) => [
@@ -41,38 +40,6 @@ const WHY_VEDORA = [
   },
 ] as const
 
-/** The first product on sale, big in the hero (a placeholder while loading). */
-function HeroImage({ featured }: { featured: SiteProduct | undefined }) {
-  if (!featured) {
-    return (
-      <div
-        aria-hidden
-        className="mx-auto aspect-[5/4] w-full max-w-[34rem] animate-pulse rounded-2xl border border-border bg-muted"
-      />
-    )
-  }
-  return (
-    <div className="relative mx-auto w-full max-w-[34rem] overflow-hidden rounded-2xl border border-border shadow-2xl shadow-black/50">
-      <img src={featured.image} alt={featured.name} className="aspect-[5/4] w-full object-cover" />
-      <div className="absolute inset-x-3 bottom-3 flex items-center justify-between gap-3 rounded-xl border border-border bg-background/85 px-4 py-3 backdrop-blur-md md:inset-x-4 md:bottom-4">
-        <div className="min-w-0">
-          <p className="truncate text-[0.8125rem] font-bold">{featured.name}</p>
-          {featured.stones.length ? (
-            <p className="mt-0.5 truncate text-[0.6875rem] text-muted-foreground">
-              {stoneLine(featured)}
-            </p>
-          ) : null}
-        </div>
-        <Price
-          price={featured.price}
-          mrp={featured.mrp}
-          className="shrink-0 font-display text-[1.5rem] leading-none text-gold"
-        />
-      </div>
-    </div>
-  )
-}
-
 export function HomePage() {
   // The collection comes from the backend — whatever Admin has put live in Products.
   const { products, isPending } = useSiteProducts()
@@ -81,35 +48,7 @@ export function HomePage() {
 
   return (
     <>
-      <PageHero
-        kicker="Premium natural gemstone brand"
-        title={
-          <>
-            Wear Your
-            <br />
-            <em className="text-gold-light">Energy</em>
-          </>
-        }
-        description="Handcrafted bracelets of Pyrite, Tiger Eye, Citrine and Onyx — natural gemstones, hand-strung for everyday wear."
-        actions={
-          <>
-            <Button size="lg" asChild>
-              <Link to={ROUTES.products}>Explore the collection</Link>
-            </Button>
-          </>
-        }
-        footer={
-          <dl className="mt-10 grid max-w-md grid-cols-3 gap-4 border-t border-border pt-6">
-            {HERO_STATS.map((s) => (
-              <div key={s.label} className="flex flex-col-reverse">
-                <dt className="mt-1.5 text-[0.6875rem] text-muted-foreground">{s.label}</dt>
-                <dd className="font-display text-[1.75rem] leading-none">{s.value}</dd>
-              </div>
-            ))}
-          </dl>
-        }
-        aside={<HeroImage featured={products[0]} />}
-      />
+      <HomeHero products={products} isPending={isPending} stats={HERO_STATS} />
 
       <Section>
         <SectionHeading

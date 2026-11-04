@@ -1,4 +1,4 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, OneToOne, OneToMany } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, OneToOne, OneToMany, Unique } from 'typeorm';
 import { Exclude } from 'class-transformer';
 import { UserBank } from './user-bank.entity';
 import { UserProfile } from './user-profile.entity';
@@ -17,6 +17,8 @@ export enum UserStatus {
 }
 
 @Entity('users')
+// One PAN card per VEDORA ID (NULL — partners registered before PAN was collected — is allowed many times)
+@Unique('UQ_users_pan_number', ['panNumber'])
 export class User {
   @PrimaryGeneratedColumn()
   id: number;
@@ -32,6 +34,10 @@ export class User {
 
   @Column({ type: 'varchar', length: 20, unique: true })
   mobile: string;
+
+  /** PAN card (e.g. ABCDE1234F), given at registration */
+  @Column({ name: 'pan_number', type: 'varchar', length: 10, nullable: true })
+  panNumber: string | null;
 
   @Exclude()
   @Column({ name: 'password_hash', type: 'varchar', length: 255 })
