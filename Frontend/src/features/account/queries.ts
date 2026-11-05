@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query"
+import { toast } from "sonner"
 
 import {
   addBank,
@@ -70,20 +71,51 @@ export const useSaveAccountDetails = () => {
 export const useChangePassword = () =>
   useApiMutation(changePassword, { success: "Password updated" })
 
-/** Toast text after RazorpayX Penny Drop check. */
-const verificationResult = (b: Bank) =>
-  b.verificationStatus === "VERIFIED"
-    ? `${b.bankName} ****${b.accountNumber.slice(-4)} verified via RazorpayX penny drop — you can withdraw to it`
-    : b.verificationStatus === "REJECTED"
-      ? `Bank couldn't be verified: ${b.verificationFailedReason ?? "check the details"}`
-      : "Bank account verified successfully"
+/** Format truthful feedback text after Penny Drop check. */
+export const formatBankVerificationResult = (b?: Bank | null): string => {
+  if (!b) return "Bank account submitted"
+  if (b.verificationStatus === "VERIFIED") {
+    return `${b.bankName} ****${b.accountNumber.slice(-4)} verified via RazorpayX penny drop — you can withdraw to it`
+  }
+  if (b.verificationStatus === "REJECTED") {
+    return `Bank couldn't be verified: ${b.verificationFailedReason ?? "check the details and try again"}`
+  }
+  if (b.verificationStatus === "PENDING") {
+    return `${b.bankName} ****${b.accountNumber.slice(-4)} submitted — Penny Drop verification is in progress`
+  }
+  return "Bank account details saved"
+}
 
-/** Adding a bank also runs the Penny Drop check, so the toast says how it went. */
+/** Adding a bank runs the Penny Drop check — toast gives exact truthful verification outcome. */
 export const useAddBank = () =>
-  useApiMutation(addBank, { success: verificationResult, invalidate: [accountKeys.banks] })
+  useApiMutation(addBank, {
+    onSuccess: (b) => {
+      if (b.verificationStatus === "VERIFIED") {
+        toast.success(formatBankVerificationResult(b))
+      } else if (b.verificationStatus === "REJECTED") {
+        toast.error(formatBankVerificationResult(b))
+      } else {
+        toast.info(formatBankVerificationResult(b))
+      }
+    },
+    invalidate: [accountKeys.banks],
+    invalidateOnSettled: [accountKeys.banks],
+  })
 
 export const useVerifyBank = () =>
-  useApiMutation(verifyBank, { success: verificationResult, invalidate: [accountKeys.banks] })
+  useApiMutation(verifyBank, {
+    onSuccess: (b) => {
+      if (b.verificationStatus === "VERIFIED") {
+        toast.success(formatBankVerificationResult(b))
+      } else if (b.verificationStatus === "REJECTED") {
+        toast.error(formatBankVerificationResult(b))
+      } else {
+        toast.info(formatBankVerificationResult(b))
+      }
+    },
+    invalidate: [accountKeys.banks],
+    invalidateOnSettled: [accountKeys.banks],
+  })
 
 /** [Admin] Verify or reject a bank by hand (from the "Bank account to verify" notification). */
 export const useAdminVerifyBank = () =>

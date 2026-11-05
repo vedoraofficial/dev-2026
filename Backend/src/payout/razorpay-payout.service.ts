@@ -13,6 +13,7 @@ export interface RazorpayPayoutParams {
 
 export interface RazorpayPayoutResult {
   success: boolean;
+  payoutId?: string;
   utr: string;
   referenceId: string;
   remarks: string;
@@ -45,7 +46,8 @@ export class RazorpayPayoutService {
     const accountNumber = this.configService.get<string>('RAZORPAY_ACCOUNT_NUMBER');
     const env = (this.configService.get<string>('RAZORPAY_ENV') || 'TEST').toUpperCase();
 
-    const idempotencyKey = `VED_WD_${params.withdrawalId}_${Date.now()}`;
+    // Deterministic Idempotency Key: must remain identical across network retries for the same withdrawal
+    const idempotencyKey = `VED_WD_${params.withdrawalId}`;
 
     this.logger.log(
       `[RazorpayX Payout] Processing withdrawal #${params.withdrawalId} of ₹${amountRupees} to A/C: ****${params.accountNumber.slice(-4)} (${params.ifscCode}) [${env} mode]`,
@@ -117,6 +119,7 @@ export class RazorpayPayoutService {
 
           return {
             success: true,
+            payoutId: data.id,
             utr,
             referenceId: data.id,
             status,
@@ -151,15 +154,28 @@ export class RazorpayPayoutService {
       }
     }
 
-    // Default Test / Simulation Mode (when API keys are not yet configured or for sandbox testing)
+    // Safety guard: NEVER simulate payouts in production or LIVE environment
+    if (process.env.NODE_ENV === 'production' || env === 'LIVE') {
+      const err = 'RazorpayX credentials or source account number not configured in production environment. Real payout cannot be simulated.';
+      this.logger.error(`[RazorpayX Payout Critical Error] ${err}`);
+      return {
+        success: false,
+        utr: '',
+        referenceId: idempotencyKey,
+        remarks: err,
+      };
+    }
+
+    // Default Test / Simulation Mode (STRICTLY for local non-production development without keys)
     const testUtr = `RZPX_TEST_UTR_${Date.now().toString().slice(-10)}`;
     const testRef = `pout_test_${params.withdrawalId}_${Date.now()}`;
-    this.logger.log(
-      `[RazorpayX Test Mode] Simulated IMPS payout of ₹${amountRupees} to ${params.accountHolderName} (A/C: ****${params.accountNumber.slice(-4)}, IFSC: ${params.ifscCode}). UTR: ${testUtr}`,
+    this.logger.warn(
+      `[RazorpayX Local Dev Mode] Simulated IMPS payout of ₹${amountRupees} to ${params.accountHolderName} (A/C: ****${params.accountNumber.slice(-4)}, IFSC: ${params.ifscCode}). UTR: ${testUtr}`,
     );
 
     return {
       success: true,
+      payoutId: testRef,
       utr: testUtr,
       referenceId: testRef,
       status: 'processed',

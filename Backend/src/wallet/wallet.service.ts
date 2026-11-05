@@ -348,6 +348,12 @@ export class WalletService {
    * Locks the amount from available balance.
    */
   async requestWithdrawal(userId: number, amountInRupees: number, bankId: number) {
+    if (process.env.ENABLE_PAYOUTS !== 'true' && process.env.NODE_ENV !== 'test') {
+      throw new BadRequestException(
+        'Withdrawals are currently under development. Online payouts will be activated soon. Your wallet balance is secure.',
+      );
+    }
+
     if (amountInRupees < 100) {
       throw new BadRequestException('Minimum withdrawal amount is ₹100.');
     }
@@ -495,6 +501,8 @@ export class WalletService {
       withdrawal.status = WithdrawalStatus.APPROVED;
       withdrawal.adminUserId = adminUserId;
       withdrawal.adminRemarks = payoutResult.remarks;
+      withdrawal.payoutId = payoutResult.payoutId || payoutResult.referenceId || null;
+      withdrawal.utr = payoutResult.utr || null;
       withdrawal.processedAt = new Date();
       await withdrawalRepo.save(withdrawal);
 
@@ -773,7 +781,10 @@ export class WalletService {
    */
   async handlePayoutProcessed(withdrawalId: number | null, payoutId: string, rawPayoutData?: any) {
     let withdrawal: Withdrawal | null = null;
-    if (withdrawalId) {
+    if (payoutId) {
+      withdrawal = await this.withdrawalRepo.findOne({ where: { payoutId } });
+    }
+    if (!withdrawal && withdrawalId) {
       withdrawal = await this.withdrawalRepo.findOne({ where: { id: withdrawalId } });
     }
     if (!withdrawal && payoutId) {
@@ -791,9 +802,13 @@ export class WalletService {
     if (withdrawal.status !== WithdrawalStatus.COMPLETED) {
       withdrawal.status = WithdrawalStatus.COMPLETED;
       const utr = rawPayoutData?.utr || payoutId;
-      withdrawal.adminRemarks = `RazorpayX Payout Completed. UTR: ${utr}`;
+      withdrawal.utr = utr;
+      if (!withdrawal.payoutId && payoutId) {
+        withdrawal.payoutId = payoutId;
+      }
+      withdrawal.adminRemarks = `RazorpayX Payout Completed. UTR: ${utr} (Payout: ${payoutId})`;
       await this.withdrawalRepo.save(withdrawal);
-      this.logger.log(`Withdrawal #${withdrawal.id} marked COMPLETED (UTR: ${utr})`);
+      this.logger.log(`Withdrawal #${withdrawal.id} marked COMPLETED (UTR: ${utr}, Payout: ${payoutId})`);
     }
 
     return withdrawal;
@@ -809,7 +824,10 @@ export class WalletService {
     rawPayoutData?: any,
   ) {
     let withdrawal: Withdrawal | null = null;
-    if (withdrawalId) {
+    if (payoutId) {
+      withdrawal = await this.withdrawalRepo.findOne({ where: { payoutId } });
+    }
+    if (!withdrawal && withdrawalId) {
       withdrawal = await this.withdrawalRepo.findOne({ where: { id: withdrawalId } });
     }
     if (!withdrawal && payoutId) {
@@ -840,9 +858,11 @@ export class WalletService {
       throw new NotFoundException(`Withdrawal #${withdrawalId} not found.`);
     }
 
-    // Extract payoutId from adminRemarks (e.g. pout_TqWONYb8P01onW)
-    const match = withdrawal.adminRemarks?.match(/pout_[a-zA-Z0-9]+/);
-    const payoutId = match ? match[0] : null;
+    // Extract payoutId from dedicated column first, fallback to regex in adminRemarks
+    const payoutId =
+      withdrawal.payoutId ||
+      withdrawal.adminRemarks?.match(/pout_[a-zA-Z0-9]+/)?.[0] ||
+      null;
 
     if (!payoutId) {
       throw new BadRequestException(
@@ -873,7 +893,10 @@ export class WalletService {
       };
     } else if (status === 'processed') {
       withdrawal.status = WithdrawalStatus.COMPLETED;
-      withdrawal.adminRemarks = `RazorpayX Payout Completed. UTR: ${payoutData.utr || payoutId}`;
+      const utr = payoutData.utr || payoutId;
+      withdrawal.utr = utr;
+      withdrawal.payoutId = payoutId;
+      withdrawal.adminRemarks = `RazorpayX Payout Completed. UTR: ${utr} (Payout: ${payoutId})`;
       await this.withdrawalRepo.save(withdrawal);
       return {
         synced: true,
@@ -902,7 +925,7 @@ export class WalletService {
     const activeWithdrawals = await this.withdrawalRepo
       .createQueryBuilder('w')
       .where('w.status IN (:...statuses)', { statuses: [WithdrawalStatus.APPROVED, WithdrawalStatus.PROCESSING] })
-      .andWhere("w.adminRemarks LIKE '%pout_%'")
+      .andWhere('(w.payout_id IS NOT NULL OR w.adminRemarks LIKE :pat)', { pat: '%pout_%' })
       .getMany();
 
     const results = [];

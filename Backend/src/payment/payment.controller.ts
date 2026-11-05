@@ -101,7 +101,8 @@ export class PaymentController {
   // ─── 5. Manual Status Check ────────────────────────────────────────
 
   @Get('status/:merchantOrderId')
-  @UseGuards(AuthGuard('jwt'))
+  @UseGuards(AuthGuard('jwt'), RateLimitGuard)
+  @RateLimit({ windowMs: 60000, max: 30, message: 'Too many payment status check requests. Please slow down.' })
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Manually check payment status for an order or top-up' })
   async checkStatus(@Param('merchantOrderId') merchantOrderId: string, @Request() req: any) {

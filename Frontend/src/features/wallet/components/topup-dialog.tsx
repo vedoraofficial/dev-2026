@@ -37,7 +37,11 @@ export function TopupDialog({ open, onOpenChange, currentBalance = 0 }: Props) {
 
   const handleProceed = () => {
     if (!isValid) return
-    topupWallet.mutate(rupeesToPaise(amount))
+    topupWallet.mutate(rupeesToPaise(amount), {
+      onSuccess: () => {
+        onOpenChange(false)
+      },
+    })
   }
 
   return (

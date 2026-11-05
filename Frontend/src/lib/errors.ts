@@ -5,3 +5,30 @@
 export class AppError extends Error {
   override name = "AppError"
 }
+
+export class PaymentCancelledError extends AppError {
+  override name = "PaymentCancelledError"
+  constructor(message = "Payment cancelled — no money was deducted.") {
+    super(message)
+  }
+}
+
+export class PaymentFailedError extends AppError {
+  override name = "PaymentFailedError"
+  constructor(message = "Payment failed at gateway.") {
+    super(message)
+  }
+}
+
+export function isPaymentCancelled(err: unknown): err is PaymentCancelledError {
+  return (
+    err instanceof PaymentCancelledError ||
+    (err instanceof Error && err.name === "PaymentCancelledError")
+  )
+}
+export function isPaymentFailed(err: unknown): err is PaymentFailedError {
+  return (
+    err instanceof PaymentFailedError ||
+    (err instanceof Error && err.name === "PaymentFailedError")
+  )
+}

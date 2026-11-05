@@ -41,6 +41,8 @@ function clearStored() {
   try {
     localStorage.removeItem(STORAGE_KEY)
     sessionStorage.removeItem(STORAGE_KEY)
+    sessionStorage.removeItem("vedora.pendingPayment")
+    sessionStorage.removeItem("vedora.pendingJoin")
   } catch {
     // nothing to clear
   }

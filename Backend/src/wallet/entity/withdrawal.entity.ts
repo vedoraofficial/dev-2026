@@ -6,6 +6,7 @@ import {
   JoinColumn,
   CreateDateColumn,
   UpdateDateColumn,
+  Index,
 } from 'typeorm';
 import { User } from '../../user/entity/user.entity';
 import { UserBank } from '../../user/entity/user-bank.entity';
@@ -55,6 +56,15 @@ export class Withdrawal {
 
   @Column({ name: 'admin_remarks', type: 'text', nullable: true })
   adminRemarks: string | null;
+
+  /** RazorpayX Payout ID (pout_...) */
+  @Index('IDX_withdrawals_payout_id')
+  @Column({ name: 'payout_id', type: 'varchar', length: 100, nullable: true })
+  payoutId: string | null;
+
+  /** Bank UTR / Reference number for the disbursed payout */
+  @Column({ name: 'utr', type: 'varchar', length: 100, nullable: true })
+  utr: string | null;
 
   @Column({ name: 'processed_at', type: 'timestamptz', nullable: true })
   processedAt: Date | null;

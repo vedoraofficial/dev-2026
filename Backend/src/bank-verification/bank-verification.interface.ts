@@ -10,7 +10,7 @@ export type NameMatchCategory = 'DIRECT' | 'GOOD' | 'MODERATE' | 'POOR' | 'NO_MA
 
 export interface BankVerificationResult {
   isValid: boolean;
-  accountStatus: 'VALID' | 'INVALID' | 'UNKNOWN';
+  accountStatus: 'VALID' | 'INVALID' | 'UNKNOWN' | 'PENDING';
   accountStatusCode?: string;
   registeredName?: string | null;
   nameMatchScore: number;

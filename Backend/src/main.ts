@@ -16,6 +16,20 @@ async function bootstrap() {
         'Please supply a cryptographically strong secret of at least 32 characters in .env.',
       );
     }
+
+    const requiredPaymentVars = [
+      'RAZORPAY_KEY_ID',
+      'RAZORPAY_KEY_SECRET',
+      ...(process.env.ENABLE_PAYOUTS === 'true' ? ['RAZORPAY_ACCOUNT_NUMBER'] : []),
+      'RAZORPAY_WEBHOOK_SECRET',
+    ];
+    const missingVars = requiredPaymentVars.filter((v) => !process.env[v] || process.env[v]!.trim() === '');
+    if (missingVars.length > 0) {
+      throw new Error(
+        `CRITICAL PAYMENT CONFIGURATION ERROR: Missing required production payment variables: ${missingVars.join(', ')}. ` +
+        'Production payments, payouts, and penny drop verification cannot run securely without these credentials.',
+      );
+    }
   }
 
   const port = process.env.PORT ?? 3000;

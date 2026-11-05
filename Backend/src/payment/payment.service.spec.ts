@@ -177,5 +177,70 @@ describe('PaymentService Razorpay Security & Verification', () => {
         ),
       ).rejects.toThrow(UnauthorizedException);
     });
+
+    it('should route payout.reversed event to walletService.handlePayoutReversalByPayoutIdOrId', async () => {
+      const payload = {
+        event: 'payout.reversed',
+        payload: {
+          payout: {
+            entity: {
+              id: 'pout_rev_123',
+              reference_id: 'VED_WD_42',
+              status: 'reversed',
+              failure_reason: 'Account closed by beneficiary',
+            },
+          },
+        },
+      };
+
+      const rawBody = JSON.stringify(payload);
+      const signature = crypto
+        .createHmac('sha256', 'test_webhook_secret')
+        .update(rawBody)
+        .digest('hex');
+
+      mockWalletService.handlePayoutReversalByPayoutIdOrId = vi.fn().mockResolvedValue({});
+
+      const res = await paymentService.handleWebhook(payload, rawBody, signature);
+      expect(res.status).toBe('SUCCESS');
+      expect(mockWalletService.handlePayoutReversalByPayoutIdOrId).toHaveBeenCalledWith(
+        42,
+        'pout_rev_123',
+        'Account closed by beneficiary',
+        expect.anything(),
+      );
+    });
+
+    it('should route payout.processed event to walletService.handlePayoutProcessed', async () => {
+      const payload = {
+        event: 'payout.processed',
+        payload: {
+          payout: {
+            entity: {
+              id: 'pout_proc_456',
+              reference_id: 'VED_WD_55',
+              status: 'processed',
+              utr: 'CMS1234567890',
+            },
+          },
+        },
+      };
+
+      const rawBody = JSON.stringify(payload);
+      const signature = crypto
+        .createHmac('sha256', 'test_webhook_secret')
+        .update(rawBody)
+        .digest('hex');
+
+      mockWalletService.handlePayoutProcessed = vi.fn().mockResolvedValue({});
+
+      const res = await paymentService.handleWebhook(payload, rawBody, signature);
+      expect(res.status).toBe('SUCCESS');
+      expect(mockWalletService.handlePayoutProcessed).toHaveBeenCalledWith(
+        55,
+        'pout_proc_456',
+        expect.anything(),
+      );
+    });
   });
 });

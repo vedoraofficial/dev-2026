@@ -73,6 +73,8 @@ export type Withdrawal = {
   status: WithdrawalStatus
   bank: WithdrawalBank | null
   adminRemarks: string | null
+  payoutId?: string | null
+  utr?: string | null
   processedAt: string | null
   createdAt: string
 }

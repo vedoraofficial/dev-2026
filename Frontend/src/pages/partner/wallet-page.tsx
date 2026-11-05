@@ -59,7 +59,9 @@ export function PartnerWalletPage() {
             <Button variant="outline" onClick={() => setTopupOpen(true)}>
               Add money
             </Button>
-            <Button onClick={focusWithdrawPanel}>Request withdrawal</Button>
+            <Button variant="outline" onClick={focusWithdrawPanel}>
+              Request withdrawal <span className="ml-1 text-[0.625rem] font-medium text-amber-400 uppercase tracking-wider">(Coming Soon)</span>
+            </Button>
           </div>
         }
       />

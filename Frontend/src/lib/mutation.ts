@@ -2,6 +2,7 @@ import { useMutation, useQueryClient, type QueryKey } from "@tanstack/react-quer
 import { toast } from "sonner"
 
 import { apiErrorMessage } from "@/lib/api"
+import { isPaymentCancelled } from "@/lib/errors"
 
 type Options<TData, TVars> = {
   /** Toast shown on success — a string, or built from the response. Leave out for no toast. */
@@ -10,7 +11,10 @@ type Options<TData, TVars> = {
   error?: string
   /** Queries to refetch after success, e.g. [["wallet"]] refreshes every wallet query. */
   invalidate?: QueryKey[]
+  /** Queries to refetch regardless of whether mutation succeeded or failed (e.g. bank verification). */
+  invalidateOnSettled?: QueryKey[]
   onSuccess?: (data: TData, vars: TVars) => void
+  onError?: (err: unknown, vars: TVars) => void
 }
 
 /**
@@ -19,7 +23,14 @@ type Options<TData, TVars> = {
  */
 export function useApiMutation<TData, TVars = void>(
   mutationFn: (vars: TVars) => Promise<TData>,
-  { success, error, invalidate = [], onSuccess }: Options<TData, TVars> = {},
+  {
+    success,
+    error,
+    invalidate = [],
+    invalidateOnSettled = [],
+    onSuccess,
+    onError,
+  }: Options<TData, TVars> = {},
 ) {
   const queryClient = useQueryClient()
   return useMutation({
@@ -29,8 +40,20 @@ export function useApiMutation<TData, TVars = void>(
       if (success) toast.success(typeof success === "function" ? success(data, vars) : success)
       onSuccess?.(data, vars)
     },
-    onError: (err) => {
-      toast.error(apiErrorMessage(err, error))
+    onError: (err, vars) => {
+      if (isPaymentCancelled(err)) {
+        toast.info(err.message)
+      } else {
+        toast.error(apiErrorMessage(err, error))
+      }
+      onError?.(err, vars)
+    },
+    onSettled: async () => {
+      if (invalidateOnSettled.length > 0) {
+        await Promise.all(
+          invalidateOnSettled.map((queryKey) => queryClient.invalidateQueries({ queryKey })),
+        )
+      }
     },
   })
 }

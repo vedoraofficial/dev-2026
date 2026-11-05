@@ -192,20 +192,24 @@ export function AdminWithdrawalsPage() {
               <StatusPill variant={withdrawalPill[r.status].variant}>
                 {withdrawalPill[r.status].label}
               </StatusPill>
-              {(r.status === "APPROVED" || r.status === "PROCESSING") && r.adminRemarks?.includes("pout_") && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="h-6 px-1.5 text-[0.6875rem] gap-1"
-                  disabled={sync.isPending}
-                  onClick={() => sync.mutate(r.id)}
-                  title="Sync live status from RazorpayX"
-                >
-                  <RefreshCw className={`h-2.5 w-2.5 ${sync.isPending ? "animate-spin" : ""}`} />
-                  Sync
-                </Button>
-              )}
+              {(r.status === "APPROVED" || r.status === "PROCESSING") &&
+                (r.payoutId || r.adminRemarks?.includes("pout_")) && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-6 px-1.5 text-[0.6875rem] gap-1"
+                    disabled={sync.isPending}
+                    onClick={() => sync.mutate(r.id)}
+                    title="Sync live status from RazorpayX"
+                  >
+                    <RefreshCw className={`h-2.5 w-2.5 ${sync.isPending ? "animate-spin" : ""}`} />
+                    Sync
+                  </Button>
+                )}
             </div>
+            {r.utr ? (
+              <p className="font-mono text-[0.6875rem] text-gold md:text-right">UTR: {r.utr}</p>
+            ) : null}
             <p className="mt-0.5 text-[0.6875rem] text-muted-foreground md:text-right">
               {r.adminRemarks ?? (r.adminUser ? `by ${r.adminUser.vedId}` : "")}
             </p>

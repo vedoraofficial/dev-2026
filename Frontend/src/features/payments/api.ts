@@ -1,4 +1,5 @@
 import { api } from "@/lib/api"
+import { AppError, PaymentCancelledError, PaymentFailedError } from "@/lib/errors"
 
 export type InitiatePaymentResponse = {
   message: string
@@ -195,14 +196,17 @@ export function openRazorpayCheckout({
   onError,
   onDismiss,
   verify = verifyPayment,
-}: RazorpayModalOptions): Promise<void> {
+}: RazorpayModalOptions): Promise<VerifyPaymentResponse> {
   return new Promise((resolve, reject) => {
     if (typeof window === "undefined" || !window.Razorpay) {
-      const err = new Error("Razorpay SDK is not loaded. Please refresh the page.")
+      const err = new AppError("Razorpay SDK is not loaded. Please refresh the page.")
       onError?.(err)
       reject(err)
       return
     }
+
+    let isCompleted = false
+    let isFailed = false
 
     const options = {
       key: initiateData.keyId,
@@ -216,8 +220,11 @@ export function openRazorpayCheckout({
       theme: initiateData.theme || { color: "#D4AF37" },
       modal: {
         ondismiss: () => {
+          if (isCompleted || isFailed) return
           onDismiss?.()
-          resolve()
+          const cancelErr = new PaymentCancelledError("Payment cancelled — no money was deducted.")
+          onError?.(cancelErr)
+          reject(cancelErr)
         },
       },
       handler: async (response: {
@@ -225,14 +232,17 @@ export function openRazorpayCheckout({
         razorpay_order_id: string
         razorpay_signature: string
       }) => {
+        if (isCompleted || isFailed) return
+        isCompleted = true
         try {
           const verifyResult = await verify({
             razorpayOrderId: response.razorpay_order_id,
             razorpayPaymentId: response.razorpay_payment_id,
             razorpaySignature: response.razorpay_signature,
           })
+          clearPendingPayment()
           onSuccess(verifyResult)
-          resolve()
+          resolve(verifyResult)
         } catch (verifyErr) {
           onError?.(verifyErr)
           reject(verifyErr)
@@ -242,7 +252,12 @@ export function openRazorpayCheckout({
 
     const rzp = new window.Razorpay(options)
     rzp.on("payment.failed", (response: any) => {
-      onError?.(response.error || response)
+      if (isCompleted || isFailed) return
+      isFailed = true
+      const desc = response?.error?.description || "Payment was declined or failed at Razorpay."
+      const failErr = new PaymentFailedError(desc)
+      onError?.(failErr)
+      reject(failErr)
     })
     rzp.open()
   })
@@ -258,7 +273,7 @@ export async function startRazorpayOrderCheckout(
     onError?: (error: any) => void
     onDismiss?: () => void
   },
-): Promise<void> {
+): Promise<VerifyPaymentResponse> {
   const initiateData = await initiatePayment(orderId)
   // For orders the backend sends our order number as `orderId` and Razorpay's own order id
   // (order_…) as `merchantOrderId` — Razorpay needs its own id, or it answers 400.
@@ -293,7 +308,7 @@ export async function startRazorpayTopup(
     onError?: (error: any) => void
     onDismiss?: () => void
   },
-): Promise<void> {
+): Promise<VerifyPaymentResponse> {
   const initiateData = await initiateTopup(amountInPaise)
   savePendingPayment({
     merchantOrderId: initiateData.orderId,
@@ -327,7 +342,7 @@ export function startRazorpayCartCheckout(
     onError?: (error: any) => void
     onDismiss?: () => void
   },
-): Promise<void> {
+): Promise<VerifyPaymentResponse> {
   savePendingPayment({ merchantOrderId: checkout.orderId, type: "ORDER", orderId: firstOrderId })
   return openRazorpayCheckout({
     initiateData: checkout,
@@ -349,7 +364,7 @@ export function startRazorpayJoinCheckout(
     onError?: (error: any) => void
     onDismiss?: () => void
   },
-): Promise<void> {
+): Promise<VerifyPaymentResponse> {
   savePendingPayment({ ...pending, merchantOrderId: checkout.orderId, type: "JOIN" })
   return openRazorpayCheckout({
     initiateData: checkout,

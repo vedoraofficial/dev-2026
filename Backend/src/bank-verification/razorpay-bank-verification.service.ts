@@ -89,6 +89,17 @@ export class RazorpayBankVerificationService {
     const env = (this.configService.get<string>('RAZORPAY_ENV') || 'TEST').toUpperCase();
 
     if (!this.isConfigured() || !sourceAccount) {
+      if (process.env.NODE_ENV === 'production' || env === 'LIVE') {
+        this.logger.error('[RazorpayX Penny Drop] Credentials not configured in production/LIVE environment.');
+        return {
+          isValid: false,
+          accountStatus: 'INVALID',
+          accountStatusCode: 'CONFIG_ERROR',
+          nameMatchScore: 0,
+          nameMatchResult: 'NO_MATCH',
+          failureReason: 'Bank verification service is not configured in production.',
+        };
+      }
       this.logger.warn('[RazorpayX Penny Drop] Credentials not fully configured. Running simulation mode.');
       return this.runSimulation(accountNumber, ifscCode, accountHolderName, userName);
     }
@@ -153,7 +164,7 @@ export class RazorpayBankVerificationService {
         };
       }
 
-      // If Razorpay accepted the request:
+      // If Razorpay accepted or responded:
       const validationId = data.id;
       const status = data.status; // 'created' | 'completed' | 'failed'
 
@@ -161,41 +172,85 @@ export class RazorpayBankVerificationService {
         `[RazorpayX Penny Drop Response] Validation ID: ${validationId}, Status: ${status}`,
       );
 
-      // In Live mode with immediate completed status
+      // 1. Direct failure from RazorpayX
+      if (status === 'failed') {
+        const failureReason =
+          data?.results?.failure_reason ||
+          data?.error?.description ||
+          'Bank account validation failed by beneficiary bank or RazorpayX.';
+        return {
+          isValid: false,
+          accountStatus: 'INVALID',
+          accountStatusCode: 'VALIDATION_FAILED',
+          nameMatchScore: 0,
+          nameMatchResult: 'NO_MATCH',
+          failureReason,
+          referenceId: validationId,
+          rawResponse: data,
+        };
+      }
+
+      // 2. In Live mode with immediate completed status
       if (status === 'completed' && data.results) {
         return this.processCompletedResults(data, accountHolderName, userName);
       }
 
-      // In Live mode, poll up to 2 times for completed status
+      // 3. In Live mode, poll up to 4 times for completed or failed status
       if (status === 'created' && env === 'LIVE') {
         const pollResult = await this.pollValidationStatus(validationId, authHeader);
-        if (pollResult && pollResult.status === 'completed' && pollResult.results) {
-          return this.processCompletedResults(pollResult, accountHolderName, userName);
+        if (pollResult) {
+          if (pollResult.status === 'completed' && pollResult.results) {
+            return this.processCompletedResults(pollResult, accountHolderName, userName);
+          }
+          if (pollResult.status === 'failed') {
+            const failureReason =
+              pollResult?.results?.failure_reason ||
+              pollResult?.error?.description ||
+              'Bank account validation failed by beneficiary bank.';
+            return {
+              isValid: false,
+              accountStatus: 'INVALID',
+              accountStatusCode: 'VALIDATION_FAILED',
+              nameMatchScore: 0,
+              nameMatchResult: 'NO_MATCH',
+              failureReason,
+              referenceId: validationId,
+              rawResponse: pollResult,
+            };
+          }
         }
+
+        // Live mode safety: if still pending after polling, return PENDING status; DO NOT fall through to sandbox
+        this.logger.warn(`[RazorpayX Penny Drop] Live validation ${validationId} is pending after polling.`);
+        return {
+          isValid: false,
+          accountStatus: 'PENDING',
+          accountStatusCode: 'VERIFICATION_PENDING',
+          nameMatchScore: 0,
+          nameMatchResult: 'NO_MATCH',
+          failureReason: 'Bank account validation is pending with the beneficiary bank. Please retry verification in a moment.',
+          referenceId: validationId,
+          rawResponse: data,
+        };
       }
 
-      // In Test mode (or when API returned 'created' in sandbox environment):
-      // As Razorpay documentation confirms, sandbox does not connect to live banks,
-      // but API accepted the IFSC and bank details format.
+      // 4. In Test mode: run sandbox evaluation
       this.logger.log(
-        `[RazorpayX Penny Drop Success] Account verified via RazorpayX (Ref: ${validationId})`,
+        `[RazorpayX Penny Drop Sandbox] Running sandbox evaluation for Ref: ${validationId}`,
       );
 
-      return {
-        isValid: true,
-        accountStatus: 'VALID',
-        accountStatusCode: 'ACCOUNT_IS_VALID',
-        registeredName: accountHolderName.toUpperCase(),
-        nameMatchScore: 100,
-        nameMatchResult: 'DIRECT',
-        utr: data.utr || validationId,
-        referenceId: validationId,
-        rawResponse: data,
-      };
+      return this.evaluateSandboxValidation(
+        accountNumber,
+        ifscCode,
+        accountHolderName,
+        userName,
+        validationId,
+        data,
+      );
     } catch (err: any) {
       this.logger.error('[RazorpayX Penny Drop Network Error]', err);
 
-      if (env === 'TEST') {
+      if (env === 'TEST' && process.env.NODE_ENV !== 'production') {
         return this.runSimulation(accountNumber, ifscCode, accountHolderName, userName);
       }
 
@@ -211,7 +266,7 @@ export class RazorpayBankVerificationService {
   }
 
   /**
-   * Process results when validation status is completed
+   * Process results when validation status is completed (Live Mode)
    */
   private processCompletedResults(
     data: any,
@@ -235,36 +290,47 @@ export class RazorpayBankVerificationService {
       };
     }
 
-    // Name match verification
-    let nameMatchScore = 100;
-    let nameMatchResult: any = 'DIRECT';
+    // Name match verification: Registered name from bank MUST match user identity
+    if (!registeredName) {
+      return {
+        isValid: false,
+        accountStatus: 'INVALID',
+        accountStatusCode: 'NAME_NOT_RETURNED',
+        nameMatchScore: 0,
+        nameMatchResult: 'NO_MATCH',
+        failureReason: 'Beneficiary bank did not return the registered account holder name for validation.',
+        rawResponse: data,
+      };
+    }
 
-    if (registeredName) {
-      const match = calculateNameMatch(accountHolderName, registeredName);
-      nameMatchScore = match.score;
-      nameMatchResult = match.result;
+    // Match bank registered name against both input name and user profile name
+    const inputMatch = calculateNameMatch(accountHolderName, registeredName);
+    const profileMatch = userName ? calculateNameMatch(userName, registeredName) : inputMatch;
 
-      if (nameMatchScore < 50 || nameMatchResult === 'NO_MATCH') {
-        return {
-          isValid: false,
-          accountStatus: 'INVALID',
-          accountStatusCode: 'NAME_MISMATCH',
-          registeredName,
-          nameMatchScore,
-          nameMatchResult,
-          failureReason: `Account holder name does not match bank records. Registered name at bank: "${registeredName}".`,
-          rawResponse: data,
-        };
-      }
+    // Use conservative score
+    const finalScore = Math.min(inputMatch.score, profileMatch.score);
+    const finalResult = inputMatch.score <= profileMatch.score ? inputMatch.result : profileMatch.result;
+
+    if (finalScore < 60 || finalResult === 'NO_MATCH') {
+      return {
+        isValid: false,
+        accountStatus: 'INVALID',
+        accountStatusCode: 'NAME_MISMATCH',
+        registeredName,
+        nameMatchScore: finalScore,
+        nameMatchResult: finalResult,
+        failureReason: `Account holder name does not match bank records. Registered name at bank: "${registeredName}" (Match: ${finalScore}%).`,
+        rawResponse: data,
+      };
     }
 
     return {
       isValid: true,
       accountStatus: 'VALID',
       accountStatusCode: 'ACCOUNT_IS_VALID',
-      registeredName: registeredName || accountHolderName.toUpperCase(),
-      nameMatchScore,
-      nameMatchResult,
+      registeredName,
+      nameMatchScore: finalScore,
+      nameMatchResult: finalResult,
       utr,
       referenceId: data.id,
       rawResponse: data,
@@ -275,7 +341,7 @@ export class RazorpayBankVerificationService {
    * Poll status in live mode
    */
   private async pollValidationStatus(validationId: string, authHeader: string): Promise<any> {
-    for (let i = 0; i < 2; i++) {
+    for (let i = 0; i < 4; i++) {
       await new Promise((r) => setTimeout(r, 1000));
       try {
         const res = await fetch(`https://api.razorpay.com/v1/fund_accounts/validations/${validationId}`, {
@@ -293,6 +359,121 @@ export class RazorpayBankVerificationService {
   }
 
   /**
+   * Evaluate validation in Sandbox / Test Mode
+   * Strictly isolated to non-production environments with realistic simulation rules.
+   */
+  private evaluateSandboxValidation(
+    accountNumber: string,
+    ifscCode: string,
+    accountHolderName: string,
+    userName: string,
+    validationId: string,
+    rawResponse?: any,
+  ): BankVerificationResult {
+    // Hard security check: Never run sandbox evaluation in production or LIVE environment
+    const env = (this.configService.get<string>('RAZORPAY_ENV') || 'TEST').toUpperCase();
+    if (process.env.NODE_ENV === 'production' || env === 'LIVE') {
+      throw new Error('FATAL: Sandbox bank evaluation cannot be executed in production or LIVE environment.');
+    }
+
+    // 1. Account Number Sandbox Failure Patterns
+    const isRepeatedDigits = /^(.)\1+$/.test(accountNumber);
+    if (
+      accountNumber.length < 9 ||
+      accountNumber.endsWith('0000') ||
+      accountNumber.endsWith('9999') ||
+      accountNumber.endsWith('1111') ||
+      accountNumber.endsWith('1234') ||
+      isRepeatedDigits
+    ) {
+      this.logger.warn(`[RazorpayX Test Mode] Account ${accountNumber} simulated as INVALID_ACCOUNT`);
+      return {
+        isValid: false,
+        accountStatus: 'INVALID',
+        accountStatusCode: 'BENEFICIARY_BANK_REJECTED',
+        nameMatchScore: 0,
+        nameMatchResult: 'NO_MATCH',
+        failureReason:
+          'Bank account does not exist or has been rejected by beneficiary bank (Invalid Account Number).',
+        referenceId: validationId,
+        rawResponse,
+      };
+    }
+
+    // Accounts ending in 8888 simulate bank downtime
+    if (accountNumber.endsWith('8888')) {
+      return {
+        isValid: false,
+        accountStatus: 'INVALID',
+        accountStatusCode: 'BENEFICIARY_BANK_OFFLINE',
+        nameMatchScore: 0,
+        nameMatchResult: 'NO_MATCH',
+        failureReason:
+          'Beneficiary bank is currently offline or experiencing network downtime. Please try again later.',
+        referenceId: validationId,
+        rawResponse,
+      };
+    }
+
+    // Accounts ending in 7777 simulate blocked/frozen account
+    if (accountNumber.endsWith('7777')) {
+      return {
+        isValid: false,
+        accountStatus: 'INVALID',
+        accountStatusCode: 'ACCOUNT_BLOCKED',
+        nameMatchScore: 0,
+        nameMatchResult: 'NO_MATCH',
+        failureReason: 'Bank account is frozen or blocked by the beneficiary bank.',
+        referenceId: validationId,
+        rawResponse,
+      };
+    }
+
+    // 2. Name Matching Simulation
+    // Accounts ending in 4444 simulate a different bank registered holder (Name Mismatch test)
+    let simulatedBankName: string;
+    if (accountNumber.endsWith('4444') || accountNumber.endsWith('5555')) {
+      simulatedBankName = 'RAKESH SURESH JADHAV';
+    } else {
+      simulatedBankName = (userName || accountHolderName).trim().toUpperCase();
+    }
+
+    const match = calculateNameMatch(accountHolderName, simulatedBankName);
+
+    this.logger.log(
+      `[RazorpayX Test Mode] Name match check: Input "${accountHolderName}" vs Bank Registered "${simulatedBankName}" => Score: ${match.score} (${match.result})`,
+    );
+
+    // Fail if name match score < 60% or NO_MATCH
+    if (match.score < 60 || match.result === 'NO_MATCH') {
+      return {
+        isValid: false,
+        accountStatus: 'INVALID',
+        accountStatusCode: 'NAME_MISMATCH',
+        registeredName: simulatedBankName,
+        nameMatchScore: match.score,
+        nameMatchResult: match.result,
+        failureReason: `Account holder name does not match bank records. Registered name at bank: "${simulatedBankName}" (${match.score}% match).`,
+        referenceId: validationId,
+        rawResponse,
+      };
+    }
+
+    // 3. Success with dynamically calculated match score
+    return {
+      isValid: true,
+      accountStatus: 'VALID',
+      accountStatusCode: 'ACCOUNT_IS_VALID',
+      registeredName: simulatedBankName,
+      nameMatchScore: match.score,
+      nameMatchResult: match.result,
+      utr: rawResponse?.utr || `RZPX_TEST_${Date.now()}`,
+      referenceId: validationId,
+      rawResponse,
+    };
+  }
+
+  /**
    * Offline simulation when API credentials are absent
    */
   private runSimulation(
@@ -301,27 +482,12 @@ export class RazorpayBankVerificationService {
     accountHolderName: string,
     userName: string,
   ): BankVerificationResult {
-    const isMockInvalid = accountNumber.endsWith('0000');
-    if (isMockInvalid) {
-      return {
-        isValid: false,
-        accountStatus: 'INVALID',
-        accountStatusCode: 'INVALID_ACCOUNT',
-        nameMatchScore: 0,
-        nameMatchResult: 'NO_MATCH',
-        failureReason: 'Account does not exist according to bank records (Simulation).',
-      };
-    }
-
-    return {
-      isValid: true,
-      accountStatus: 'VALID',
-      accountStatusCode: 'ACCOUNT_IS_VALID',
-      registeredName: accountHolderName.toUpperCase(),
-      nameMatchScore: 100,
-      nameMatchResult: 'DIRECT',
-      utr: `RZPX_PENNY_${Date.now()}`,
-      referenceId: `fav_sim_${Date.now()}`,
-    };
+    return this.evaluateSandboxValidation(
+      accountNumber,
+      ifscCode,
+      accountHolderName,
+      userName,
+      `fav_sim_${Date.now()}`,
+    );
   }
 }

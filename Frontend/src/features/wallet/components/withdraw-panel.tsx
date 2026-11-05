@@ -1,3 +1,4 @@
+import { AlertCircle } from "lucide-react"
 import { useState, type Ref } from "react"
 import { Link } from "react-router-dom"
 
@@ -23,8 +24,9 @@ import { formatDateTime } from "@/lib/date"
 import { formatINR, formatNumber } from "@/lib/format"
 import { paiseToRupees } from "@/lib/money"
 
-/** POST /api/wallet/withdraw rejects anything below ₹100. */
+/** POST /api/wallet/withdraw limits: min ₹100, max ₹5,00,000. */
 const MIN_WITHDRAWAL = 100
+const MAX_WITHDRAWAL = 500000
 
 /**
  * "Request withdrawal": amount (with quick amounts) and a verified payout bank.
@@ -51,10 +53,11 @@ export function WithdrawPanel({
   const selectedBankId =
     bankId || String(verifiedBanks.find((b) => b.isPrimary)?.id ?? verifiedBanks[0]?.id ?? "")
 
-  const quickAmounts = [500, 1000, Math.floor(balance)]
+  const quickAmounts = [500, 1000, Math.min(MAX_WITHDRAWAL, Math.floor(balance))]
   const numericAmount = Number(amount) || 0
   const canSubmit =
     numericAmount >= MIN_WITHDRAWAL &&
+    numericAmount <= MAX_WITHDRAWAL &&
     numericAmount <= balance &&
     !!selectedBankId &&
     !requestWithdrawal.isPending
@@ -69,7 +72,23 @@ export function WithdrawPanel({
 
   return (
     <Panel>
-      <PanelHeader title="Request withdrawal" />
+      <PanelHeader
+        title="Request withdrawal"
+        aside={
+          <span className="rounded-full border border-amber-500/40 bg-amber-500/10 px-2.5 py-0.5 text-[0.6875rem] font-medium text-amber-400">
+            Under Development
+          </span>
+        }
+      />
+      <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3.5 text-xs text-amber-200">
+        <div className="flex items-center gap-2 font-medium text-amber-300">
+          <AlertCircle className="size-4 shrink-0 text-amber-400" />
+          <span>Payouts Under Development</span>
+        </div>
+        <p className="mt-1 leading-relaxed text-muted-foreground">
+          Withdrawals and bank payouts are currently under development. Online payout requests will be enabled soon. Your earned wallet balance remains 100% secure.
+        </p>
+      </div>
       <div className="space-y-2">
         <Label htmlFor="amount" className="eyebrow">
           Amount
@@ -105,6 +124,10 @@ export function WithdrawPanel({
         {numericAmount > balance ? (
           <p className="text-[0.6875rem] text-danger">
             Amount exceeds your available balance of {formatINR(balance)}.
+          </p>
+        ) : numericAmount > MAX_WITHDRAWAL ? (
+          <p className="text-[0.6875rem] text-danger">
+            Maximum single withdrawal is {formatINR(MAX_WITHDRAWAL)}.
           </p>
         ) : numericAmount > 0 && numericAmount < MIN_WITHDRAWAL ? (
           <p className="text-[0.6875rem] text-danger">
@@ -150,8 +173,8 @@ export function WithdrawPanel({
           Once Admin approves, the amount is credited to your bank account within 24 hours.
         </span>
       </p>
-      <Button size="lg" className="mt-4 w-full" disabled={!canSubmit} onClick={submit}>
-        {requestWithdrawal.isPending ? "Submitting…" : "Submit request"}
+      <Button size="lg" className="mt-4 w-full" disabled={true} onClick={submit}>
+        Withdrawal Service Under Development
       </Button>
     </Panel>
   )
@@ -174,7 +197,12 @@ const withdrawalColumns: Column<Withdrawal>[] = [
   {
     key: "bank",
     header: "Bank",
-    cell: (r) => <span className="font-mono text-xs">{maskedBank(r.bank)}</span>,
+    cell: (r) => (
+      <div className="font-mono text-xs">
+        <p>{maskedBank(r.bank)}</p>
+        {r.utr ? <p className="text-[0.6875rem] text-gold font-sans font-medium">UTR: {r.utr}</p> : null}
+      </div>
+    ),
   },
   {
     key: "status",

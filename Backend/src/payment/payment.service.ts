@@ -2,9 +2,9 @@ import {
   Injectable,
   Logger,
   NotFoundException,
-  InternalServerErrorException,
   ForbiddenException,
   BadRequestException,
+  UnauthorizedException,
   OnModuleInit,
   Inject,
   forwardRef,
@@ -347,26 +347,23 @@ export class PaymentService implements OnModuleInit {
   }): Promise<any> {
     const { razorpayOrderId, razorpayPaymentId, razorpaySignature } = dto;
     const keySecret = this.configService.get<string>('RAZORPAY_KEY_SECRET') || '';
-    const env = (this.configService.get<string>('RAZORPAY_ENV') || 'TEST').toUpperCase();
 
-    // 1. Signature check
+    // 1. Cryptographic HMAC Signature check with constant-time equality
     let isValid = false;
-    if (keySecret && razorpaySignature) {
+    if (keySecret && razorpaySignature && razorpayOrderId && razorpayPaymentId) {
       const generatedSignature = crypto
         .createHmac('sha256', keySecret)
         .update(`${razorpayOrderId}|${razorpayPaymentId}`)
         .digest('hex');
 
-      isValid = generatedSignature === razorpaySignature;
-    }
+      const genBuf = Buffer.from(generatedSignature);
+      const sigBuf = Buffer.from(razorpaySignature);
 
-    // In TEST mode, allow simulated signatures or fallback
-    if (!isValid && env === 'TEST') {
-      this.logger.warn(`Signature verification accepted in TEST mode for ${razorpayOrderId}`);
-      isValid = true;
+      isValid = genBuf.length === sigBuf.length && crypto.timingSafeEqual(genBuf, sigBuf);
     }
 
     if (!isValid) {
+      this.logger.error(`Invalid Razorpay signature for order ID: ${razorpayOrderId}`);
       throw new BadRequestException('Payment verification failed: Invalid Razorpay signature.');
     }
 
@@ -376,6 +373,24 @@ export class PaymentService implements OnModuleInit {
     });
 
     if (topup) {
+      // Amount and currency validation against Razorpay API
+      if (this.razorpayInstance && !razorpayOrderId.startsWith('order_topup_')) {
+        try {
+          const payment = await this.razorpayInstance.payments.fetch(razorpayPaymentId);
+          if (payment) {
+            if (payment.currency !== 'INR') {
+              throw new BadRequestException('Payment currency must be INR.');
+            }
+            if (Number(payment.amount) !== Number(topup.amount)) {
+              throw new BadRequestException(`Payment amount mismatch. Expected: ${topup.amount}, Received: ${payment.amount}`);
+            }
+          }
+        } catch (err: any) {
+          if (err instanceof BadRequestException) throw err;
+          this.logger.warn(`Could not verify payment amount with Razorpay API for ${razorpayPaymentId}:`, err);
+        }
+      }
+
       return this.processCompletedTopup(topup, razorpayPaymentId, razorpaySignature);
     }
 
@@ -393,6 +408,24 @@ export class PaymentService implements OnModuleInit {
 
     if (!order) {
       throw new NotFoundException(`Order or Top-up not found for Razorpay Order ID: ${razorpayOrderId}`);
+    }
+
+    // Amount and currency validation against Razorpay API
+    if (this.razorpayInstance && !razorpayOrderId.startsWith('order_test_')) {
+      try {
+        const payment = await this.razorpayInstance.payments.fetch(razorpayPaymentId);
+        if (payment) {
+          if (payment.currency !== 'INR') {
+            throw new BadRequestException('Payment currency must be INR.');
+          }
+          if (Number(payment.amount) !== Number(order.totalAmount)) {
+            throw new BadRequestException(`Payment amount mismatch. Expected: ${order.totalAmount}, Received: ${payment.amount}`);
+          }
+        }
+      } catch (err: any) {
+        if (err instanceof BadRequestException) throw err;
+        this.logger.warn(`Could not verify payment amount with Razorpay API for ${razorpayPaymentId}:`, err);
+      }
     }
 
     return this.processCompletedOrder(order, razorpayOrderId, razorpayPaymentId, razorpaySignature);
@@ -511,6 +544,15 @@ export class PaymentService implements OnModuleInit {
     });
 
     if (topup) {
+      // IDOR Authorization check: Only owner or admin can check status
+      if (requestingUser) {
+        const reqUserId = requestingUser.sub || requestingUser.id;
+        const isAdmin = requestingUser.role === 'ADMIN';
+        if (!isAdmin && topup.userId !== reqUserId) {
+          throw new ForbiddenException('Forbidden: You do not have permission to access this top-up payment.');
+        }
+      }
+
       if (topup.status === WalletTopupStatus.COMPLETED) {
         return {
           message: 'Top-up already completed.',
@@ -555,6 +597,15 @@ export class PaymentService implements OnModuleInit {
       throw new NotFoundException(`Order not found for Razorpay Order ID: ${razorpayOrderId}`);
     }
 
+    // IDOR Authorization check: Only order owner or admin can check status
+    if (requestingUser) {
+      const reqUserId = requestingUser.sub || requestingUser.id;
+      const isAdmin = requestingUser.role === 'ADMIN';
+      if (!isAdmin && order.userId !== reqUserId) {
+        throw new ForbiddenException('Forbidden: You do not have permission to access this order payment.');
+      }
+    }
+
     if (order.paymentStatus === PaymentStatus.PAID) {
       return {
         message: 'Payment already confirmed.',
@@ -586,18 +637,36 @@ export class PaymentService implements OnModuleInit {
   }
 
   // ─── 5. Webhook Handling ───────────────────────────────────────────
-  async handleWebhook(payload: any, rawBody?: string, signature?: string): Promise<any> {
+  async handleWebhook(payload: any, rawBody?: string | Buffer, signature?: string): Promise<any> {
     const webhookSecret = this.configService.get<string>('RAZORPAY_WEBHOOK_SECRET');
 
-    if (webhookSecret && signature && rawBody) {
+    // 1. Mandatory signature verification if secret is configured
+    if (webhookSecret) {
+      if (!signature || !rawBody) {
+        this.logger.error('Razorpay Webhook rejected: missing signature header or raw request body');
+        throw new UnauthorizedException('Missing webhook signature or raw payload');
+      }
+
       const expectedSignature = crypto
         .createHmac('sha256', webhookSecret)
         .update(rawBody)
         .digest('hex');
 
-      if (expectedSignature !== signature) {
+      const sigBuf = Buffer.from(signature);
+      const expBuf = Buffer.from(expectedSignature);
+
+      if (sigBuf.length !== expBuf.length || !crypto.timingSafeEqual(sigBuf, expBuf)) {
         this.logger.error('Razorpay Webhook signature verification failed');
-        throw new BadRequestException('Invalid webhook signature');
+        throw new UnauthorizedException('Invalid webhook signature');
+      }
+    } else {
+      // If secret is unset, reject in production
+      if (
+        process.env.NODE_ENV === 'production' ||
+        (this.configService.get<string>('RAZORPAY_ENV') || '').toUpperCase() === 'LIVE'
+      ) {
+        this.logger.error('CRITICAL: RAZORPAY_WEBHOOK_SECRET is missing in production environment');
+        throw new UnauthorizedException('Webhook verification unconfigured in production');
       }
     }
 

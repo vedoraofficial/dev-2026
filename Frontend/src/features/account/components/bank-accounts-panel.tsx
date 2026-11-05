@@ -1,5 +1,5 @@
 import { zodResolver } from "@hookform/resolvers/zod"
-import { Plus } from "lucide-react"
+import { AlertCircle, Plus } from "lucide-react"
 import { useState } from "react"
 import { Controller, useForm } from "react-hook-form"
 
@@ -140,14 +140,23 @@ export function BankAccountsPanel() {
         title="Bank details for payout"
         aside={
           adding ? null : (
-            <Button size="sm" variant="outline" onClick={() => setAdding(true)}>
-              <Plus /> Add account
+            <Button size="sm" variant="outline" disabled title="Bank account addition is currently under development">
+              <Plus /> Add account (Coming Soon)
             </Button>
           )
         }
       />
       <QueryState query={banks} rows={2}>
         <div className="space-y-3">
+          <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3.5 text-xs text-amber-200">
+            <div className="flex items-center gap-2 font-medium text-amber-300">
+              <AlertCircle className="size-4 shrink-0 text-amber-400" />
+              <span>Penny Drop & Bank Verification Under Development</span>
+            </div>
+            <p className="mt-1 leading-relaxed text-muted-foreground">
+              RazorpayX Penny Drop verification and automated payouts are currently under development. Adding and verifying bank accounts will be enabled in an upcoming release.
+            </p>
+          </div>
           {adding ? (
             <AddBankForm first={list.length === 0} onDone={() => setAdding(false)} />
           ) : null}
@@ -192,10 +201,11 @@ export function BankAccountsPanel() {
                   <Button
                     size="sm"
                     variant="outline"
-                    disabled={verify.isPending}
+                    disabled={true}
+                    title="Penny Drop verification is currently under development"
                     onClick={() => verify.mutate(b.id)}
                   >
-                    {verify.isPending && verify.variables === b.id ? "Verifying…" : "Verify now"}
+                    Verify now (Coming Soon)
                   </Button>
                 ) : null}
                 {!b.isPrimary ? (

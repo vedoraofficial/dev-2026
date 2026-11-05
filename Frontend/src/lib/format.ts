@@ -1,12 +1,20 @@
 /** Single place for money / BV / number formatting (Indian digit grouping). */
-const grouped = new Intl.NumberFormat("en-IN", { maximumFractionDigits: 0 })
+const groupedInt = new Intl.NumberFormat("en-IN", { maximumFractionDigits: 0 })
+const groupedDec = new Intl.NumberFormat("en-IN", {
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+})
+const grouped = groupedInt
 
 const trim = (n: number) => Number(n.toFixed(2)).toString()
 
-/** 48600 -> "₹48,600" · -8000 -> "-₹8,000" */
+/** 48600 -> "₹48,600" · 48600.5 -> "₹48,600.50" · -8000 -> "-₹8,000" */
 export function formatINR(amount: number): string {
+  if (isNaN(amount) || !isFinite(amount)) return "₹0"
   const sign = amount < 0 ? "-" : ""
-  return `${sign}₹${grouped.format(Math.abs(amount))}`
+  const abs = Math.abs(amount)
+  const formatter = abs % 1 === 0 ? groupedInt : groupedDec
+  return `${sign}₹${formatter.format(abs)}`
 }
 
 /** +200 -> "+₹200" · -8000 -> "-₹8,000" · 0 -> "₹0" */

@@ -55,13 +55,13 @@ export function AdminWalletPage() {
         title="Wallet"
         subtitle={`₹${ADMIN_COMMISSION_PER_UNIT} is credited automatically for every product sold`}
         actions={
-          <Button
+          <Button variant="outline"
             onClick={() => {
               amountInputRef.current?.scrollIntoView({ behavior: "smooth", block: "center" })
               amountInputRef.current?.focus()
             }}
           >
-            Request withdrawal
+            Request withdrawal <span className="ml-1 text-[0.625rem] font-medium text-amber-400 uppercase tracking-wider">(Coming Soon)</span>
           </Button>
         }
       />
