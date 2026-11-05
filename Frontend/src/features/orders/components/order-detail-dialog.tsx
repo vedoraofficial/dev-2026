@@ -45,7 +45,7 @@ export function OrderDetailDialog({ orderId, onClose, actions, extra }: Props) {
 
   return (
     <Dialog open={orderId !== null} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-h-[90dvh] overflow-y-auto">
+      <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>{orderId ? orderNo(orderId) : "Order"}</DialogTitle>
           <DialogDescription>
