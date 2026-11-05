@@ -44,12 +44,14 @@ const page = (load: () => Promise<Record<string, unknown>>, name: string): Route
 })
 
 export const router = createBrowserRouter([
-  // Public website (static, src/website) — "/" opens its home page; "Partner Login" goes to /login.
+  // Portal branch: opening the site directly ("/") goes to /login, not the marketing home page.
+  // The other website pages (about, products, register, contact...) still work by direct URL.
+  { path: SITE_ROUTES.home, element: <Navigate to={ROUTES.login} replace /> },
+  // Public website (static, src/website) — reachable by direct URL; "Partner Login" goes to /login.
   {
     element: <SiteLayout />,
     ErrorBoundary: RouteError,
     children: [
-      { path: SITE_ROUTES.home, ...page(() => import("@/website/pages/home-page"), "HomePage") },
       { path: SITE_ROUTES.about, ...page(() => import("@/website/pages/about-page"), "AboutPage") },
       {
         path: SITE_ROUTES.products,
