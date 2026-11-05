@@ -26,6 +26,11 @@ import { NotificationKey } from '../notification/notification.constants';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { queueInvoice } from '../invoice/invoice-queue';
 import { AdminCreateCashOrderDto } from './dto/admin-create-cash-order.dto';
+import { SrpService } from '../srp/srp.service';
+import { SrpReason } from '../srp/entity/srp-ledger.entity';
+
+/** SRP (Sales Reward Points) earned per confirmed sale. */
+const SRP_PER_SALE = 2;
 
 /** Commission structure: level → { rate (basis points), category, flat amount in paise or null } */
 const COMMISSION_CONFIG = [
@@ -60,6 +65,7 @@ export class OrderService {
     @Inject(forwardRef(() => WalletService))
     private readonly walletService: WalletService,
     private readonly notificationService: NotificationService,
+    private readonly srpService: SrpService,
   ) {}
 
   // ─── Create Order (Partner) ─────────────────────────────────────────
@@ -282,7 +288,7 @@ export class OrderService {
     }
 
     // Every paid order passes here once — a "pay later" partner's ID becomes active with it.
-    await this.activateIfPending(manager, order.userId, orderId);
+    const wasJustActivated = await this.activateIfPending(manager, order.userId, orderId);
 
     // Get buyer's commission uplines
     const upline = await manager.getRepository(CommissionUpline).findOne({
@@ -309,6 +315,46 @@ export class OrderService {
       where: { userId: order.userId },
     });
     const sponsorUserId = buyerNode?.sponsorUserId ?? null;
+
+    // SRP (Sales Reward Points): 2 SRP to whoever made this sale — the enrolling sponsor on the
+    // partner's first (activating) order, or the buyer themselves on any later order of their own.
+    if (wasJustActivated) {
+      if (sponsorUserId) {
+        await this.srpService.credit(
+          sponsorUserId,
+          SRP_PER_SALE,
+          SrpReason.PARTNER_JOIN_SALE,
+          'ORDER',
+          String(orderId),
+          manager,
+        );
+        await this.notificationService.create(
+          sponsorUserId,
+          NotificationKey.SRP_CREDITED,
+          `${SRP_PER_SALE} SRP credited`,
+          `${SRP_PER_SALE} SRP credited for enrolling a new partner whose order #${orderId} activated their ID.`,
+          { orderId, srp: SRP_PER_SALE, reason: SrpReason.PARTNER_JOIN_SALE },
+          manager,
+        );
+      }
+    } else {
+      await this.srpService.credit(
+        order.userId,
+        SRP_PER_SALE,
+        SrpReason.SELF_PURCHASE,
+        'ORDER',
+        String(orderId),
+        manager,
+      );
+      await this.notificationService.create(
+        order.userId,
+        NotificationKey.SRP_CREDITED,
+        `${SRP_PER_SALE} SRP credited`,
+        `${SRP_PER_SALE} SRP credited for your order #${orderId}.`,
+        { orderId, srp: SRP_PER_SALE, reason: SrpReason.SELF_PURCHASE },
+        manager,
+      );
+    }
 
     // Get buyer info for notifications
     const buyer = await manager.getRepository(User).findOne({ where: { id: order.userId } });
@@ -502,13 +548,13 @@ export class OrderService {
    * now earn and can add partners) and tell them and their sponsor. Deactivated (INACTIVE) or
    * blocked accounts are never switched back on by a payment.
    */
-  private async activateIfPending(manager: EntityManager, userId: number, orderId: number) {
+  private async activateIfPending(manager: EntityManager, userId: number, orderId: number): Promise<boolean> {
     const userRepo = manager.getRepository(User);
     const result = await userRepo.update({ id: userId, status: UserStatus.PENDING }, { status: UserStatus.ACTIVE });
-    if (!result.affected) return;
+    if (!result.affected) return false;
 
     const user = await userRepo.findOne({ where: { id: userId } });
-    if (!user) return;
+    if (!user) return true;
     await this.notificationService.create(
       userId,
       NotificationKey.ACCOUNT_STATUS_CHANGED,
@@ -530,6 +576,7 @@ export class OrderService {
       );
     }
     this.logger.log(`User #${userId} (${user.vedId}) activated by paid order #${orderId}`);
+    return true;
   }
 
   // ─── Confirm Payment (called by PaymentService) ─────────────────────

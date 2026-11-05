@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ConfigModule, ConfigService } from '@nestjs/config';
+import { ScheduleModule } from '@nestjs/schedule';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { UserModule } from './user/user.module';
@@ -18,10 +19,12 @@ import { PayoutModule } from './payout/payout.module';
 import { OnboardingModule } from './onboarding/onboarding.module';
 import { InvoiceModule } from './invoice/invoice.module';
 import { CheckoutModule } from './checkout/checkout.module';
+import { SrpModule } from './srp/srp.module';
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
+    ScheduleModule.forRoot(),
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
@@ -48,6 +51,7 @@ import { CheckoutModule } from './checkout/checkout.module';
     InvoiceModule,
     CheckoutModule,
     EnquiryModule,
+    SrpModule,
   ],
   controllers: [AppController],
   providers: [AppService],

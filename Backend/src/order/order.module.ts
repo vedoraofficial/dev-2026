@@ -9,6 +9,7 @@ import { CommissionUpline } from '../genealogy/entity/commission-upline.entity';
 import { StockMovement } from '../stock/entity/stock-movement.entity';
 import { WalletModule } from '../wallet/wallet.module';
 import { NotificationModule } from '../notification/notification.module';
+import { SrpModule } from '../srp/srp.module';
 import { OrderService } from './order.service';
 import { OrderController } from './order.controller';
 
@@ -25,6 +26,7 @@ import { OrderController } from './order.controller';
     ]),
     forwardRef(() => WalletModule),
     NotificationModule,
+    SrpModule,
   ],
   controllers: [OrderController],
   providers: [OrderService],

@@ -3,7 +3,17 @@ import { MonoId } from "@/components/common/mono-id"
 import { PageBody, PageHeader } from "@/components/common/page-header"
 import { Panel, PanelHeader } from "@/components/common/panel"
 import { ProgressBar } from "@/components/common/progress-bar"
+import { QueryState } from "@/components/common/query-state"
+import { useSrpLedger, useSrpSummary } from "@/features/srp/queries"
+import type { SrpLedgerEntry } from "@/features/srp/types"
+import { formatDateTime } from "@/lib/date"
 import { cn } from "@/lib/utils"
+
+const REASON_LABEL: Record<SrpLedgerEntry["reason"], string> = {
+  PARTNER_JOIN_SALE: "Partner joined & activated",
+  SELF_PURCHASE: "Product purchase",
+  MONTHLY_AUTO_DEDUCT: "No sale — auto-deducted",
+}
 
 export type SrpLedgerRow = {
   id: string
@@ -54,13 +64,31 @@ const columns: Column<SrpLedgerRow>[] = [
 ]
 
 export function PartnerSrpWalletPage() {
-  const balance = 0
+  const summary = useSrpSummary()
+  const ledger = useSrpLedger()
+
   const maxSrp = 50
-  const earned = 0
-  const redeemed = 0
-  const monthsRedeemable = Math.floor(balance / 10)
-  const ledgerRows: SrpLedgerRow[] = []
-  const activationTimeline: { month: string; note: string; status: string; tone: "neutral" | "success" | "pending" }[] = []
+  const balance = summary.data?.balance ?? 0
+  const earned = summary.data?.totalEarned ?? 0
+  const redeemed = summary.data?.totalRedeemed ?? 0
+  const monthsRedeemable = summary.data?.monthsRedeemable ?? 0
+
+  const ledgerRows: SrpLedgerRow[] = (ledger.data ?? []).map((r) => ({
+    id: String(r.id),
+    date: formatDateTime(r.createdAt),
+    event: REASON_LABEL[r.reason] ?? r.reason,
+    reference: r.referenceType && r.referenceId ? `${r.referenceType} #${r.referenceId}` : "—",
+    change: r.type === "EARN" ? r.amount : -r.amount,
+    balance: r.balanceAfter,
+  }))
+
+  const activationTimeline = (ledger.data ?? [])
+    .filter((r) => r.reason === "MONTHLY_AUTO_DEDUCT")
+    .map((r) => ({
+      month: formatDateTime(r.createdAt),
+      note: "No sale that month — 10 SRP auto-deducted to stay active",
+      status: "Auto-renewed",
+    }))
 
   return (
     <>
@@ -68,6 +96,7 @@ export function PartnerSrpWalletPage() {
       <PageBody>
         <div className="grid gap-4 md:gap-5 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
           <Panel className="md:p-6">
+            <QueryState query={summary} rows={2}>
             <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-3">
               <div>
                 <p className="eyebrow text-gold">SRP balance</p>
@@ -119,6 +148,7 @@ export function PartnerSrpWalletPage() {
               bracelet sale. If you make no sale in a month and hold 10 SRP or more, the system
               deducts 10 SRP automatically and keeps your ID active for the next month.
             </p>
+            </QueryState>
           </Panel>
 
           <Panel>
@@ -138,18 +168,7 @@ export function PartnerSrpWalletPage() {
                       <p className="text-[0.875rem] font-medium">{m.month}</p>
                       <p className="text-[0.6875rem] text-muted-foreground">{m.note}</p>
                     </div>
-                    {m.tone === "neutral" ? (
-                      <span className="text-xs text-muted-foreground">{m.status}</span>
-                    ) : (
-                      <span
-                        className={cn(
-                          "text-xs font-medium",
-                          m.tone === "success" ? "text-success" : "text-warning",
-                        )}
-                      >
-                        {m.status}
-                      </span>
-                    )}
+                    <span className="text-xs font-medium text-success">{m.status}</span>
                   </li>
                 ))}
               </ul>
@@ -166,12 +185,14 @@ export function PartnerSrpWalletPage() {
               </span>
             }
           />
+          <QueryState query={ledger}>
           <DataTable
             columns={columns}
             rows={ledgerRows}
             getRowKey={(r) => r.id}
             emptyMessage="No SRP transactions recorded yet."
           />
+          </QueryState>
         </Panel>
       </PageBody>
     </>
