@@ -577,9 +577,9 @@ export class OnboardingService implements OnModuleInit, ExternalPaymentHandler {
       }),
     );
 
-    // Paid joining order → the partner is active (and can earn on their own team).
-    await manager.getRepository(User).update(params.partnerId, { status: UserStatus.ACTIVE });
-
+    // Paid joining order → the partner is active (and can earn on their own team). Activation
+    // happens inside distributeCommissions (not here) so it can tell this was the partner's first
+    // paid order — that's what credits the sponsor's 2 SRP for the sale, not the new partner's own.
     await this.orderService.distributeCommissions(Number(order.id), manager);
 
     await this.notificationService.create(
