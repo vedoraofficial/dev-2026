@@ -10,6 +10,7 @@ import { StockMovement } from '../stock/entity/stock-movement.entity';
 import { WalletModule } from '../wallet/wallet.module';
 import { NotificationModule } from '../notification/notification.module';
 import { SrpModule } from '../srp/srp.module';
+import { BvModule } from '../bv/bv.module';
 import { OrderService } from './order.service';
 import { OrderController } from './order.controller';
 
@@ -27,6 +28,7 @@ import { OrderController } from './order.controller';
     forwardRef(() => WalletModule),
     NotificationModule,
     SrpModule,
+    BvModule,
   ],
   controllers: [OrderController],
   providers: [OrderService],

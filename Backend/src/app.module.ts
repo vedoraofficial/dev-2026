@@ -20,6 +20,7 @@ import { OnboardingModule } from './onboarding/onboarding.module';
 import { InvoiceModule } from './invoice/invoice.module';
 import { CheckoutModule } from './checkout/checkout.module';
 import { SrpModule } from './srp/srp.module';
+import { BvModule } from './bv/bv.module';
 
 @Module({
   imports: [
@@ -52,6 +53,7 @@ import { SrpModule } from './srp/srp.module';
     CheckoutModule,
     EnquiryModule,
     SrpModule,
+    BvModule,
   ],
   controllers: [AppController],
   providers: [AppService],
