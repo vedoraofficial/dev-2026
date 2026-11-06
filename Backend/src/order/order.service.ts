@@ -28,6 +28,7 @@ import { queueInvoice } from '../invoice/invoice-queue';
 import { AdminCreateCashOrderDto } from './dto/admin-create-cash-order.dto';
 import { SrpService } from '../srp/srp.service';
 import { SrpReason } from '../srp/entity/srp-ledger.entity';
+import { BvService } from '../bv/bv.service';
 
 /** SRP (Sales Reward Points) earned per confirmed sale. */
 const SRP_PER_SALE = 2;
@@ -66,6 +67,7 @@ export class OrderService {
     private readonly walletService: WalletService,
     private readonly notificationService: NotificationService,
     private readonly srpService: SrpService,
+    private readonly bvService: BvService,
   ) {}
 
   // ─── Create Order (Partner) ─────────────────────────────────────────
@@ -471,34 +473,17 @@ export class OrderService {
       );
     }
 
-    // ─── Task 5: 1 BV = ₹1 credited to purchasing user's wallet ────────────
+    // ─── Task 5: BV points (not money) to the sponsor who added this buyer ─────
     const bvTotalNum = Number(order.bvTotal);
-    if (bvTotalNum > 0) {
-      const bvPaise = bvTotalNum * 100; // 1 BV = 100 paise (₹1)
-      const bvTxn = await this.walletService.credit(
-        order.userId,
-        bvPaise,
-        TransactionCategory.COMMISSION_LEVEL_1,
-        `BV Earnings: ${bvTotalNum} BV credited as ₹${bvTotalNum} for Order #${orderId}`,
-        'ORDER',
-        String(orderId),
-        manager,
-      );
-
-      await this.recordLevelZeroDistribution(commissionRepo, {
-        orderId,
-        beneficiaryUserId: order.userId,
-        commissionRate: 10000, // 100% (1 BV = ₹1)
-        amount: bvPaise,
-        walletTransactionId: bvTxn ? Number(bvTxn.id) : null,
-      });
+    if (bvTotalNum > 0 && sponsorUserId) {
+      await this.bvService.credit(sponsorUserId, bvTotalNum, order.userId, 'ORDER', String(orderId), manager);
 
       await this.notificationService.create(
-        order.userId,
-        NotificationKey.COMMISSION_CREDITED,
-        `₹${bvTotalNum} BV earnings credited`,
-        `Your order #${orderId} generated ${bvTotalNum} BV, credited as ₹${bvTotalNum} to your wallet.`,
-        { orderId: Number(order.id), totalPaise: bvPaise, bv: bvTotalNum },
+        sponsorUserId,
+        NotificationKey.BV_CREDITED,
+        `${bvTotalNum} BV credited`,
+        `${buyerName}'s order #${orderId} earned you ${bvTotalNum} BV.`,
+        { orderId: Number(order.id), bv: bvTotalNum },
         manager,
       );
     }

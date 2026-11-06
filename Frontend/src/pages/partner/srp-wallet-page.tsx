@@ -1,9 +1,14 @@
+import { useState } from "react"
+
 import { DataTable, type Column } from "@/components/common/data-table"
+import { FilterTabs } from "@/components/common/filter-tabs"
 import { MonoId } from "@/components/common/mono-id"
 import { PageBody, PageHeader } from "@/components/common/page-header"
 import { Panel, PanelHeader } from "@/components/common/panel"
 import { ProgressBar } from "@/components/common/progress-bar"
 import { QueryState } from "@/components/common/query-state"
+import { useBvLedger, useBvSummary } from "@/features/bv/queries"
+import type { BvLedgerEntry } from "@/features/bv/types"
 import { useSrpLedger, useSrpSummary } from "@/features/srp/queries"
 import type { SrpLedgerEntry } from "@/features/srp/types"
 import { formatDateTime } from "@/lib/date"
@@ -63,9 +68,41 @@ const columns: Column<SrpLedgerRow>[] = [
   },
 ]
 
+export type BvLedgerRow = {
+  id: string
+  date: string
+  from: string
+  change: number
+  balance: number
+}
+
+const bvColumns: Column<BvLedgerRow>[] = [
+  {
+    key: "date",
+    header: "Date",
+    cell: (r) => <span className="text-muted-foreground">{r.date}</span>,
+  },
+  { key: "from", header: "From partner", primary: true, cell: (r) => <span className="font-medium">{r.from}</span> },
+  {
+    key: "change",
+    header: "BV",
+    cell: (r) => <span className="font-mono text-success">+{r.change}</span>,
+  },
+  {
+    key: "balance",
+    header: "Balance",
+    align: "right",
+    cell: (r) => <span className="font-mono">{r.balance}</span>,
+  },
+]
+
 export function PartnerSrpWalletPage() {
+  const [tab, setTab] = useState<"srp" | "bv">("srp")
+
   const summary = useSrpSummary()
   const ledger = useSrpLedger()
+  const bvSummary = useBvSummary()
+  const bvLedger = useBvLedger()
 
   const maxSrp = 50
   const balance = summary.data?.balance ?? 0
@@ -82,6 +119,15 @@ export function PartnerSrpWalletPage() {
     balance: r.balanceAfter,
   }))
 
+  const bvBalance = bvSummary.data?.balance ?? 0
+  const bvLedgerRows: BvLedgerRow[] = (bvLedger.data ?? []).map((r: BvLedgerEntry) => ({
+    id: String(r.id),
+    date: formatDateTime(r.createdAt),
+    from: r.fromUser ? `${r.fromUser.name} (${r.fromUser.vedId})` : "—",
+    change: r.amount,
+    balance: r.balanceAfter,
+  }))
+
   const activationTimeline = (ledger.data ?? [])
     .filter((r) => r.reason === "MONTHLY_AUTO_DEDUCT")
     .map((r) => ({
@@ -92,8 +138,56 @@ export function PartnerSrpWalletPage() {
 
   return (
     <>
-      <PageHeader title="SRP Wallet" subtitle="Sales Reward Points · 2 SRP per confirmed sale" />
+      <PageHeader
+        title={tab === "bv" ? "BV Wallet" : "SRP Wallet"}
+        subtitle={
+          tab === "bv"
+            ? "Business Volume points · credited when a partner you added places an order"
+            : "Sales Reward Points · 2 SRP per confirmed sale"
+        }
+        actions={
+          <FilterTabs
+            aria-label="SRP or BV"
+            value={tab}
+            onValueChange={(v) => setTab(v as typeof tab)}
+            tabs={[
+              { value: "srp", label: "SRP" },
+              { value: "bv", label: "BV" },
+            ]}
+            className="mr-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden [&_button]:text-sm [&_button]:font-semibold"
+          />
+        }
+      />
       <PageBody>
+        {tab === "bv" ? (
+          <>
+            <Panel className="md:p-6">
+              <QueryState query={bvSummary} rows={2}>
+                <p className="eyebrow text-gold">BV balance</p>
+                <p className="mt-2 font-display text-5xl leading-none md:text-6xl">
+                  {bvBalance} <span className="text-2xl text-muted-foreground">BV</span>
+                </p>
+                <p className="mt-5 border-t border-border/70 pt-4 text-xs leading-relaxed text-muted-foreground">
+                  You earn BV when a partner you personally added places an order — the BV from
+                  their order's product. It's a points count only, not money.
+                </p>
+              </QueryState>
+            </Panel>
+
+            <Panel>
+              <PanelHeader title="BV ledger" />
+              <QueryState query={bvLedger}>
+                <DataTable
+                  columns={bvColumns}
+                  rows={bvLedgerRows}
+                  getRowKey={(r) => r.id}
+                  emptyMessage="No BV earned yet — it credits when a partner you added places an order."
+                />
+              </QueryState>
+            </Panel>
+          </>
+        ) : (
+        <>
         <div className="grid gap-4 md:gap-5 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
           <Panel className="md:p-6">
             <QueryState query={summary} rows={2}>
@@ -194,6 +288,8 @@ export function PartnerSrpWalletPage() {
           />
           </QueryState>
         </Panel>
+        </>
+        )}
       </PageBody>
     </>
   )
