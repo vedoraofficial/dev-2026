@@ -312,6 +312,7 @@ export function AdminOrdersPage() {
       <OrderDetailDialog
         orderId={openId}
         onClose={() => setOpenId(null)}
+        showCommissions
         extra={(o) => (hasShipment(o) ? <OrderTrackingSection orderId={o.id} /> : null)}
         actions={(o) => (
           <>

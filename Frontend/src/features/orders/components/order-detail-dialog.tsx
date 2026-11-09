@@ -36,10 +36,12 @@ type Props = {
   actions?: (order: OrderDetail) => ReactNode
   /** More sections under the commission split, e.g. shipment tracking */
   extra?: (order: OrderDetail) => ReactNode
+  /** Admin-only: who earned what on this order. Partners/Founders never see this. */
+  showCommissions?: boolean
 }
 
-/** GET /api/order/:id — the order, its payment and the commission split. */
-export function OrderDetailDialog({ orderId, onClose, actions, extra }: Props) {
+/** GET /api/order/:id — the order, its payment and (Admin only) the commission split. */
+export function OrderDetailDialog({ orderId, onClose, actions, extra, showCommissions = false }: Props) {
   const order = useOrder(orderId)
   const o = order.data
 
@@ -87,38 +89,40 @@ export function OrderDetailDialog({ orderId, onClose, actions, extra }: Props) {
                 </div>
               </dl>
 
-              <div>
-                <p className="mb-2 eyebrow">Commission split</p>
-                {o.commissions.length === 0 ? (
-                  <p className="text-xs text-muted-foreground">
-                    {o.commissionsDistributed
-                      ? "No uplines earned on this order."
-                      : "Commissions go out once the payment is confirmed."}
-                  </p>
-                ) : (
-                  <ul className="divide-y divide-border/70 rounded-xl border border-border">
-                    {o.commissions.map((c) => (
-                      <li
-                        key={`${c.level}-${c.beneficiary.vedId}`}
-                        className="flex items-center justify-between gap-3 px-3.5 py-2.5 text-[0.8125rem]"
-                      >
-                        <span>
-                          {c.level === 0 ? "Direct" : `L${c.level}`} · {c.beneficiary.name}{" "}
-                          <MonoId tone="muted" className="text-[0.6875rem]">
-                            {c.beneficiary.vedId}
-                          </MonoId>
-                        </span>
-                        <span className="font-mono text-success">
-                          {formatINR(paiseToRupees(c.amount))}
-                          <span className="ml-1 text-[0.6875rem] text-muted-foreground">
-                            ({c.commissionRate})
+              {showCommissions ? (
+                <div>
+                  <p className="mb-2 eyebrow">Commission split</p>
+                  {o.commissions.length === 0 ? (
+                    <p className="text-xs text-muted-foreground">
+                      {o.commissionsDistributed
+                        ? "No uplines earned on this order."
+                        : "Commissions go out once the payment is confirmed."}
+                    </p>
+                  ) : (
+                    <ul className="divide-y divide-border/70 rounded-xl border border-border">
+                      {o.commissions.map((c) => (
+                        <li
+                          key={`${c.level}-${c.beneficiary.vedId}`}
+                          className="flex items-center justify-between gap-3 px-3.5 py-2.5 text-[0.8125rem]"
+                        >
+                          <span>
+                            {c.level === 0 ? "Direct" : `L${c.level}`} · {c.beneficiary.name}{" "}
+                            <MonoId tone="muted" className="text-[0.6875rem]">
+                              {c.beneficiary.vedId}
+                            </MonoId>
                           </span>
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
+                          <span className="font-mono text-success">
+                            {formatINR(paiseToRupees(c.amount))}
+                            <span className="ml-1 text-[0.6875rem] text-muted-foreground">
+                              ({c.commissionRate})
+                            </span>
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              ) : null}
 
               {extra ? extra(o) : null}
             </div>
