@@ -31,6 +31,26 @@ export type NetworkMember = {
   team: number
   /** When they joined — Founders (added here, not from the API) have none */
   joinedAt?: string
+  // Registration details (no password/OTP) — for the Admin › Partners CSV export. Founders (added
+  // here, not from the API) have none.
+  pan?: string | null
+  aadhaar?: string | null
+  dateOfBirth?: string | null
+  gender?: string | null
+  addressLine1?: string | null
+  addressLine2?: string | null
+  city?: string | null
+  state?: string | null
+  pincode?: string | null
+  // Their joining order's shipping address — null/missing when it shipped to the address above
+  shippingName?: string | null
+  shippingMobile?: string | null
+  shippingAddressLine1?: string | null
+  shippingLandmark?: string | null
+  shippingArea?: string | null
+  shippingCity?: string | null
+  shippingState?: string | null
+  shippingPincode?: string | null
 }
 
 /**
@@ -81,6 +101,23 @@ async function crawlTeams(
           direct: 0,
           team: 0,
           joinedAt: p.joinedAt,
+          pan: p.pan,
+          aadhaar: p.aadhaar,
+          dateOfBirth: p.dateOfBirth,
+          gender: p.gender,
+          addressLine1: p.addressLine1,
+          addressLine2: p.addressLine2,
+          city: p.city,
+          state: p.state,
+          pincode: p.pincode,
+          shippingName: p.shippingName,
+          shippingMobile: p.shippingMobile,
+          shippingAddressLine1: p.shippingAddressLine1,
+          shippingLandmark: p.shippingLandmark,
+          shippingArea: p.shippingArea,
+          shippingCity: p.shippingCity,
+          shippingState: p.shippingState,
+          shippingPincode: p.shippingPincode,
         }
         members.set(p.vedId, member)
         if (member.level < maxLevel) next.push(member)

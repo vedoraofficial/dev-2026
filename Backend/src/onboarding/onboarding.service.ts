@@ -43,6 +43,33 @@ const JOINING_ORDER_HERE = { withJoiningOrder: false };
 
 const formatPaise = (paise: number) => `₹${(Number(paise) / 100).toFixed(2)}`;
 
+/** The joining order's shipping address fields, as stored on `Order`. */
+type ShippingFields = Pick<
+  Order,
+  | 'shippingName'
+  | 'shippingMobile'
+  | 'shippingAddressLine1'
+  | 'shippingLandmark'
+  | 'shippingArea'
+  | 'shippingCity'
+  | 'shippingState'
+  | 'shippingPincode'
+>;
+
+/** Picks the joining order's shipping fields out of the registration details — undefined ones stay null (ships to the partner's own address). */
+function shippingFieldsOf(details: RegistrationDetails): ShippingFields {
+  return {
+    shippingName: details.shippingName ?? null,
+    shippingMobile: details.shippingMobile ?? null,
+    shippingAddressLine1: details.shippingAddressLine1 ?? null,
+    shippingLandmark: details.shippingLandmark ?? null,
+    shippingArea: details.shippingArea ?? null,
+    shippingCity: details.shippingCity ?? null,
+    shippingState: details.shippingState ?? null,
+    shippingPincode: details.shippingPincode ?? null,
+  };
+}
+
 /**
  * Add Partner with a paid joining order: the sponsor pays from their wallet or with Razorpay, and
  * the partner (plus a PAID order in the partner's name, ready to ship) is created only once the
@@ -131,6 +158,7 @@ export class OnboardingService implements OnModuleInit, ExternalPaymentHandler {
             paymentMethod: PaymentMethod.RAZORPAY,
             paymentStatus: PaymentStatus.PENDING,
             orderStatus: OrderStatus.PENDING,
+            ...shippingFieldsOf(details),
           }),
         );
 
@@ -263,6 +291,7 @@ export class OnboardingService implements OnModuleInit, ExternalPaymentHandler {
           quantity,
           paymentMethod: PaymentMethod.WALLET,
           note: `Joining order for ${registered.partner.vedId} (paid from sponsor wallet)`,
+          shipping: shippingFieldsOf(details),
         });
         await manager
           .getRepository(WalletTransaction)
@@ -399,6 +428,7 @@ export class OnboardingService implements OnModuleInit, ExternalPaymentHandler {
           razorpayOrderId: row.razorpayOrderId,
           razorpayPaymentId,
           note: `Joining order for ${registered.partner.vedId} (Razorpay)`,
+          shipping: shippingFieldsOf(row.details as RegistrationDetails),
         });
 
         row.status = PendingRegistrationStatus.COMPLETED;
@@ -545,6 +575,7 @@ export class OnboardingService implements OnModuleInit, ExternalPaymentHandler {
       razorpayOrderId?: string;
       razorpayPaymentId?: string | null;
       note: string;
+      shipping?: ShippingFields;
     },
   ): Promise<Order> {
     const product = await this.orderableProduct(manager, params.productId, params.quantity);
@@ -564,6 +595,7 @@ export class OnboardingService implements OnModuleInit, ExternalPaymentHandler {
         orderStatus: OrderStatus.CONFIRMED,
         razorpayOrderId: params.razorpayOrderId ?? null,
         razorpayPaymentId: params.razorpayPaymentId ?? null,
+        ...params.shipping,
       }),
     );
 

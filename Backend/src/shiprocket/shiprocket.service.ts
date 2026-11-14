@@ -8,7 +8,7 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { DataSource, Repository } from 'typeorm';
 import { Shipment, ShipmentStatus, TrackingActivity } from './entity/shipment.entity';
 import { Order, OrderStatus } from '../order/entity/order.entity';
 import { CreateShipmentDto } from './dto/create-shipment.dto';
@@ -31,6 +31,7 @@ export class ShiprocketService {
   private tokenExpiresAt: number = 0;
 
   constructor(
+    private readonly dataSource: DataSource,
     private readonly configService: ConfigService,
     @InjectRepository(Shipment)
     private readonly shipmentRepo: Repository<Shipment>,
@@ -128,6 +129,15 @@ export class ShiprocketService {
 
     const token = await this.getAuthToken();
 
+    // The joining order can ship somewhere other than the buyer's own (billing) address — set at
+    // registration time (see RegisterWithOrderDto.shipping*). Falls back to the billing address.
+    const hasCustomShipping = !!(
+      order.shippingAddressLine1 &&
+      order.shippingCity &&
+      order.shippingState &&
+      order.shippingPincode
+    );
+
     // 1. Create Order in Shiprocket
     const orderDate = new Date(order.createdAt).toISOString().replace('T', ' ').substring(0, 19);
     const orderPayload = {
@@ -144,7 +154,21 @@ export class ShiprocketService {
       billing_country: 'India',
       billing_email: order.user.email,
       billing_phone: order.user.mobile,
-      shipping_is_billing: true,
+      shipping_is_billing: !hasCustomShipping,
+      ...(hasCustomShipping
+        ? {
+            shipping_customer_name: order.shippingName || order.user.name,
+            shipping_last_name: '',
+            shipping_address: order.shippingAddressLine1,
+            shipping_address_2: [order.shippingLandmark, order.shippingArea].filter(Boolean).join(', '),
+            shipping_city: order.shippingCity,
+            shipping_pincode: order.shippingPincode,
+            shipping_state: order.shippingState,
+            shipping_country: 'India',
+            shipping_email: order.user.email,
+            shipping_phone: order.shippingMobile || order.user.mobile,
+          }
+        : {}),
       order_items: [
         {
           name: order.product.name,
@@ -215,29 +239,41 @@ export class ShiprocketService {
       this.logger.warn(`AWB assignment warning: ${awbErr.message}`);
     }
 
-    // 3. Save Shipment in Database
-    let shipment = order.shipment;
-    if (!shipment) {
-      shipment = this.shipmentRepo.create({
-        orderId: order.id,
-      });
-    }
+    // 3. Save Shipment + update Order status together — both or neither, so a crash mid-save
+    // (e.g. the dev server hot-reloading) can never leave the AWB saved but the order status stale.
+    // Plain .update()/.insert() with column values only — Shipment's `order` is a @JoinColumn
+    // relation, and TypeORM's save() resolves order_id from that relation object rather than the
+    // plain orderId column; an entity eager-loaded outside this transaction can carry a stale/unset
+    // relation and save() would then null out order_id on an existing row. Bypassing save() avoids
+    // that resolution entirely.
+    const shipmentColumns = {
+      shiprocketOrderId: srOrderId,
+      shiprocketShipmentId: srShipmentId,
+      awbCode,
+      courierName,
+      courierCompanyId,
+      currentStatus: awbCode ? ShipmentStatus.AWB_ASSIGNED : ShipmentStatus.NEW,
+      trackingUrl: awbCode ? `https://shiprocket.co/tracking/${awbCode}` : null,
+    };
 
-    shipment.shiprocketOrderId = srOrderId;
-    shipment.shiprocketShipmentId = srShipmentId;
-    shipment.awbCode = awbCode;
-    shipment.courierName = courierName;
-    shipment.courierCompanyId = courierCompanyId;
-    shipment.currentStatus = awbCode ? ShipmentStatus.AWB_ASSIGNED : ShipmentStatus.NEW;
-    shipment.trackingUrl = awbCode ? `https://shiprocket.co/tracking/${awbCode}` : null;
+    return this.dataSource.transaction(async (manager) => {
+      const shipmentRepo = manager.getRepository(Shipment);
+      let shipmentId = order.shipment?.id;
 
-    const savedShipment = await this.shipmentRepo.save(shipment);
+      if (shipmentId) {
+        await shipmentRepo.update(shipmentId, shipmentColumns);
+      } else {
+        const inserted = await shipmentRepo.insert({ orderId: order.id, ...shipmentColumns });
+        shipmentId = inserted.identifiers[0].id;
+      }
 
-    // Update Order status to SHIPPED or PROCESSING
-    order.orderStatus = awbCode ? OrderStatus.SHIPPED : OrderStatus.PROCESSING;
-    await this.orderRepo.save(order);
+      // Update Order status to SHIPPED or PROCESSING
+      await manager
+        .getRepository(Order)
+        .update(order.id, { orderStatus: awbCode ? OrderStatus.SHIPPED : OrderStatus.PROCESSING });
 
-    return savedShipment;
+      return (await shipmentRepo.findOneByOrFail({ id: shipmentId })) as Shipment;
+    });
   }
 
   /**

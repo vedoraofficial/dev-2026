@@ -100,6 +100,34 @@ export class Order {
   @Column({ name: 'created_by_admin_id', type: 'int', nullable: true })
   createdByAdminId: number | null;
 
+  /**
+   * Where this order ships, when it differs from the buyer's own profile address (e.g. a joining
+   * order placed for someone else). Null means the shipment uses the buyer's profile address.
+   */
+  @Column({ name: 'shipping_name', type: 'varchar', length: 150, nullable: true })
+  shippingName: string | null;
+
+  @Column({ name: 'shipping_mobile', type: 'varchar', length: 20, nullable: true })
+  shippingMobile: string | null;
+
+  @Column({ name: 'shipping_address_line1', type: 'varchar', length: 255, nullable: true })
+  shippingAddressLine1: string | null;
+
+  @Column({ name: 'shipping_landmark', type: 'varchar', length: 255, nullable: true })
+  shippingLandmark: string | null;
+
+  @Column({ name: 'shipping_area', type: 'varchar', length: 150, nullable: true })
+  shippingArea: string | null;
+
+  @Column({ name: 'shipping_city', type: 'varchar', length: 100, nullable: true })
+  shippingCity: string | null;
+
+  @Column({ name: 'shipping_state', type: 'varchar', length: 100, nullable: true })
+  shippingState: string | null;
+
+  @Column({ name: 'shipping_pincode', type: 'varchar', length: 20, nullable: true })
+  shippingPincode: string | null;
+
   @OneToOne(() => Shipment, shipment => shipment.order)
   shipment: Shipment;
 

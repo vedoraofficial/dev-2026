@@ -24,8 +24,22 @@ import { WalletTransaction, TransactionCategory } from '../wallet/entity/wallet-
 import { JoinPartnerDto } from './dto/join-partner.dto';
 import { RegisterPartnerBySponsorDto } from './dto/register-partner-by-sponsor.dto';
 
-/** What a registration needs; the password can be left out when a hash is passed instead. */
-export type RegistrationDetails = Omit<RegisterPartnerBySponsorDto, 'password'> & { password?: string };
+/**
+ * What a registration needs; the password can be left out when a hash is passed instead. The
+ * shipping* fields are for the joining order, not the partner's own profile — left out, the order
+ * ships to the partner's registered address instead.
+ */
+export type RegistrationDetails = Omit<RegisterPartnerBySponsorDto, 'password'> & {
+  password?: string;
+  shippingName?: string;
+  shippingMobile?: string;
+  shippingAddressLine1?: string;
+  shippingLandmark?: string;
+  shippingArea?: string;
+  shippingCity?: string;
+  shippingState?: string;
+  shippingPincode?: string;
+};
 
 /** Shown when a PAN card is already linked to another VEDORA ID */
 export const PAN_TAKEN_MESSAGE = 'This PAN card is already registered with another VEDORA ID. One PAN card can be used for only one ID.';
@@ -344,22 +358,57 @@ export class GenealogyService {
     // Direct children (max 20) under this user
     const directChildren = await this.nodeRepo.find({
       where: { parentUserId: user.id },
-      relations: { user: true },
+      relations: { user: { profile: true } },
       order: { slotNumber: 'ASC' },
     });
 
-    return directChildren.map((child) => ({
-      id: child.user.id,
-      vedId: child.user.vedId,
-      name: child.user.name,
-      email: child.user.email,
-      mobile: child.user.mobile,
-      slotNumber: child.slotNumber,
-      depth: child.depth,
-      status: child.placementStatus,
-      // When they joined (placed in the tree) — Admin › Partners filters by it
-      joinedAt: child.createdAt,
-    }));
+    // Each one's joining order (their earliest order) — its shipping* fields, when the joining
+    // order shipped somewhere other than the registered address. Null means it shipped there.
+    const childUserIds = directChildren.map((c) => c.user.id);
+    const joiningOrders: any[] = childUserIds.length
+      ? await this.dataSource.query(
+          `SELECT DISTINCT ON (user_id) user_id, shipping_name, shipping_mobile, shipping_address_line1,
+                  shipping_landmark, shipping_area, shipping_city, shipping_state, shipping_pincode
+           FROM orders WHERE user_id = ANY($1) ORDER BY user_id, created_at ASC`,
+          [childUserIds],
+        )
+      : [];
+    const shippingByUserId = new Map(joiningOrders.map((o) => [Number(o.user_id), o]));
+
+    return directChildren.map((child) => {
+      const shipping = shippingByUserId.get(child.user.id);
+      return {
+        id: child.user.id,
+        vedId: child.user.vedId,
+        name: child.user.name,
+        email: child.user.email,
+        mobile: child.user.mobile,
+        pan: child.user.panNumber,
+        aadhaar: child.user.aadhaar,
+        slotNumber: child.slotNumber,
+        depth: child.depth,
+        status: child.placementStatus,
+        // When they joined (placed in the tree) — Admin › Partners filters by it
+        joinedAt: child.createdAt,
+        // Registration details (not password/OTP) — for the Admin › Partners CSV export
+        dateOfBirth: child.user.profile?.dateOfBirth ?? null,
+        gender: child.user.profile?.gender ?? null,
+        addressLine1: child.user.profile?.addressLine1 ?? null,
+        addressLine2: child.user.profile?.addressLine2 ?? null,
+        city: child.user.profile?.city ?? null,
+        state: child.user.profile?.state ?? null,
+        pincode: child.user.profile?.pincode ?? null,
+        // The joining order's shipping address — null when it shipped to the address above
+        shippingName: shipping?.shipping_name ?? null,
+        shippingMobile: shipping?.shipping_mobile ?? null,
+        shippingAddressLine1: shipping?.shipping_address_line1 ?? null,
+        shippingLandmark: shipping?.shipping_landmark ?? null,
+        shippingArea: shipping?.shipping_area ?? null,
+        shippingCity: shipping?.shipping_city ?? null,
+        shippingState: shipping?.shipping_state ?? null,
+        shippingPincode: shipping?.shipping_pincode ?? null,
+      };
+    });
   }
 
   /** True if `userId` sits anywhere below `ancestorId` (walks parent_user_id upwards). */
@@ -615,6 +664,7 @@ export class GenealogyService {
         email: dto.email,
         mobile: dto.mobile,
         panNumber: dto.pan ?? null,
+        aadhaar: dto.aadhaar ?? null,
         passwordHash: passwordHash ?? (await bcrypt.hash(dto.password as string, 10)),
         role: UserRole.PARTNER,
         status: UserStatus.PENDING,

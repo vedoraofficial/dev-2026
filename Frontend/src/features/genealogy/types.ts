@@ -8,11 +8,30 @@ export type DirectPartner = {
   name: string
   email: string
   mobile: string
+  pan: string | null
+  aadhaar: string | null
   slotNumber: number
   depth: number
   status: string
   /** When they were placed in the tree (joined) */
   joinedAt?: string
+  // Registration details (no password/OTP) — for the Admin › Partners CSV export
+  dateOfBirth: string | null
+  gender: Gender | null
+  addressLine1: string | null
+  addressLine2: string | null
+  city: string | null
+  state: string | null
+  pincode: string | null
+  // Their joining order's shipping address — null when it shipped to the address above
+  shippingName: string | null
+  shippingMobile: string | null
+  shippingAddressLine1: string | null
+  shippingLandmark: string | null
+  shippingArea: string | null
+  shippingCity: string | null
+  shippingState: string | null
+  shippingPincode: string | null
 }
 
 type UserRef = { id: number; vedId: string; name: string }
