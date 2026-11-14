@@ -37,6 +37,7 @@ import {
   copyRegisteredToShipping,
   panErrorMessage,
   partnerDetailsPayload,
+  shippingPayload,
 } from "@/features/placement/partner-details"
 import { useRegisterWithOrder } from "@/features/placement/queries"
 import {
@@ -230,6 +231,7 @@ export function PartnerManualPlacementPage() {
     registerWithOrder.mutate(
       {
         ...partnerDetailsPayload(values),
+        ...shippingPayload(values),
         slotNumber: values.slot,
         parentVedId: underMe ? undefined : upline,
         productId,

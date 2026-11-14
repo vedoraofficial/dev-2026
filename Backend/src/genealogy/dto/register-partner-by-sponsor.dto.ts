@@ -6,6 +6,9 @@ import { Gender } from '../../user/dto/profile-details.dto';
 /** PAN card format: 5 letters, 4 digits, 1 letter */
 export const PAN_PATTERN = /^[A-Z]{5}\d{4}[A-Z]$/;
 
+/** Aadhaar: 12 digits */
+export const AADHAAR_PATTERN = /^\d{12}$/;
+
 export class RegisterPartnerBySponsorDto {
   @ApiProperty({ example: 'Alice Smith', description: 'Full name of the new partner' })
   @IsString()
@@ -27,6 +30,12 @@ export class RegisterPartnerBySponsorDto {
   @Matches(PAN_PATTERN, { message: 'Enter a valid PAN, e.g. ABCDE1234F.' })
   @IsOptional()
   pan?: string;
+
+  @ApiProperty({ example: '123456789012', description: 'Aadhaar card — one Aadhaar per VEDORA ID', required: false })
+  @Transform(({ value }) => (typeof value === 'string' ? value.replace(/\D/g, '') : value))
+  @Matches(AADHAAR_PATTERN, { message: 'Aadhaar is 12 digits.' })
+  @IsOptional()
+  aadhaar?: string;
 
   @ApiProperty({ example: 'Secret@123', description: 'Password' })
   @IsString()

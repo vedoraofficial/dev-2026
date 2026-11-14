@@ -61,6 +61,14 @@ export function PlacementSuccess({ partner, values, product, order, onPlaceAnoth
   const parentName = partner.placedUnderName ?? partner.sponsorName
   const underYou = parentVedId === partner.sponsorVedId
   const payLater = order.paymentStatus === "PENDING"
+
+  // The order ships to the shipping address entered — only the same as the registered one when
+  // "same as registered" was left checked (copyRegisteredToShipping copies it field for field).
+  const shipsToRegistered =
+    values.shipLine1 === values.address &&
+    values.shipCity === values.city &&
+    values.shipState === values.state &&
+    values.shipPincode === values.pincode
   return (
     <div className="space-y-4 md:space-y-5">
       <Panel className="flex flex-wrap items-center gap-4 border-success/40 bg-success-soft/20">
@@ -173,15 +181,18 @@ export function PlacementSuccess({ partner, values, product, order, onPlaceAnoth
             </div>
           </div>
           <div className="mt-4 rounded-xl border border-border bg-field/60 p-3.5 text-[0.8125rem] leading-relaxed">
-            <p className="mb-1 eyebrow text-[0.625rem]">Ships to (registered address)</p>
-            <p className="font-medium">{partner.name}</p>
+            <p className="mb-1 eyebrow text-[0.625rem]">
+              Ships to{shipsToRegistered ? " (registered address)" : ""}
+            </p>
+            <p className="font-medium">{values.shipName}</p>
             <p className="text-muted-foreground">
-              {values.address}
-              {values.area ? `, ${values.area}` : ""}
+              {values.shipLine1}
+              {values.shipLandmark ? `, ${values.shipLandmark}` : ""}
+              {values.shipArea ? `, ${values.shipArea}` : ""}
               <br />
-              {values.city}, {values.state} – {values.pincode}
+              {values.shipCity}, {values.shipState} – {values.shipPincode}
               <br />
-              {partner.mobile}
+              {values.shipMobile}
             </p>
           </div>
           {payLater ? (

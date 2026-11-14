@@ -38,8 +38,8 @@ export function ageOn(dateOfBirth: string, now = new Date()): number {
 
 /**
  * The new partner's own details — shared by Add Partner and the public referral join form.
- * Aadhaar and PAN are checked here but the backend has no fields for them yet; the date of birth
- * is saved to the partner's profile (and the backend also refuses anyone under 18).
+ * PAN and Aadhaar are each unique per VEDORA ID (the backend rejects a duplicate); the date of
+ * birth is saved to the partner's profile (and the backend also refuses anyone under 18).
  */
 const partnerDetailsShape = {
   fullName: z.string().trim().min(3, "Enter the full name"),

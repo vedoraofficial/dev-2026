@@ -1,7 +1,7 @@
 import { ApiProperty, OmitType } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
 import { IsDateString, IsIn, IsInt, IsNotEmpty, IsOptional, IsString, Matches, Max, Min } from 'class-validator';
-import { PAN_PATTERN, RegisterPartnerBySponsorDto } from '../../genealogy/dto/register-partner-by-sponsor.dto';
+import { AADHAAR_PATTERN, PAN_PATTERN, RegisterPartnerBySponsorDto } from '../../genealogy/dto/register-partner-by-sponsor.dto';
 import { PaymentMethod } from '../../order/entity/order.entity';
 
 /** PAY_LATER: the partner is created now with an inactive ID and pays the joining order from My Orders */
@@ -16,6 +16,7 @@ export type JoiningPaymentMethod = (typeof JOINING_PAYMENT_METHODS)[number];
  */
 export class RegisterWithOrderDto extends OmitType(RegisterPartnerBySponsorDto, [
   'pan',
+  'aadhaar',
   'dateOfBirth',
   'addressLine1',
   'city',
@@ -49,6 +50,11 @@ export class RegisterWithOrderDto extends OmitType(RegisterPartnerBySponsorDto, 
   @Matches(PAN_PATTERN, { message: 'Enter a valid PAN, e.g. ABCDE1234F.' })
   pan: string;
 
+  @ApiProperty({ example: '123456789012', description: 'Aadhaar card — one Aadhaar per VEDORA ID' })
+  @Transform(({ value }) => (typeof value === 'string' ? value.replace(/\D/g, '') : value))
+  @Matches(AADHAAR_PATTERN, { message: 'Aadhaar is 12 digits.' })
+  aadhaar: string;
+
   @ApiProperty({ example: '1996-07-15', description: 'Date of birth (YYYY-MM-DD) — must be 18 or older today' })
   @IsDateString({}, { message: 'Enter a valid date of birth.' })
   @IsNotEmpty({ message: 'Date of birth is required.' })
@@ -72,4 +78,45 @@ export class RegisterWithOrderDto extends OmitType(RegisterPartnerBySponsorDto, 
   @ApiProperty({ example: '560001' })
   @Matches(/^\d{6}$/, { message: 'Pincode must be 6 digits.' })
   pincode: string;
+
+  // Shipping address for the joining order — when left out, it ships to the address above.
+  @ApiProperty({ example: 'Alice Smith', required: false, description: "Receiver's name, if different from the partner" })
+  @IsString()
+  @IsOptional()
+  shippingName?: string;
+
+  @ApiProperty({ example: '9876543211', required: false })
+  @IsString()
+  @IsOptional()
+  shippingMobile?: string;
+
+  @ApiProperty({ example: 'Flat 102, Sunrise Towers', required: false })
+  @IsString()
+  @IsOptional()
+  shippingAddressLine1?: string;
+
+  @ApiProperty({ example: 'Near City Hospital', required: false })
+  @IsString()
+  @IsOptional()
+  shippingLandmark?: string;
+
+  @ApiProperty({ example: 'Koramangala', required: false })
+  @IsString()
+  @IsOptional()
+  shippingArea?: string;
+
+  @ApiProperty({ example: 'Bengaluru', required: false })
+  @IsString()
+  @IsOptional()
+  shippingCity?: string;
+
+  @ApiProperty({ example: 'Karnataka', required: false })
+  @IsString()
+  @IsOptional()
+  shippingState?: string;
+
+  @ApiProperty({ example: '560001', required: false })
+  @IsOptional()
+  @Matches(/^\d{6}$/, { message: 'Shipping pincode must be 6 digits.' })
+  shippingPincode?: string;
 }

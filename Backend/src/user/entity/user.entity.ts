@@ -39,6 +39,10 @@ export class User {
   @Column({ name: 'pan_number', type: 'varchar', length: 10, nullable: true })
   panNumber: string | null;
 
+  /** Aadhaar card (12 digits), given at registration */
+  @Column({ type: 'varchar', length: 12, nullable: true })
+  aadhaar: string | null;
+
   @Exclude()
   @Column({ name: 'password_hash', type: 'varchar', length: 255 })
   passwordHash: string;

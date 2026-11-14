@@ -1,5 +1,5 @@
 import type { RegisteredPartner } from "@/features/placement/components/placement-success"
-import type { partnerDetailsPayload } from "@/features/placement/partner-details"
+import type { partnerDetailsPayload, shippingPayload } from "@/features/placement/partner-details"
 import { api } from "@/lib/api"
 import type {
   InitiatePaymentResponse,
@@ -151,7 +151,8 @@ export async function getJoinStatus(razorpayOrderId: string): Promise<PaymentSta
 }
 
 /** POST /api/partner/register-with-order — a new partner plus their joining order. */
-export type RegisterWithOrderInput = ReturnType<typeof partnerDetailsPayload> & {
+export type RegisterWithOrderInput = ReturnType<typeof partnerDetailsPayload> &
+  Partial<ReturnType<typeof shippingPayload>> & {
   /** 1–20; leave out for the lowest free slot */
   slotNumber?: number
   /** Place under this team member instead of yourself (you stay the sponsor) */

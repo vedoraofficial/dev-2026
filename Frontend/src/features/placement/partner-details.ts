@@ -35,6 +35,7 @@ export function partnerDetailsPayload(values: PartnerDetailsValues) {
     email: values.email,
     mobile: toMobile10(values.mobile),
     pan: values.pan,
+    aadhaar: values.aadhaar.replace(/\D/g, ""),
     password: values.password,
     gender: GENDER_API[values.gender],
     addressLine1: values.address,
@@ -42,6 +43,29 @@ export function partnerDetailsPayload(values: PartnerDetailsValues) {
     city: values.city,
     state: values.state,
     pincode: values.pincode,
+  }
+}
+
+/** The joining order's shipping address — shared by Add Partner and the public referral join form. */
+export function shippingPayload(values: {
+  shipName: string
+  shipMobile: string
+  shipLine1: string
+  shipLandmark: string
+  shipArea: string
+  shipCity: string
+  shipState: string
+  shipPincode: string
+}) {
+  return {
+    shippingName: values.shipName,
+    shippingMobile: toMobile10(values.shipMobile),
+    shippingAddressLine1: values.shipLine1,
+    shippingLandmark: values.shipLandmark || undefined,
+    shippingArea: values.shipArea || undefined,
+    shippingCity: values.shipCity,
+    shippingState: values.shipState,
+    shippingPincode: values.shipPincode,
   }
 }
 
