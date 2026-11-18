@@ -21,12 +21,12 @@ type Props = {
   orderLabel: string
 }
 
-/** Placeholders are the backend's defaults when a size is left empty. */
+/** Sent in place of a size left empty — the backend's own default is 10/10/10/0.5. */
 const FIELDS = [
-  { key: "length", label: "Length (cm)", placeholder: "10" },
-  { key: "breadth", label: "Breadth (cm)", placeholder: "10" },
-  { key: "height", label: "Height (cm)", placeholder: "10" },
-  { key: "weight", label: "Weight (kg)", placeholder: "0.5" },
+  { key: "length", label: "Length (cm)", placeholder: "11" },
+  { key: "breadth", label: "Breadth (cm)", placeholder: "11" },
+  { key: "height", label: "Height (cm)", placeholder: "5" },
+  { key: "weight", label: "Weight (kg)", placeholder: "0.12" },
 ] as const
 
 type Size = Record<(typeof FIELDS)[number]["key"], string>
@@ -37,17 +37,17 @@ export function CreateShipmentDialog({ trigger, orderId, orderLabel }: Props) {
   const [size, setSize] = useState<Size>({ length: "", breadth: "", height: "", weight: "" })
   const create = useCreateShipment()
 
-  const num = (v: string) => (v.trim() && Number(v) > 0 ? Number(v) : undefined)
+  const num = (v: string, fallback: number) => (v.trim() && Number(v) > 0 ? Number(v) : fallback)
   const invalid = Object.values(size).some((v) => v.trim() !== "" && !(Number(v) > 0))
 
   const submit = () =>
     create.mutate(
       {
         orderId,
-        length: num(size.length),
-        breadth: num(size.breadth),
-        height: num(size.height),
-        weight: num(size.weight),
+        length: num(size.length, 11),
+        breadth: num(size.breadth, 11),
+        height: num(size.height, 5),
+        weight: num(size.weight, 0.12),
       },
       { onSuccess: () => setOpen(false) },
     )

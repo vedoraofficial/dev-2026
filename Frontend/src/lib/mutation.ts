@@ -9,6 +9,11 @@ type Options<TData, TVars> = {
   success?: string | ((data: TData, vars: TVars) => string)
   /** Fallback error text when the backend sends none. Errors always toast. */
   error?: string
+  /**
+   * Shows specific error messages as a success (green) toast instead of the default red one —
+   * e.g. a "already shipped" notice that isn't really a failure. Return true to use green.
+   */
+  errorAsSuccess?: (message: string) => boolean
   /** Queries to refetch after success, e.g. [["wallet"]] refreshes every wallet query. */
   invalidate?: QueryKey[]
   /** Queries to refetch regardless of whether mutation succeeded or failed (e.g. bank verification). */
@@ -26,6 +31,7 @@ export function useApiMutation<TData, TVars = void>(
   {
     success,
     error,
+    errorAsSuccess,
     invalidate = [],
     invalidateOnSettled = [],
     onSuccess,
@@ -44,7 +50,12 @@ export function useApiMutation<TData, TVars = void>(
       if (isPaymentCancelled(err)) {
         toast.info(err.message)
       } else {
-        toast.error(apiErrorMessage(err, error))
+        const message = apiErrorMessage(err, error)
+        if (errorAsSuccess?.(message)) {
+          toast.success(message)
+        } else {
+          toast.error(message)
+        }
       }
       onError?.(err, vars)
     },
