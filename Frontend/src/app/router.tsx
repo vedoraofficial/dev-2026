@@ -72,6 +72,10 @@ export const router = createBrowserRouter([
         path: SITE_ROUTES.privacy,
         ...page(() => import("@/website/pages/privacy-page"), "PrivacyPage"),
       },
+      {
+        path: SITE_ROUTES.cancellation,
+        ...page(() => import("@/website/pages/cancellation-page"), "CancellationPage"),
+      },
     ],
   },
   { path: "/wallet", element: <WalletRedirect />, ErrorBoundary: RouteError },

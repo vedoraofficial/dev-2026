@@ -14,9 +14,11 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { CancelOrderDialog } from "@/features/orders/components/cancel-order-dialog"
 import { CashOrderDialog } from "@/features/orders/components/cash-order-dialog"
+import { MarkDeliveredDialog } from "@/features/orders/components/mark-delivered-dialog"
 import { OrderDetailDialog } from "@/features/orders/components/order-detail-dialog"
 import {
   canAdminCancel,
+  canMarkDelivered,
   canShip,
   hasShipment,
   orderNo,
@@ -176,9 +178,21 @@ export function AdminOrdersPage() {
       header: "Action",
       actions: true,
       cell: (r) => (
-        <Button variant="quiet" size="sm" onClick={() => setOpenId(r.id)}>
-          Details
-        </Button>
+        <div className="flex items-center justify-end gap-2">
+          {canMarkDelivered(r) ? (
+            <MarkDeliveredDialog
+              orderId={r.id}
+              trigger={
+                <Button variant="quiet" size="sm">
+                  By hand
+                </Button>
+              }
+            />
+          ) : null}
+          <Button variant="quiet" size="sm" onClick={() => setOpenId(r.id)}>
+            Details
+          </Button>
+        </div>
       ),
     },
   ]

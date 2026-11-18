@@ -23,5 +23,6 @@ export const FOOTER_EXPLORE = [
 /** Footer "Legal" column. */
 export const FOOTER_LEGAL = [
   { label: "Privacy Policy", to: ROUTES.privacy },
+  { label: "Refund and Cancellation Policy", to: ROUTES.cancellation },
   { label: "Grievance Redressal", to: ROUTES.grievance },
 ] as const

@@ -7,6 +7,7 @@ export const ROUTES = {
   register: "/register",
   contact: "/contact",
   privacy: "/privacy-policy",
+  cancellation: "/cancellation-policy",
   /** Grievance Redressal lives on the contact page. */
   grievance: "/contact#grievance",
   becomePartner: "/register",
