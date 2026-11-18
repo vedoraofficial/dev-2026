@@ -81,4 +81,13 @@ export class OrderController {
   async getAllOrders() {
     return this.orderService.getAllOrders();
   }
+
+  @Post(':id/mark-delivered')
+  @Roles('ADMIN')
+  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: '[Admin] Mark an order Delivered by hand, bypassing Shiprocket' })
+  async markDelivered(@Param('id', ParseIntPipe) id: number) {
+    return this.orderService.markDelivered(id);
+  }
 }

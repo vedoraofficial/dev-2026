@@ -66,6 +66,14 @@ export async function cancelOrder({
   return data
 }
 
+/** POST /api/order/:id/mark-delivered — [Admin] mark Delivered by hand, bypassing Shiprocket. */
+export async function markOrderDelivered(id: number): Promise<{ id: number; orderStatus: string }> {
+  const { data } = await api.post<{ id: number; orderStatus: string }>(
+    `/order/${id}/mark-delivered`,
+  )
+  return data
+}
+
 /** POST /api/order/checkout — the cart: one payment, one invoice, one email. */
 export async function checkoutCart(input: CheckoutInput): Promise<CheckoutResult> {
   const { data } = await api.post<CheckoutResult>("/order/checkout", input)

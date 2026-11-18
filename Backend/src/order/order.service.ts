@@ -780,6 +780,27 @@ export class OrderService {
     );
   }
 
+  // ─── Mark Delivered (Admin override) ─────────────────────────────────
+  /** [Admin] Marks an order Delivered by hand, bypassing Shiprocket tracking. */
+  async markDelivered(orderId: number) {
+    const order = await this.orderRepo.findOne({ where: { id: orderId } });
+    if (!order) throw new NotFoundException('Order not found.');
+
+    if (order.orderStatus === OrderStatus.CANCELLED || order.orderStatus === OrderStatus.RTO) {
+      throw new BadRequestException(
+        `Cannot mark delivered — order is ${order.orderStatus.toLowerCase()}.`,
+      );
+    }
+    if (order.orderStatus === OrderStatus.DELIVERED) {
+      throw new BadRequestException('Order is already marked Delivered.');
+    }
+
+    order.orderStatus = OrderStatus.DELIVERED;
+    await this.orderRepo.save(order);
+
+    return { id: Number(order.id), orderStatus: order.orderStatus };
+  }
+
   // ─── Get Orders ─────────────────────────────────────────────────────
 
   async getMyOrders(userId: number) {

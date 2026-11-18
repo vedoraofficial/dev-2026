@@ -7,6 +7,7 @@ import {
   getAllOrders,
   getMyOrders,
   getOrder,
+  markOrderDelivered,
 } from "@/features/orders/api"
 import { useApiMutation } from "@/lib/mutation"
 
@@ -42,4 +43,11 @@ export const useCancelOrder = () =>
   useApiMutation(cancelOrder, {
     success: (r) => r.message || "Order cancelled",
     invalidate: [orderKeys.all, ["wallet"], ["stock"]],
+  })
+
+/** [Admin] Mark an order Delivered by hand, bypassing Shiprocket. */
+export const useMarkDelivered = () =>
+  useApiMutation(markOrderDelivered, {
+    success: "Order marked Delivered",
+    invalidate: [orderKeys.all],
   })

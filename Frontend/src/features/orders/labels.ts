@@ -62,9 +62,11 @@ export const canPay = (o: Pick<ApiOrder, "paymentStatus" | "orderStatus" | "paym
 export const canCancel = (o: Pick<ApiOrder, "paymentStatus" | "orderStatus">) =>
   o.paymentStatus === "PENDING" && o.orderStatus !== "CANCELLED"
 
-/** [Admin] can also cancel a paid order — it is refunded to the buyer's wallet. */
+/** [Admin] can also cancel a paid order — it is refunded to the buyer's wallet. Not once delivered. */
 export const canAdminCancel = (o: Pick<ApiOrder, "paymentStatus" | "orderStatus">) =>
-  (o.paymentStatus === "PENDING" || o.paymentStatus === "PAID") && o.orderStatus !== "CANCELLED"
+  (o.paymentStatus === "PENDING" || o.paymentStatus === "PAID") &&
+  o.orderStatus !== "CANCELLED" &&
+  o.orderStatus !== "DELIVERED"
 
 /** Paid and waiting for a courier (PROCESSING = sent to Shiprocket, no AWB yet). */
 export const canShip = (o: Pick<ApiOrder, "paymentStatus" | "orderStatus">) =>
@@ -76,6 +78,10 @@ export const hasShipment = (o: Pick<ApiOrder, "orderStatus">) =>
   o.orderStatus === "SHIPPED" ||
   o.orderStatus === "DELIVERED" ||
   o.orderStatus === "RTO"
+
+/** [Admin] Can mark Delivered by hand — any stage except cancelled/returned/already delivered. */
+export const canMarkDelivered = (o: Pick<ApiOrder, "orderStatus">) =>
+  o.orderStatus !== "CANCELLED" && o.orderStatus !== "RTO" && o.orderStatus !== "DELIVERED"
 
 /** "ORD-00042" */
 export const orderNo = (id: number) => `ORD-${String(id).padStart(5, "0")}`
