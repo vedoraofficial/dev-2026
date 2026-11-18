@@ -35,6 +35,8 @@ export const useCreateShipment = () =>
       s.awbCode
         ? `Shipment booked — AWB ${s.awbCode}${s.courierName ? ` (${s.courierName})` : ""}`
         : "Sent to Shiprocket, but no courier was assigned — check the Shiprocket wallet / pincode, then retry",
+    // Not really a failure — the order is already shipped, so show it in green, not red.
+    errorAsSuccess: (message) => /already exists|already has a shipment/i.test(message),
     invalidate: [["orders"], shippingKeys.all],
   })
 

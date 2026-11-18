@@ -1,3 +1,4 @@
+import { useQuery } from "@tanstack/react-query"
 import { useState } from "react"
 
 import { DataTable, type Column } from "@/components/common/data-table"
@@ -30,8 +31,10 @@ import { useAllOrders } from "@/features/orders/queries"
 import type { ApiOrder } from "@/features/orders/types"
 import { useReconcilePayments } from "@/features/payments/queries"
 import { useProducts } from "@/features/products/queries"
+import { getOrderTracking } from "@/features/shipping/api"
 import { CreateShipmentDialog } from "@/features/shipping/components/create-shipment-dialog"
 import { OrderTrackingSection } from "@/features/shipping/components/order-tracking-section"
+import { mapLimit } from "@/lib/async"
 import { downloadCsv } from "@/lib/csv"
 import { formatDate, formatDateTime } from "@/lib/date"
 import { formatCompactINR, formatINR, formatNumber } from "@/lib/format"
@@ -66,7 +69,30 @@ export function AdminOrdersPage() {
   const [openId, setOpenId] = useState<number | null>(null)
 
   const list = orders.data ?? []
-  const inStage = (stage: Tab) => list.filter((o) => stage === "all" || orderStage(o) === stage)
+
+  // Shiprocket sometimes assigns an AWB without the order's own status ever reaching SHIPPED
+  // (e.g. a crash mid-save). Catch those here by checking tracking for every "confirmed" order,
+  // so they show up under Shipped instead of being stuck.
+  const confirmedIds = list.filter((o) => orderStage(o) === "confirmed").map((o) => o.id)
+  const shippedOverride = useQuery({
+    queryKey: ["orders", "shipped-override", confirmedIds],
+    queryFn: () =>
+      mapLimit(confirmedIds, 6, async (id) => {
+        try {
+          const t = await getOrderTracking(id)
+          return t?.awbCode ? id : null
+        } catch {
+          return null
+        }
+      }),
+    enabled: confirmedIds.length > 0,
+    staleTime: 60_000,
+  })
+  const awbByOrderId = new Set(shippedOverride.data?.filter((id): id is number => id !== null))
+  const stageOf = (o: ApiOrder): OrderStage =>
+    orderStage(o) === "confirmed" && awbByOrderId.has(o.id) ? "shipped" : orderStage(o)
+
+  const inStage = (stage: Tab) => list.filter((o) => stage === "all" || stageOf(o) === stage)
   const rows = inStage(tab).filter((o) => matchesQuery(o, query))
   const pageRows = rows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
   const tabs = STAGE_TABS.map((t) => ({ ...t, label: `${t.label} ${inStage(t.value).length}` }))
@@ -134,8 +160,8 @@ export function AdminOrdersPage() {
       key: "status",
       header: "Status",
       cell: (r) => (
-        <StatusPill variant={stagePill[orderStage(r)].variant}>
-          {stagePill[orderStage(r)].label}
+        <StatusPill variant={stagePill[stageOf(r)].variant}>
+          {stagePill[stageOf(r)].label}
         </StatusPill>
       ),
     },
@@ -176,7 +202,7 @@ export function AdminOrdersPage() {
         paiseToRupees(o.totalAmount),
         o.bvTotal,
         paymentMethodLabel[o.paymentMethod],
-        stagePill[orderStage(o)].label,
+        stagePill[stageOf(o)].label,
       ]),
     )
 
